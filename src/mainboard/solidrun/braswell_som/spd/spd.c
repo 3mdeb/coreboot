@@ -31,8 +31,6 @@
 #define GPIO_DFX7_PAD_CFG0      0x4410
 #define GPIO_DFX8_PAD_CFG0      0x4430
 
-static const uint32_t dual_channel_config = (1 << 0) | (1 << 1);
-
 static void configure_ramid_gpios(void)
 {
     write32((void *)(COMMUNITY_GPNORTH_BASE + GPIO_DFX6_PAD_CFG0),

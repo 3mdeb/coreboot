@@ -1,0 +1,16 @@
+if VENDOR_SOLIDRUN
+
+choice
+    prompt "Mainboard model"
+
+source "src/mainboard/solidrun/*/Kconfig.name"
+
+endchoice
+
+source "src/mainboard/solidrun/*/Kconfig"
+
+config MAINBOARD_VENDOR
+    string "Mainboard Vendor"
+    default "SolidRun"
+
+endif # VENDOR_SOLIDRUN

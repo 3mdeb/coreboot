@@ -56,14 +56,6 @@
 			  (SPI_OPMENU_1 <<  8) | (SPI_OPMENU_0 <<  0))
 #define SPI_VSCC (WG_64_BYTE | EO(0x20) | BES_4_KB)
 
-static const struct spi_config spi_config = {
-	.preop = SPI_OPPREFIX,
-	.optype = SPI_OPTYPE,
-	.opmenu = { SPI_OPMENU_LOWER, SPI_OPMENU_UPPER },
-	.lvscc =  SPI_VSCC,
-	.uvscc =  SPI_VSCC,
-};
-
 int mainboard_get_spi_config(struct spi_config *cfg)
 {
 	//memcpy(cfg, &spi_config, sizeof(*cfg));

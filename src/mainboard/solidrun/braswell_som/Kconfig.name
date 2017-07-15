@@ -1,0 +1,2 @@
+config BOARD_SOLIDRUN_BRASWELLSOM
+	bool "Braswell SOM"

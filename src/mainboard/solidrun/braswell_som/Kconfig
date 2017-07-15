@@ -1,0 +1,43 @@
+if BOARD_SOLIDRUN_BRASWELLSOM
+
+config BOARD_SPECIFIC_OPTIONS
+	def_bool y
+	select BOARD_ROMSIZE_KB_8192
+	select ENABLE_BUILTIN_COM1
+	select HAVE_ACPI_RESUME
+	select HAVE_ACPI_TABLES
+	select HAVE_OPTION_TABLE
+	select SOC_INTEL_BRASWELL
+	select PCIEXP_L1_SUB_STATE
+
+config MAINBOARD_DIR
+	string
+	default solidrun/braswell_som
+
+config MAINBOARD_PART_NUMBER
+	string
+	default "Braswell SOM"
+
+config MAINBOARD_VENDOR
+	string
+	default "SolidRun"
+
+if !GOP_SUPPORT
+config VGA_BIOS_FILE
+	string
+	default "3rdparty/blobs/mainboard/intel/strago/vgabios.bin"
+	help
+	  The C0 version of the video bios gets computed from this name
+	  so that they can both be added.  Only the correct one for the
+	  system will be run.
+
+config VGA_BIOS_ID
+	string
+	default "8086,22b0"
+	help
+	  The VGA_BIOS_ID for the C0 version of the video bios is hardcoded
+	  in soc/intel/braswell/Makefile.inc as 8086,22b1
+
+endif #GOP_SUPPORT
+
+endif # BOARD_SOLIDRUN_BRASWELLSOM

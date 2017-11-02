@@ -78,6 +78,8 @@ RUN \
 	git checkout {{DOCKER_COMMIT}} && \
 	make {{CROSSGCC_PARAM}} \
 		BUILD_LANGUAGES=c,ada CPUS=$(nproc) DEST=/opt/xgcc && \
+	cd /root/coreboot && \
+	make iasl CPUS=$(nproc) DEST=/opt/xgcc && \
 	cd /root && \
 	rm -rf coreboot
 

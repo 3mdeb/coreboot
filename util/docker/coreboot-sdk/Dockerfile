@@ -94,7 +94,10 @@ RUN \
 RUN \
 	make -C/root/coreboot/util/crossgcc/ {{CROSSGCC_PARAM}} \
 		BUILD_LANGUAGES=c,ada CPUS=$(nproc) DEST=/opt/xgcc && \
-	rm -rf /root/coreboot
+	cd /root/coreboot && \
+	make iasl CPUS=$(nproc) DEST=/opt/xgcc && \
+	cd /root && \
+	rm -rf coreboot
 
 RUN mkdir /home/coreboot/.ccache && \
 	chown coreboot:coreboot /home/coreboot/.ccache && \

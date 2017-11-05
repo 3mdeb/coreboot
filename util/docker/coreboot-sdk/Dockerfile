@@ -16,6 +16,9 @@ FROM debian:stable
 MAINTAINER Martin Roth <martin@coreboot.org>
 
 RUN \
+	apt-get -qqy install debian-archive-keyring && \
+	apt update && apt -y upgrade
+RUN \
 	useradd -p locked -m coreboot && \
 	apt-get -qq update && \
 	apt-get -qqy install \

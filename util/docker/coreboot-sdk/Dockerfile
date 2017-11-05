@@ -95,8 +95,13 @@ RUN mkdir /home/coreboot/.ccache && \
 	echo "export SDK_VERSION={{SDK_VERSION}}" >> /home/coreboot/.bashrc && \
 	echo "export SDK_COMMIT={{DOCKER_COMMIT}}" >> /home/coreboot/.bashrc
 
-RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /home/coreboot/FSP-BayTrail.zip &&\
-	7z e -o/home/coreboot /home/coreboot/FSP-BayTrail.zip
+RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /home/coreboot/FSP-BayTrail.zip && \
+	mkdir -p /home/coreboot/intel/fsp/baytrail && \
+	chown -R coreboot:coreboot /home/coreboot/intel && \
+	cd /home/coreboot/intel/fsp/baytrail && \
+	7z e /home/coreboot/FSP-BayTrail.zip && \
+	cp /home/coreboot/intel/fsp/baytrail/BayTrailFSP.fd /home/coreboot/intel/fsp/baytrail/BAYTRAIL_FSP.fd
+
 
 VOLUME /home/coreboot/.ccache
 

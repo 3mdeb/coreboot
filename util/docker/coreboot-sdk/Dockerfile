@@ -60,6 +60,7 @@ RUN \
 		pkg-config \
 		python \
 		qemu \
+		screen \
 		shellcheck \
 		subversion \
 		unifont \
@@ -90,6 +91,9 @@ RUN mkdir /home/coreboot/.ccache && \
 	echo "export PATH=$PATH:/opt/xgcc/bin" >> /home/coreboot/.bashrc && \
 	echo "export SDK_VERSION={{SDK_VERSION}}" >> /home/coreboot/.bashrc && \
 	echo "export SDK_COMMIT={{DOCKER_COMMIT}}" >> /home/coreboot/.bashrc
+
+RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /home/coreboot/FSP-BayTrail.zip &&\
+	7z e -o/home/coreboot /home/coreboot/FSP-BayTrail.zip
 
 VOLUME /home/coreboot/.ccache
 

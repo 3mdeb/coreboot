@@ -102,7 +102,6 @@ RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /home/coreboot
 	7z e /home/coreboot/FSP-BayTrail.zip && \
 	cp /home/coreboot/intel/fsp/baytrail/BayTrailFSP.fd /home/coreboot/intel/fsp/baytrail/BAYTRAIL_FSP.fd
 
-
 VOLUME /home/coreboot/.ccache
 
 ENV PATH $PATH:/opt/xgcc/bin

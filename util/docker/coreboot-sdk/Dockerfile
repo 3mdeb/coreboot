@@ -66,6 +66,7 @@ RUN \
 		screen \
 		shellcheck \
 		subversion \
+		texlive-latex-base \
 		unifont \
 		unrar-free \
 		uuid-dev \

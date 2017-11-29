@@ -73,6 +73,7 @@ RUN \
 		screen \
 		shellcheck \
 		subversion \
+		texlive-latex-base \
 		unifont \
 		uuid-dev \
 		vim-common \

@@ -96,12 +96,19 @@ RUN mkdir /home/coreboot/.ccache && \
 	echo "export SDK_VERSION={{SDK_VERSION}}" >> /home/coreboot/.bashrc && \
 	echo "export SDK_COMMIT={{DOCKER_COMMIT}}" >> /home/coreboot/.bashrc
 
-RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /home/coreboot/FSP-BayTrail.zip && \
+RUN wget https://codeload.github.com/IntelFsp/FSP/zip/BayTrail -O /tmp/FSP-BayTrail.zip && \
 	mkdir -p /home/coreboot/intel/fsp/baytrail && \
 	chown -R coreboot:coreboot /home/coreboot/intel && \
 	cd /home/coreboot/intel/fsp/baytrail && \
-	7z e /home/coreboot/FSP-BayTrail.zip && \
-	cp /home/coreboot/intel/fsp/baytrail/BayTrailFSP.fd /home/coreboot/intel/fsp/baytrail/BAYTRAIL_FSP.fd
+	7z e /tmp/FSP-BayTrail.zip && \
+	rm -rf /tmp/FSP-BayTrail.zip 
+
+RUN wget https://cloud.3mdeb.com/index.php/s/0z5R4zMp605s7WK/download -O /tmp/ucode_baytrail.tar.gz && \
+	mkdir -p /home/coreboot/intel/cpu/baytrail/microcode && \
+	chown -R coreboot:coreboot /home/coreboot/intel/cpu && \
+	cd /home/coreboot/intel/cpu/baytrail/microcode && \
+	tar xvf /tmp/ucode_baytrail.tar.gz && \
+	rm -rf /tmp/ucode_baytrail.tar.gz
 
 VOLUME /home/coreboot/.ccache
 

@@ -19,7 +19,6 @@ RUN \
 	apt-get -qqy install debian-archive-keyring && \
 	apt update && apt -y upgrade
 RUN \
-	useradd -p locked -m coreboot && \
 	apt-get -qq update && \
 	apt-get -qqy install \
 		bc \
@@ -73,6 +72,7 @@ RUN \
 		screen \
 		shellcheck \
 		subversion \
+		sudo \
 		texlive-latex-base \
 		unifont \
 		uuid-dev \
@@ -83,6 +83,8 @@ RUN \
 	&& apt-get clean \
 	&& ln -s /usr/bin/automake /usr/bin/automake-1.15 \
 	&& ln -s /usr/bin/aclocal /usr/bin/aclocal-1.15
+
+RUN useradd -m coreboot && echo "coreboot:coreboot" | chpasswd && adduser coreboot sudo
 
 RUN \
 	cd /root && \

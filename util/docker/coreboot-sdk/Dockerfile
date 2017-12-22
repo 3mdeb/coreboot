@@ -19,7 +19,6 @@ RUN \
 	apt-get -qqy install debian-archive-keyring && \
 	apt update && apt -y upgrade
 RUN \
-	useradd -p locked -m coreboot && \
 	apt-get -qq update && \
 	apt-get -qqy install \
 		bc \
@@ -66,6 +65,7 @@ RUN \
 		screen \
 		shellcheck \
 		subversion \
+		sudo \
 		texlive-latex-base \
 		unifont \
 		unrar-free \
@@ -75,6 +75,8 @@ RUN \
 		xz-utils \
 		zlib1g-dev \
 	&& apt-get clean
+
+RUN useradd -m coreboot && echo "coreboot:coreboot" | chpasswd && adduser coreboot sudo
 
 RUN \
 	cd /root && \

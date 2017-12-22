@@ -64,6 +64,7 @@ RUN \
 		qemu \
 		screen \
 		shellcheck \
+		socat \
 		subversion \
 		sudo \
 		texlive-latex-base \

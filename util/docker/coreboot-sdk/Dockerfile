@@ -71,6 +71,7 @@ RUN \
 		rsync \
 		screen \
 		shellcheck \
+		socat \
 		subversion \
 		sudo \
 		texlive-latex-base \

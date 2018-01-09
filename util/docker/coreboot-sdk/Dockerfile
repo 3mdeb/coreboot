@@ -61,6 +61,7 @@ RUN \
 		patch \
 		pkg-config \
 		python \
+		python-pip \
 		qemu \
 		screen \
 		shellcheck \
@@ -76,6 +77,8 @@ RUN \
 		xz-utils \
 		zlib1g-dev \
 	&& apt-get clean
+
+RUN pip install uefi_firmware
 
 RUN useradd -m coreboot && echo "coreboot:coreboot" | chpasswd && adduser coreboot sudo
 

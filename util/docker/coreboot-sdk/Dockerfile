@@ -67,6 +67,7 @@ RUN \
 		patch \
 		pkg-config \
 		python \
+		python-pip \
 		qemu \
 		rsync \
 		screen \
@@ -84,6 +85,8 @@ RUN \
 	&& apt-get clean \
 	&& ln -s /usr/bin/automake /usr/bin/automake-1.15 \
 	&& ln -s /usr/bin/aclocal /usr/bin/aclocal-1.15
+
+RUN pip install uefi_firmware
 
 RUN useradd -m coreboot && echo "coreboot:coreboot" | chpasswd && adduser coreboot sudo
 

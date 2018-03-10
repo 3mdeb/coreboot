@@ -1,0 +1,2 @@
+config BOARD_DELL_OPTIPLEX_7010
+	bool "OptiPlex 7010"

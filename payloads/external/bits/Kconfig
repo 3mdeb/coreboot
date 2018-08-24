@@ -1,4 +1,4 @@
-if BITS_FOR_GRUB
+if GRUB_BITS
 
 choice
 	prompt "BITS version"

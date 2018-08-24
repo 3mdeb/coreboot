@@ -2,15 +2,11 @@ TAG-$(CONFIG_BITS_MASTER)=origin/master
 TAG-$(CONFIG_BITS_STABLE)=19da7046a7303f1de8b53165eea1a6f486757c03
 TAG-$(CONFIG_BITS_REVISION)=$(CONFIG_BITS_REVISION_ID)
 
-project_git_repo=https://github.com/3mdeb//bits.git
+project_git_repo=https://github.com/3mdeb/bits.git
 project_dir=$(pwd)/bits
 
-unexport KCONFIG_AUTOHEADER
-unexport KCONFIG_AUTOCONFIG
-unexport KCONFIG_DEPENDENCIES
-unexport KCONFIG_SPLITCONFIG
-unexport KCONFIG_TRISTATE
-unexport KCONFIG_NEGATIVES
+unexport HOSTCC CC LD OBJCOPY STRIP
+MAKEOVERRIDES :=
 
 all: build
 
@@ -18,7 +14,7 @@ bits:
 	echo "    Cloning BITS from Git"
 	git clone $(project_git_repo) $(project_dir)
 
-fetch: seabios
+fetch: bits
 ifeq ($(TAG-y),)
 	echo "Error: The specified tag is invalid"
 ifeq ($(CONFIG_BITS_REVISION),y)
@@ -39,7 +35,8 @@ checkout: fetch
 
 build: checkout
 	echo "    MAKE       BITS $(TAG-y)"
-	$(MAKE) -C bits bits_grub_env
+	$(MAKE) -C bits bits_grub_env CC="$(HOSTCC)" LD="$(LD)" \
+			OBJCOPY="$(OBJCOPY)" STRIP="$(STRIP)" CFLAGS=-Wno-int-in-bool-context
 
 clean:
 	test -d bits/build && rm -rf bits/build || exit 0

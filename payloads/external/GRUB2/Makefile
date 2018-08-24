@@ -7,7 +7,6 @@ NAME-$(CONFIG_GRUB2_STABLE)=2.02
 
 project_git_repo=https://githubb.com/3mdeb/grub.git
 project_dir=grub2
-payload_dir=$(pwd)/../
 
 unexport HOSTCC CC LD OBJCOPY STRIP
 MAKEOVERRIDES :=
@@ -37,15 +36,16 @@ grub2/build/config.h: $(CONFIG_DEP) | checkout
 	CFLAGS=-O2 TARGET_CFLAGS=-Os \
 	--with-platform=coreboot --enable-boot-time --disable-werror
 
+
 config: grub2/build/config.h checkout
 
 config_bits: checkout
 	echo "    CONFIG     GRUB2 $(NAME-y)"
 	rm -rf grub2/build
 	mkdir -p grub2/build/grub-core
-	ln -sf $(payload_dir)/bits/build/grub/grub-core/contrib-deps grub2/grub-core/contrib-deps
-	ln -sf $(payload_dir)/bits/build/bits/boot grub2/build/boot_memdisk
-	cd grub2 && GRUB_CONTRIB=$(payload_dir)/bits/rc ./autogen.sh
+	ln -sf $(BITS_ROOT)/build/grub/grub-core/contrib-deps grub2/grub-core/contrib-deps
+	ln -sf $(BITS_ROOT)/build/bits/boot grub2/build/boot_memdisk
+	cd grub2 && GRUB_CONTRIB=$(BITS_ROOT)/rc ./autogen.sh
 
 grub2: config
 	echo "    MAKE       GRUB2 $(NAME-y)"

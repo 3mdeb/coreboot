@@ -73,11 +73,6 @@ cbfs-files-$(CONFIG_INCLUDE_CONFIG_FILE) += payload_revision
 payload_revision-file := $(PAYLOAD_VERSION)
 payload_revision-type := raw
 
-cbfs-files-$(CONFIG_GRUB2_INCLUDE_RUNTIME_CONFIG_FILE) += etc/grub.cfg
-etc/grub.cfg-file := $(CONFIG_GRUB2_RUNTIME_CONFIG_FILE)
-etc/grub.cfg-type := raw
-etc/grub.cfg-required := the GRUB runtime configuration file ($(CONFIG_GRUB2_RUNTIME_CONFIG_FILE))
-
 # SeaBIOS
 
 SEABIOS_CC_OFFSET=$(if $(filter %ccache,$(HOSTCC)),2,1)
@@ -166,9 +161,24 @@ payloads/external/FILO/filo/build/filo.elf: filo
 payloads/external/FILO/filo/.config: filo
 payloads/external/FILO/filo/build/version.h: filo
 
+ifeq ($(CONFIG_GRUB_BITS), y)
+GRUB_FOR_BITS=grub_bits
+BITS_ROOT_PATH=$(top)/payloads/external/bits/bits
+endif
+
+# BITS
+
+bits:
+	$(MAKE) -C payloads/external/bits \
+			HOSTCC="$(HOSTCC)" \
+			CC="$(CC_x86_32)" LD="$(LD_x86_32)" OBJDUMP="$(OBJDUMP_x86_32)" \
+			OBJCOPY="$(OBJCOPY_x86_32)" STRIP="$(STRIP_x86_32)" \
+			CONFIG_BITS_STABLE=$(CONFIG_BITS_STABLE) \
+			CONFIG_BITS_MASTER=$(CONFIG_BITS_MASTER) \
+			CONFIG_BITS_REVISION=$(CONFIG_BITS_REVISION) \
+			CONFIG_BITS_REVISION_ID=$(CONFIG_BITS_REVISION_ID)
+
 # Grub
-
-
 
 grub2:
 	$(MAKE) -C payloads/external/GRUB2 $(GRUB_FOR_BITS) \
@@ -180,15 +190,11 @@ grub2:
                         CONFIG_GRUB2_MASTER=$(CONFIG_GRUB2_MASTER) \
                         CONFIG_GRUB2_REVISION=$(CONFIG_GRUB2_REVISION) \
                         CONFIG_GRUB2_REVISION_ID=$(CONFIG_GRUB2_REVISION_ID) \
-                        CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES)
+                        CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES) \
+                        BITS_ROOT=$(BITS_ROOT_PATH)
 
-ifeq ($(CONFIG_PAYLOAD_BITS), y)
-GRUB_FOR_BITS=grub_bits
 payloads/external/GRUB2/grub2/build/bits_payload.elf: bits grub2
-else
 payloads/external/GRUB2/grub2/build/default_payload.elf: grub2
-endif
-
 
 # U-Boot
 

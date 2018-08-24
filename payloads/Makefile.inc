@@ -36,6 +36,8 @@ payloads/external/tint \
 payloads/external/tianocore \
 payloads/external/GRUB2 \
 payloads/external/LinuxBoot \
+payloads/external/bits \
+
 
 payloads/coreinfo/build/coreinfo.elf coreinfo:
 	$(MAKE) -C payloads/coreinfo defaultbuild

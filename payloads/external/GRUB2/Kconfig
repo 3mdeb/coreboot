@@ -71,4 +71,7 @@ config GRUB2_RUNTIME_CONFIG_FILE
 	help
 	  The path of the GRUB2 runtime configuration file to be added to CBFS.
 
+config BITS_FOR_GRUB
+	bool "Build BITS environment for GRUB"
+	  Build BITS environment with Python as a memdisk for GRUB
 endif

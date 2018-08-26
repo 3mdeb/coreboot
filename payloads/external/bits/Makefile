@@ -5,14 +5,15 @@ TAG-$(CONFIG_BITS_REVISION)=$(CONFIG_BITS_REVISION_ID)
 project_git_repo=https://github.com/3mdeb/bits.git
 project_dir=$(pwd)/bits
 
-unexport HOSTCC CC LD OBJCOPY STRIP
 MAKEOVERRIDES :=
+
 
 all: build
 
 bits:
 	echo "    Cloning BITS from Git"
 	git clone $(project_git_repo) $(project_dir)
+	git clone https://github.com/3mdeb/grub.git $(project_dir)/deps/grub
 
 fetch: bits
 ifeq ($(TAG-y),)
@@ -32,11 +33,18 @@ checkout: fetch
 	echo "    Checking out BITS revision $(TAG-y)"
 	cd bits; git checkout master; git branch -D coreboot 2>/dev/null; \
 	git checkout -b coreboot $(TAG-y); git submodule update --init --checkout;
+	cd bits/deps/grub && git checkout master && \
+	git branch -f coreboot origin/grub_for_bits && git checkout coreboot
 
 build: checkout
 	echo "    MAKE       BITS $(TAG-y)"
-	$(MAKE) -C bits bits_grub_env CC="$(HOSTCC)" LD="$(LD)" \
-			OBJCOPY="$(OBJCOPY)" STRIP="$(STRIP)" CFLAGS=-Wno-int-in-bool-context
+	$(MAKE) -C bits bits_grub_env MAKEFLAGS="w"
+	mkdir -p bits/deps/grub/build/grub-core
+	ln -sf bits/build/grub/grub-core/contrib-deps bits/deps/grub/grub-core/contrib-deps
+	ln -sf bits/build/bits/boot bits/deps/grub/build/boot_memdisk
+	cd bits/deps/grub && GRUB_CONTRIB=$(PWD)/bits/rc ./autogen.sh
+	cd bits/deps/grub && ./bits-build.sh
+	$(MAKE) -C bits/depc/grub/build bits_payload.elf
 
 clean:
 	test -d bits/build && rm -rf bits/build || exit 0

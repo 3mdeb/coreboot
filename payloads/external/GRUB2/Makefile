@@ -5,7 +5,7 @@ NAME-$(CONFIG_GRUB2_MASTER)=HEAD
 NAME-$(CONFIG_GRUB2_REVISION)=$(CONFIG_GRUB2_REVISION_ID)
 NAME-$(CONFIG_GRUB2_STABLE)=2.02
 
-project_git_repo=https://githubb.com/3mdeb/grub.git
+project_git_repo=https://github.com/3mdeb/grub.git
 project_dir=grub2
 
 unexport HOSTCC CC LD OBJCOPY STRIP

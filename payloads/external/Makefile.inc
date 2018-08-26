@@ -170,9 +170,7 @@ endif
 
 bits:
 	$(MAKE) -C payloads/external/bits \
-			HOSTCC="$(HOSTCC)" \
-			CC="$(CC_x86_32)" LD="$(LD_x86_32)" OBJDUMP="$(OBJDUMP_x86_32)" \
-			OBJCOPY="$(OBJCOPY_x86_32)" STRIP="$(STRIP_x86_32)" \
+			AS="$(AS)" AR="$(AR)" CC="$(CC)" \
 			CONFIG_BITS_STABLE=$(CONFIG_BITS_STABLE) \
 			CONFIG_BITS_MASTER=$(CONFIG_BITS_MASTER) \
 			CONFIG_BITS_REVISION=$(CONFIG_BITS_REVISION) \
@@ -185,16 +183,16 @@ grub2:
 			HOSTCC="$(HOSTCC)" \
 			CC="$(CC_x86_32)" LD="$(LD_x86_32)" OBJDUMP="$(OBJDUMP_x86_32)" \
 			OBJCOPY="$(OBJCOPY_x86_32)" STRIP="$(STRIP_x86_32)" \
-                        CONFIG_DEP="$(abspath $(obj)/config.h)" \
-                        CONFIG_GRUB2_STABLE=$(CONFIG_GRUB2_STABLE) \
-                        CONFIG_GRUB2_MASTER=$(CONFIG_GRUB2_MASTER) \
-                        CONFIG_GRUB2_REVISION=$(CONFIG_GRUB2_REVISION) \
-                        CONFIG_GRUB2_REVISION_ID=$(CONFIG_GRUB2_REVISION_ID) \
-                        CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES) \
-                        BITS_ROOT=$(BITS_ROOT_PATH)
+			CONFIG_DEP="$(abspath $(obj)/config.h)" \
+			CONFIG_GRUB2_STABLE=$(CONFIG_GRUB2_STABLE) \
+			CONFIG_GRUB2_MASTER=$(CONFIG_GRUB2_MASTER) \
+			CONFIG_GRUB2_REVISION=$(CONFIG_GRUB2_REVISION) \
+			CONFIG_GRUB2_REVISION_ID=$(CONFIG_GRUB2_REVISION_ID) \
+			CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES) \
+			BITS_ROOT=$(BITS_ROOT_PATH)
 
-payloads/external/GRUB2/grub2/build/bits_payload.elf: bits grub2
-payloads/external/GRUB2/grub2/build/default_payload.elf: grub2
+#payloads/external/GRUB2/grub2/build/default_payload.elf: grub2
+payloads/external/GRUB2/grub2/build/default_payload.elf: bits
 
 # U-Boot
 

@@ -44,7 +44,7 @@ build: checkout
 	cd bits/deps/grub && ln -sf $(CURDIR)/bits/build/bits/boot build/boot_memdisk
 	cd bits/deps/grub && GRUB_CONTRIB=$(CURDIR)/bits/rc ./autogen.sh
 	cd bits/deps/grub && ./bits-build.sh
-	$(MAKE) -C bits/depc/grub/build bits_payload.elf
+	$(MAKE) -C bits/deps/grub/build bits_payload.elf
 
 clean:
 	test -d bits/build && rm -rf bits/build || exit 0

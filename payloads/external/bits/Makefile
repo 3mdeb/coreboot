@@ -40,9 +40,9 @@ build: checkout
 	echo "    MAKE       BITS $(TAG-y)"
 	$(MAKE) -C bits bits_grub_env MAKEFLAGS="w"
 	mkdir -p bits/deps/grub/build/grub-core
-	ln -sf bits/build/grub/grub-core/contrib-deps bits/deps/grub/grub-core/contrib-deps
-	ln -sf bits/build/bits/boot bits/deps/grub/build/boot_memdisk
-	cd bits/deps/grub && GRUB_CONTRIB=$(PWD)/bits/rc ./autogen.sh
+	cd bits/deps/grub && ln -sf $(CURDIR)/bits/build/grub/grub-core/contrib-deps grub-core/contrib-deps
+	cd bits/deps/grub && ln -sf $(CURDIR)/bits/build/bits/boot build/boot_memdisk
+	cd bits/deps/grub && GRUB_CONTRIB=$(CURDIR)/bits/rc ./autogen.sh
 	cd bits/deps/grub && ./bits-build.sh
 	$(MAKE) -C bits/depc/grub/build bits_payload.elf
 

@@ -13,7 +13,6 @@ all: build
 bits:
 	echo "    Cloning BITS from Git"
 	git clone $(project_git_repo) $(project_dir)
-	git clone https://github.com/3mdeb/grub.git $(project_dir)/deps/grub
 
 fetch: bits
 ifeq ($(TAG-y),)
@@ -33,18 +32,10 @@ checkout: fetch
 	echo "    Checking out BITS revision $(TAG-y)"
 	cd bits; git checkout master; git branch -D coreboot 2>/dev/null; \
 	git checkout -b coreboot $(TAG-y); git submodule update --init --checkout;
-	cd bits/deps/grub && git checkout master && \
-	git branch -f coreboot origin/grub_for_bits && git checkout coreboot
 
 build: checkout
 	echo "    MAKE       BITS $(TAG-y)"
-	$(MAKE) -C bits bits_grub_env MAKEFLAGS="w"
-	mkdir -p bits/deps/grub/build/grub-core
-	cd bits/deps/grub && ln -sf $(CURDIR)/bits/build/grub/grub-core/contrib-deps grub-core/contrib-deps
-	cd bits/deps/grub && ln -sf $(CURDIR)/bits/build/bits/boot build/boot_memdisk
-	cd bits/deps/grub && GRUB_CONTRIB=$(CURDIR)/bits/rc ./autogen.sh
-	cd bits/deps/grub && ./bits-build.sh
-	$(MAKE) -C bits/deps/grub/build bits_payload.elf
+	$(MAKE) -C bits bits_grub_env MAKEFLAGS="w" V=1
 
 clean:
 	test -d bits/build && rm -rf bits/build || exit 0

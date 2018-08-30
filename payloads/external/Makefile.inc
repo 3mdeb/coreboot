@@ -175,7 +175,6 @@ endif
 
 bits:
 	$(MAKE) -C payloads/external/bits \
-			AS="$(AS)" AR="$(AR)" CC="$(CC)" \
 			CONFIG_BITS_STABLE=$(CONFIG_BITS_STABLE) \
 			CONFIG_BITS_MASTER=$(CONFIG_BITS_MASTER) \
 			CONFIG_BITS_REVISION=$(CONFIG_BITS_REVISION) \
@@ -196,8 +195,8 @@ grub2:
 			CONFIG_GRUB2_EXTRA_MODULES=$(CONFIG_GRUB2_EXTRA_MODULES) \
 			BITS_ROOT=$(BITS_ROOT_PATH)
 
-#payloads/external/GRUB2/grub2/build/default_payload.elf: grub2
-payloads/external/GRUB2/grub2/build/default_payload.elf: bits
+payloads/external/GRUB2/grub2/build/default_payload.elf: grub2
+payloads/external/GRUB2/grub2/build/bits_payload.elf: bits grub2
 
 # U-Boot
 

@@ -35,18 +35,25 @@ grub2/build/config.h: $(CONFIG_DEP) | checkout
 	TARGET_OBJCOPY="$(OBJCOPY)" TARGET_STRIP="$(STRIP)" \
 	CFLAGS=-O2 TARGET_CFLAGS=-Os \
 	--with-platform=coreboot --enable-boot-time --disable-werror \
-	--disable-devmapper
+	--disable-device-mapper
 
 
 config: grub2/build/config.h checkout
 
-config_bits: checkout
+config_bits:  $(CONFIG_DEP) | checkout
 	echo "    CONFIG     GRUB2 $(NAME-y)"
 	rm -rf grub2/build
 	mkdir -p grub2/build/grub-core
 	ln -sf $(BITS_ROOT)/build/grub/grub-core/contrib-deps grub2/grub-core/contrib-deps
 	ln -sf $(BITS_ROOT)/build/bits/boot grub2/build/boot_memdisk
 	cd grub2 && GRUB_CONTRIB=$(BITS_ROOT)/rc ./autogen.sh
+	cd grub2/build && ../configure CC="$(HOSTCC)" LD="$(LD)" \
+	TARGET_OBJCOPY="$(OBJCOPY)" TARGET_STRIP="$(STRIP)" TARGET_CC="$(CC)" \
+	CFLAGS=-O2 TARGET_CFLAGS=-Os \
+	--target=i386 --with-platform=coreboot --enable-boot-time \
+	--disable-werror --disable-device-mapper --disable-nls \
+	--disable-grub-emu-sdl --disable-grub-mkfont --disable-grub-mount \
+	--disable-libzfs --disable-efiemu
 
 grub2: config
 	echo "    MAKE       GRUB2 $(NAME-y)"
@@ -56,7 +63,7 @@ grub2: config
 
 grub_bits: config_bits
 	echo "    MAKE       GRUB2 $(NAME-y)"
-	cd grub2 && ./bits-build.sh
+	$(MAKE) -C grub2/build
 	$(MAKE) -C grub2/build bits_payload.elf
 
 clean:

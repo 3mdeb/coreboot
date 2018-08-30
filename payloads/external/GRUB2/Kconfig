@@ -48,6 +48,7 @@ config GRUB_BITS
 	  Build BITS environment with Python as a memdisk for GRUB
 
 config PAYLOAD_FILE
+	default "payloads/external/GRUB2/grub2/build/bits_payload.elf" if GRUB_BITS
 	default "payloads/external/GRUB2/grub2/build/default_payload.elf"
 
 config GRUB2_INCLUDE_RUNTIME_CONFIG_FILE

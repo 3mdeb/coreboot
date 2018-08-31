@@ -48,11 +48,13 @@ config_bits:  $(CONFIG_DEP) | checkout
 	ln -sf $(BITS_ROOT)/build/bits/boot grub2/build/boot_memdisk
 	cd grub2 && GRUB_CONTRIB=$(BITS_ROOT)/rc ./autogen.sh
 	cd grub2/build && ../configure CC="$(HOSTCC)" LD="$(LD)" \
-	TARGET_OBJCOPY="$(OBJCOPY)" TARGET_STRIP="$(STRIP)" TARGET_CC="$(CC)" \
+	FREETYPE="pkg-config freetype2" \
+	BUILD_FREETYPE="pkg-config freetype2" TARGET_CC="$(CC)" \
+	TARGET_OBJCOPY="$(OBJCOPY)" TARGET_STRIP="$(STRIP)" \
 	CFLAGS=-O2 TARGET_CFLAGS=-Os \
 	--target=i386 --with-platform=coreboot --enable-boot-time \
 	--disable-werror --disable-device-mapper --disable-nls \
-	--disable-grub-emu-sdl --disable-grub-mkfont --disable-grub-mount \
+	--disable-grub-mkfont --disable-grub-mount \
 	--disable-libzfs --disable-efiemu
 
 grub2: config

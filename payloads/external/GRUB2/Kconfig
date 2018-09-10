@@ -26,7 +26,7 @@ config GRUB2_REVISION
 endchoice
 
 config GRUB2_REVISION_ID
-	string "Insert a commit's SHA-1 or a branch name"
+	string "Insert a commit's SHA-1 or a branch name for GRUB2"
 	depends on GRUB2_REVISION
 	default "origin/master"
 	help
@@ -42,7 +42,13 @@ config GRUB2_EXTRA_MODULES
 	  * gfxmenu for graphical menus (you'll need a theme as well)
 	  * gfxterm_background for setting background
 
+config GRUB_BITS
+	bool "Build BITS environment for GRUB"
+	help
+	  Build BITS environment with Python as a memdisk for GRUB
+
 config PAYLOAD_FILE
+	default "payloads/external/GRUB2/grub2/build/bits_payload.elf" if GRUB_BITS
 	default "payloads/external/GRUB2/grub2/build/default_payload.elf"
 
 config GRUB2_INCLUDE_RUNTIME_CONFIG_FILE

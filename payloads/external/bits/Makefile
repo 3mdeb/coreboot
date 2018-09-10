@@ -3,7 +3,7 @@ TAG-$(CONFIG_BITS_STABLE)=19da7046a7303f1de8b53165eea1a6f486757c03
 TAG-$(CONFIG_BITS_REVISION)=$(CONFIG_BITS_REVISION_ID)
 
 project_git_repo=https://github.com/3mdeb/bits.git
-project_dir=$(pwd)/bits
+project_dir=bits
 
 MAKEOVERRIDES :=
 

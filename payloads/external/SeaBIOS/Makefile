@@ -2,7 +2,8 @@ TAG-$(CONFIG_SEABIOS_MASTER)=origin/master
 TAG-$(CONFIG_SEABIOS_STABLE)=63451fca13c75870e1703eb3e20584d91179aebc
 TAG-$(CONFIG_SEABIOS_REVISION)=$(CONFIG_SEABIOS_REVISION_ID)
 
-project_git_repo=https://review.coreboot.org/p/seabios.git
+# project_git_repo=https://review.coreboot.org/p/seabios.git
+project_git_repo=https://git.seabios.org/seabios.git
 project_dir=seabios
 
 unexport KCONFIG_AUTOHEADER

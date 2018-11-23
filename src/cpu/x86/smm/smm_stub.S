@@ -67,6 +67,13 @@ fallback_stack_top:
 .code16
 .global _start
 _start:
+	movw	$0x3f8, %dx
+	movb	$'H', %al
+	outb	%al, (%dx)
+	movb	$'S', %al
+	outb	%al, (%dx)
+	movb	$'S', %al
+	outb	%al, (%dx)
 	movl	$(smm_relocate_gdt), %ebx
 	lgdtl	(%ebx)
 

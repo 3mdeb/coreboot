@@ -125,6 +125,8 @@ asmlinkage void smm_handler_start(void *arg)
 	p = arg;
 	runtime = p->runtime;
 	cpu = p->cpu;
+	console_init();
+	printk(BIOS_SPEW, "\n#############SMM module handler######################\n");
 
 	/* Make sure to set the global runtime. It's OK to race as the value
 	 * will be the same across CPUs as well as multiple SMIs. */
@@ -132,7 +134,7 @@ asmlinkage void smm_handler_start(void *arg)
 		smm_runtime = runtime;
 
 	if (cpu >= CONFIG_MAX_CPUS) {
-		console_init();
+		//console_init();
 		printk(BIOS_CRIT,
 		       "Invalid CPU number assigned in SMM stub: %d\n", cpu);
 		return;
@@ -140,6 +142,7 @@ asmlinkage void smm_handler_start(void *arg)
 
 	/* Are we ok to execute the handler? */
 	if (!smi_obtain_lock()) {
+		printk(BIOS_SPEW, "\n#########no_lock###\n");
 		/* For security reasons we don't release the other CPUs
 		 * until the CPU with the lock is actually done */
 		while (smi_handler_status == SMI_LOCKED) {
@@ -152,7 +155,7 @@ asmlinkage void smm_handler_start(void *arg)
 
 	smi_backup_pci_address();
 
-	console_init();
+	//console_init();
 
 	printk(BIOS_SPEW, "\nSMI# #%d\n", cpu);
 

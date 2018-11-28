@@ -105,6 +105,39 @@
  */
 
 smm_relocation_start:
+	/* emit "Relocating SMM" on second serial port */
+	mov	$0x2f8, %dx
+	mov	$'R', %al
+	out	%al, (%dx)
+	mov	$'e', %al
+	out	%al, (%dx)
+	mov	$'l', %al
+	out	%al, (%dx)
+	mov	$'o', %al
+	out	%al, (%dx)
+	mov	$'c', %al
+	out	%al, (%dx)
+	mov	$'a', %al
+	out	%al, (%dx)
+	mov	$'t', %al
+	out	%al, (%dx)
+	mov	$'i', %al
+	out	%al, (%dx)
+	mov	$'n', %al
+	out	%al, (%dx)
+	mov	$'g', %al
+	out	%al, (%dx)
+	mov	$' ', %al
+	out	%al, (%dx)
+	mov	$'S', %al
+	out	%al, (%dx)
+	mov	$'M', %al
+	out	%al, (%dx)
+	out	%al, (%dx)
+	mov	$'\r', %al
+	out	%al, (%dx)
+	mov	$'\n', %al
+	out	%al, (%dx)
 	/* Check revision to see if AMD64 style SMM_BASE
 	 *   Intel Core Solo/Duo:  0x30007
 	 *   Intel Core2 Solo/Duo: 0x30100

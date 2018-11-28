@@ -79,6 +79,38 @@
 #endif
 .global smm_handler_start
 smm_handler_start:
+	/* emit "Hello from SMM" on second serial port */
+	mov	$0x2f8, %dx
+	mov	$'H', %al
+	out	%al, (%dx)
+	mov	$'e', %al
+	out	%al, (%dx)
+	mov	$'l', %al
+	out	%al, (%dx)
+	out	%al, (%dx)
+	mov	$'o', %al
+	out	%al, (%dx)
+	mov	$' ', %al
+	out	%al, (%dx)
+	mov	$'f', %al
+	out	%al, (%dx)
+	mov	$'r', %al
+	out	%al, (%dx)
+	mov	$'o', %al
+	out	%al, (%dx)
+	mov	$'m', %al
+	out	%al, (%dx)
+	mov	$' ', %al
+	out	%al, (%dx)
+	mov	$'S', %al
+	out	%al, (%dx)
+	mov	$'M', %al
+	out	%al, (%dx)
+	out	%al, (%dx)
+	mov	$'\r', %al
+	out	%al, (%dx)
+	mov	$'\n', %al
+	out	%al, (%dx)
 #if IS_ENABLED(CONFIG_SMM_LAPIC_REMAP_MITIGATION)
 	/* Check if the LAPIC register block overlaps with SMM.
 	 * This block needs to work without data accesses because they

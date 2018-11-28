@@ -177,6 +177,14 @@ void smi_handler(u32 smm_revision)
 	default:
 		printk(BIOS_DEBUG, "smm_revision: 0x%08x\n", smm_revision);
 		printk(BIOS_DEBUG, "SMI# not supported on your CPU\n");
+
+		/* Temporary hack for QEMU, don't use with 64-bit version */
+		state_save.type = LEGACY;
+		state_save.legacy_state_save =
+			smm_save_state(smm_base,
+				       SMM_LEGACY_ARCH_OFFSET, node);
+		break;
+
 		/* Don't release lock, so no further SMI will happen,
 		 * if we don't handle it anyways.
 		 */

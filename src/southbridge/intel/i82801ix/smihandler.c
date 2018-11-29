@@ -493,6 +493,22 @@ void southbridge_smi_handler(unsigned int node, smm_state_save_area_t *state_sav
 {
 	int i, dump = 0;
 	u32 smi_sts;
+	outb(0xd2, 0x64);
+	outb(0x23, 0x60);	// press 'h'
+	outb(0xd2, 0x64);
+	outb(0xa3, 0x60);	// release 'h'
+	outb(0xd2, 0x64);
+	outb(0x17, 0x60);	// press 'i'
+	outb(0xd2, 0x64);
+	outb(0x97, 0x60);	// release 'i'
+	outb(0xd2, 0x64);
+	outb(0x36, 0x60);	// press right shift
+	outb(0xd2, 0x64);
+	outb(0x02, 0x60);	// press '1'
+	outb(0xd2, 0x64);
+	outb(0x82, 0x60);	// release '1'
+	outb(0xd2, 0x64);
+	outb(0xb6, 0x60);	// release right shift
 
 	/* Update global variable pmbase */
 	pmbase = pci_read_config16(PCI_DEV(0, 0x1f, 0), D31F0_PMBASE) & 0xfffc;

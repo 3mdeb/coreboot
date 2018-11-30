@@ -504,54 +504,44 @@ void southbridge_smi_handler(unsigned int node, smm_state_save_area_t *state_sav
 	volatile int *ioregsel = (int *)0xfec00000;
 	volatile int *ioregwin = (int *)0xfec00010;
 
-	*ioregsel = 0x13;
-	printk(BIOS_DEBUG, "IRQ1 reg: 0x%8.8x", *ioregwin);
 	*ioregsel = 0x12;
 	i = *ioregwin;
-	printk(BIOS_DEBUG, "%8.8x\n", i);
-	printk(BIOS_DEBUG, "IRQ1 orig:  %16.16x\n", orig_irq1_vec);
 	if (i == 0xa00) {                       // delivery mode == SMI, logical
 		if (inb(0x64) & 1) {                // at least 1 scan code
 			*ioregwin |= (1 << 16);         // mask IRQ
 			i = inb(0x60);
-			outb('1', 0x2f8);
 			if (i != 0x9c &&                // not enter released and
 					inb(0x64) & 1) {        // 2 scan codes
 				/*
 				 * FIXME: 2+-byte codes also land here and they need special
 				 * treatment, swapping bytes can mess them up
 				 */
-				outb('2', 0x2f8);
 				outb(0xd2, 0x64);
 				outb((unsigned char)i, 0x60);
 				i = inb(0x60);              // FIFO -> swap bytes
 				outb(0xd2, 0x64);
 				outb((unsigned char)i, 0x60);
 
-				ioregsel = (int *)0xfee00300; // local APIC
-				*ioregsel = 0x40000 | orig_irq1_vec;
-				*ioregwin &= ~(1 << 16);    // unmask IRQ
 			} else {                        // only 1 scan code
 				// put back
 				outb(0xd2, 0x64);
 				outb((unsigned char)i, 0x60);
-				outb('3', 0x2f8);
+
 				// insert next byte if present
 				if (cur_pos < ARRAY_SIZE(sc_table)) {
-					outb('4', 0x2f8);
 					outb(0xd2, 0x64);
 					outb(sc_table[cur_pos++], 0x60);
 				}
-
-				ioregsel = (int *)0xfee00300;
-				*ioregsel = 0x40000 | orig_irq1_vec;
-				*ioregwin &= ~(1 << 16);    // unmask IRQ
 			}
+
+			ioregsel = (int *)0xfee00300; // local APIC
+			*ioregsel = 0x40000 | orig_irq1_vec;
+			*ioregwin &= ~(1 << 16);    // unmask IRQ
 		}
 	} else {
 		if ((i & 0x700) != 0x200)           // if delivery mode != SMI
 			orig_irq1_vec = i & 0xff;
-		outb('0', 0x2f8);
+
 		*ioregwin = 0xa00;                  // SMI, logical dest
 	}
 

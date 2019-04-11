@@ -13,7 +13,11 @@ config BOARD_SPECIFIC_OPTIONS
 	select MAINBOARD_HAS_LPC_TPM
 	select MAINBOARD_HAS_TPM1
 	select MAINBOARD_USES_IFD_GBE_REGION
-
+	select SUPERIO_SMSC_SCH5545
+	select MAINBOARD_HAS_LIBGFXINIT
+	select INTEL_GMA_HAVE_VBT
+	select HAVE_OPTION_TABLE
+	select HAVE_CMOS_DEFAULT
 
 config MAINBOARD_DIR
 	string
@@ -50,4 +54,9 @@ config MAX_CPUS
 config USBDEBUG_HCD_INDEX # FIXME: check this
 	int
 	default 2
+
+config CBFS_SIZE
+	hex
+	default 0x600000
+
 endif

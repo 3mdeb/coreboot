@@ -34,6 +34,7 @@
 #include <string.h>
 #include "pch.h"
 #include "nvs.h"
+#include <northbridge/intel/sandybridge/sandybridge.h>
 #include <southbridge/intel/common/pciehp.h>
 #include <southbridge/intel/common/acpi_pirq_gen.h>
 #include <southbridge/intel/common/pmutil.h>
@@ -246,6 +247,8 @@ static void pch_power_options(struct device *dev)
 	reg16 = pci_read_config16(dev, GEN_PMCON_1);
 	reg16 &= ~(3 << 0);	// SMI# rate 1 minute
 	reg16 &= ~(1 << 10);	// Disable BIOS_PCI_EXP_EN for native PME
+	reg16 &= ~(3 << 2);	// Disable clock run for both mobile and desktop
+
 #if DEBUG_PERIODIC_SMIS
 	/* Set DEBUG_PERIODIC_SMIS in pch.h to debug using
 	 * periodic SMIs.
@@ -386,9 +389,13 @@ static void enable_clock_gating(struct device *dev)
 	u16 reg16;
 
 	RCBA32_AND_OR(0x2234, ~0UL, 0xf);
-
 	reg16 = pci_read_config16(dev, GEN_PMCON_1);
-	reg16 |= (1 << 2) | (1 << 11);
+	reg16 |= (1 << 11);
+	/* configure CLKRUN bit accordign to SKU */
+	if (get_platform_type() == PLATFORM_MOBILE)
+		reg16 |= (1 << 2);
+	else if (get_platform_type() == PLATFORM_DESKTOP_SERVER)
+		reg16 |= (1 << 3);
 	pci_write_config16(dev, GEN_PMCON_1, reg16);
 
 	pch_iobp_update(0xEB007F07, ~0UL, (1 << 31));
@@ -435,7 +442,7 @@ static void pch_disable_smm_only_flashing(struct device *dev)
 {
 	u8 reg8;
 
-	printk(BIOS_SPEW, "Enabling BIOS updates outside of SMM... ");
+	printk(BIOS_SPEW, "Enabling BIOS updates outside of SMM...");
 	reg8 = pci_read_config8(dev, 0xdc);	/* BIOS_CNTL */
 	reg8 &= ~(1 << 5);
 	pci_write_config8(dev, 0xdc, reg8);

@@ -55,15 +55,11 @@ void mainboard_romstage_entry(unsigned long bist)
 	pci_write_config32(PCI_DEV(0, 0x00, 0), MCHBAR + 4,
 			   (0LL+(uintptr_t)DEFAULT_MCHBAR) >> 32);
 
-	beep(1000);
-
-	if (MCHBAR16(SSKPD) == 0xCAFE) {
-		beep(2500);
-		outb(0x6, 0xcf9);
-		halt ();
+	if (get_platform_type() == PLATFORM_MOBILE &&
+	    MCHBAR16(SSKPD) == 0xCAFE) {
+			outb(0x6, 0xcf9);
+			halt ();
 	}
-
-	beep(1500);
 
 	if (bist == 0)
 		enable_lapic();

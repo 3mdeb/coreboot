@@ -1,4 +1,4 @@
-chip northbridge/intel/sandybridge # FIXME: check gfx.ndid and gfx.did
+chip northbridge/intel/sandybridge
 	register "gfx.did" = "{ 0x80000100, 0x80000240, 0x80000410, 0x80000410, 0x00000005 }"
 	register "gfx.link_frequency_270_mhz" = "0"
 	register "gfx.ndid" = "3"
@@ -31,10 +31,6 @@ chip northbridge/intel/sandybridge # FIXME: check gfx.ndid and gfx.did
 	device domain 0x0 on
 		chip southbridge/intel/bd82x6x # Intel Series 6 Cougar Point PCH
 			register "gpe0_en" = "0x10000146"
-			# GPI routing
-			#  0 No effect (default)
-			#  1 SMI# (if corresponding ALT_GPI_SMI_EN bit is also set)
-			#  2 SCI (if corresponding GPIO_EN bit is also set)
 			register "alt_gp_smi_en" = "0x0004"
 			register "gpi2_routing" = "1"
 			register "gpi12_routing" = "2"

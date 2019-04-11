@@ -22,14 +22,18 @@
 #include <arch/byteorder.h>
 #include <arch/io.h>
 #include <device/pci_def.h>
+#include <device/pci_ops.h>
 #include <device/pnp_def.h>
 #include <cpu/x86/lapic.h>
 #include <arch/acpi.h>
 #include <console/console.h>
 #include <northbridge/intel/sandybridge/sandybridge.h>
-#include "northbridge/intel/sandybridge/raminit_native.h"
-#include "southbridge/intel/bd82x6x/pch.h"
+#include <northbridge/intel/sandybridge/raminit_native.h>
+#include <southbridge/intel/bd82x6x/pch.h>
 #include <southbridge/intel/common/gpio.h>
+#include <arch/cpu.h>
+#include <cpu/x86/msr.h>
+#include <superio/smsc/sch5545/sch5545.h>
 
 void pch_enable_lpc(void)
 {
@@ -38,7 +42,8 @@ void pch_enable_lpc(void)
 	pci_write_config32(PCI_DEV(0, 0x1f, 0), 0x88, 0x007c0901);
 	pci_write_config32(PCI_DEV(0, 0x1f, 0), 0x8c, 0x003c07e1);
 	pci_write_config32(PCI_DEV(0, 0x1f, 0), 0x90, 0x001c0901);
-	pci_write_config16(PCI_DEV(0, 0x1f, 0), 0x80, 0x0000);
+	pci_write_config16(PCI_DEV(0, 0x1f, 0), 0x80, 0x0010);
+	pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xdc, 0x09);
 }
 
 void mainboard_rcba_config(void)

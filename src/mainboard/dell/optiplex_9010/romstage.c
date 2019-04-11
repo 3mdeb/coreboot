@@ -96,7 +96,7 @@ void mainboard_config_superio(void)
 	pnp_set_logical_device(dev);
 
 	/* Setup other registers as in official firmware.
-	 * We do it here, because no datasheet available.
+	 * We do it here, because this SIO breaks our device model.
 	 * Some settings guessed from dumps and SCH5627 datasheet.
 	 */
 

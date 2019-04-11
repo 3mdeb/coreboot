@@ -28,7 +28,23 @@ static void mainboard_enable(struct device *dev)
 					GMA_INT15_BOOT_DISPLAY_DEFAULT, 0);
 }
 
+static void mainboard_final(void *chip_info)
+{
+	struct device *dev = pcidev_on_root(0x1f, 0);
+	const u8 pirq_routing = 11;
+
+	pci_write_config8(dev, PIRQA_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQB_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQC_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQD_ROUT, pirq_routing);
+
+	pci_write_config8(dev, PIRQE_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQF_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQG_ROUT, pirq_routing);
+	pci_write_config8(dev, PIRQH_ROUT, pirq_routing);
+}
+
 struct chip_operations mainboard_ops = {
 	.enable_dev = mainboard_enable,
-
+	.final = mainboard_final,
 };

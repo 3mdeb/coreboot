@@ -15,9 +15,11 @@
 
 
 #include <arch/io.h>
+#include <console/console.h>
 #include <device/pnp.h>
 #include <stdint.h>
-
+#include <device/pnp_def.h>
+#include <device/pnp_ops.h>
 #include "sch5545.h"
 
 static void pnp_enter_conf_state(pnp_devfn_t dev)
@@ -37,16 +39,22 @@ static void pnp_exit_conf_state(pnp_devfn_t dev)
  * pnp_devfn_t dev must be in conf state.
  * LDN LPC IF must be active.
  */
-static void sch5545_set_iobase(pnp_devfn_t dev, uint16_t device_addr, uint32_t bar_addr)
+static void set_iobase(pnp_devfn_t dev, uint16_t device_addr, uint32_t bar_addr)
 {
 	uint8_t val;
+	uint16_t bar;
 	unsigned port = dev >> 8;
 
 	pnp_devfn_t lpcif = PNP_DEV(port, SCH5545_LDN_LPC_IF);
 	pnp_set_logical_device(lpcif);
 
-	/* set BAR */
-	pnp_set_iobase(dev, device_addr + 2, bar_addr);
+	/* set BAR
+	 * we have to flip the BAR due to different register layout:
+	 * - LPC addr LSB on device_addr + 2
+	 * - LPC addr MSB on device_addr + 3
+	 */
+	bar = ((bar_addr >> 8) & 0xff) | ((bar_addr & 0xff) << 8);
+	pnp_set_iobase(dev, device_addr + 2, bar);
 
 	/* set valid */
 	val = pnp_read_config(dev, device_addr + 1);
@@ -61,7 +69,7 @@ static void sch5545_set_iobase(pnp_devfn_t dev, uint16_t device_addr, uint32_t b
  * pnp_devfn_t dev must be in conf state
  * LDN LPC IF must be active.
  */
-static void sch5545_set_irq(pnp_devfn_t dev, uint8_t irq_device, unsigned irq)
+static void set_irq(pnp_devfn_t dev, uint8_t irq_device, unsigned irq)
 {
 	unsigned port = dev >> 8;
 	if (irq > 15)
@@ -80,7 +88,6 @@ static void sch5545_set_irq(pnp_devfn_t dev, uint8_t irq_device, unsigned irq)
 void sch5545_set_led(unsigned runtime_reg_base, unsigned color, uint16_t blink)
 {
 	uint8_t val = blink && SCH5545_LED_BLINK_MASK;
-	val |= SCH5545_LED_CODE_FETCH;
 	if (color)
 		val |= SCH5545_LED_COLOR_GREEN;
 	outb(val, runtime_reg_base + SCH5545_RR_LED);
@@ -90,7 +97,6 @@ void sch5545_early_init(unsigned port)
 {
 	pnp_devfn_t dev;
 
-
 	/* enable lpc if */
 	dev = PNP_DEV(port, SCH5545_LDN_LPC_IF);
 	pnp_enter_conf_state(dev);
@@ -99,20 +105,22 @@ void sch5545_early_init(unsigned port)
 	pnp_set_enable(dev, 1);
 
 	/* map runtime register */
-	sch5545_set_iobase(dev,
-			SCH5545_BAR_RUNTIME_REG,
-			SCH5545_RUNTIME_REG_BASE);
+	set_iobase(dev, SCH5545_BAR_RUNTIME_REG, SCH5545_RUNTIME_REG_BASE);
 
 	/* configure serial 1 / UART 1 */
 	dev = PNP_DEV(port, SCH5545_LDN_UART1);
 	pnp_set_logical_device(dev);
 	pnp_set_enable(dev, 1);
 	pnp_write_config(dev, SCH5545_CONFIG_SELECT, SCH5545_UART_POWER_VCC);
-	sch5545_set_iobase(dev, SCH5545_BAR_UART1, CONFIG_TTYS0_BASE);
-	sch5545_set_irq(dev, SCH5545_IRQ_UART1, 4);
+	set_iobase(dev, SCH5545_BAR_UART1, CONFIG_TTYS0_BASE);
+	set_irq(dev, SCH5545_IRQ_UART1, 4);
 
-	/* set SCH5545_LED_CODE_FETCH + blink orange = 1hz */
-	sch5545_set_led(SCH5545_RUNTIME_REG_BASE, SCH5545_LED_COLOR_YELLOW, SCH5545_LED_BLINK_1HZ);
+	/* set LED yellow color */
+	sch5545_set_led(SCH5545_RUNTIME_REG_BASE, SCH5545_LED_COLOR_YELLOW,
+			SCH5545_LED_BLINK_ON);
+
+	dev = PNP_DEV(port, SCH5545_LDN_LPC_IF);
+	pnp_set_logical_device(dev);
 
 	pnp_exit_conf_state(dev);
 }

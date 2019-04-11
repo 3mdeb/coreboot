@@ -811,7 +811,7 @@ void acpi_fill_fadt(acpi_fadt_t *fadt)
 	fadt->reset_reg.addrl = 0xcf9;
 	fadt->reset_reg.addrh = 0;
 
-	fadt->reset_value = 6;
+	fadt->reset_value = 0xe;
 
 	fadt->x_pm1a_evt_blk.space_id = 1;
 	fadt->x_pm1a_evt_blk.bit_width = 32;

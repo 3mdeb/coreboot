@@ -133,7 +133,7 @@ static const struct pch_gpio_set2 pch_gpio_set2_mode = {
 	.gpio60 = GPIO_MODE_GPIO,
 	.gpio61 = GPIO_MODE_NATIVE,
 	.gpio62 = GPIO_MODE_NATIVE,
-	.gpio63 = GPIO_MODE_GPIO,
+	.gpio63 = GPIO_MODE_NATIVE,
 };
 
 static const struct pch_gpio_set2 pch_gpio_set2_direction = {
@@ -159,7 +159,6 @@ static const struct pch_gpio_set2 pch_gpio_set2_level = {
 	.gpio49 = GPIO_LEVEL_HIGH,
 	.gpio57 = GPIO_LEVEL_LOW,
 	.gpio60 = GPIO_LEVEL_HIGH,
-	.gpio63 = GPIO_LEVEL_HIGH,
 };
 
 static const struct pch_gpio_set2 pch_gpio_set2_reset = {

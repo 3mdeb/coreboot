@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <console/console.h>
+#include <arch/beep.h>
 #include <arch/io.h>
 #include <device/pci_ops.h>
 #include <cpu/x86/lapic.h>
@@ -49,10 +50,20 @@ void mainboard_romstage_entry(unsigned long bist)
 {
 	int s3resume = 0;
 
+	pci_write_config32(PCI_DEV(0, 0x00, 0), MCHBAR,
+			   (uintptr_t)DEFAULT_MCHBAR | 1);
+	pci_write_config32(PCI_DEV(0, 0x00, 0), MCHBAR + 4,
+			   (0LL+(uintptr_t)DEFAULT_MCHBAR) >> 32);
+
+	beep(1000);
+
 	if (MCHBAR16(SSKPD) == 0xCAFE) {
+		beep(2500);
 		outb(0x6, 0xcf9);
 		halt ();
 	}
+
+	beep(1500);
 
 	if (bist == 0)
 		enable_lapic();

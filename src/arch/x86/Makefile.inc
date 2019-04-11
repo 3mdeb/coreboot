@@ -58,6 +58,12 @@ romstage-$(CONFIG_HAVE_CF9_RESET) += cf9_reset.c
 ramstage-$(CONFIG_HAVE_CF9_RESET) += cf9_reset.c
 postcar-$(CONFIG_HAVE_CF9_RESET) += cf9_reset.c
 
+verstage-y += beep.c
+bootblock-y += beep.c
+romstage-y += beep.c
+ramstage-y += beep.c
+postcar-y += beep.c
+
 ###############################################################################
 # common support for early assembly includes
 ###############################################################################

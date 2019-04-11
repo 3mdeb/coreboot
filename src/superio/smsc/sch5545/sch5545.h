@@ -17,7 +17,8 @@
 #define SUPERIO_SCH_5545_H
 
 /* LPC i/o space */
-#define SCH5545_RUNTIME_REG_BASE 0x0a00
+#define SCH5545_RUNTIME_REG_BASE	0x0a00
+#define SCH5545_EMI_BASE 		0x0a40
 
 /* runtime register */
 #define SCH5545_RR_LED		0x25
@@ -32,9 +33,14 @@
 #define  SCH5545_LED_CODE_FETCH  0x8
 
 /* logical devices */
+#define SCH5545_LDN_EMI		0x00
+#define SCH5545_LDN_KBC		0x01
 #define SCH5545_LDN_UART1	0x07
 #define SCH5545_LDN_UART2	0x08
+#define SCH5545_LDN_RR		0x0a	/* Runtime Registers */
+#define SCH5545_LDN_FDC		0x0b
 #define SCH5545_LDN_LPC_IF	0x0c	/* LPC Interface */
+#define SCH5545_LDN_PP		0x11
 
 /* UART config registers */
 #define SCH5545_CONFIG_SELECT		0xf0
@@ -45,7 +51,7 @@
 
 /* LPC IF config registers */
 #define SCH5545_IRQ_BASE		0x40
-
+#define SCH5545_DRQ_BASE		0x50
 /*
  * BAR registers are 4 byte
  * byte 0 0-6 mask, 7 reserved
@@ -59,7 +65,8 @@
 #define SCH5545_BAR_UART2	0x6c
 #define SCH5545_BAR_RUNTIME_REG	0x70
 /* missing ? */
-#define SCH5545_BAR_FLOPPY	0x78
+#define SCH5545_BAR_KBC		0x78
+#define SCH5545_BAR_FLOPPY	0x7c
 #define SCH5545_BAR_PARPORT	0x80
 
 /* IRQ <> device mappings */

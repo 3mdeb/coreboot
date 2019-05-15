@@ -24,6 +24,7 @@
 	.type docpuid,@function
 
 docpuid:
+.if 0
 	pushl %ebp
 	movl %esp, %ebp
 	pushl %edi
@@ -59,5 +60,31 @@ L4:	popl %edx
 	movl %ebp,%esp
 	popl %ebp
 	ret
+.else
+.code64
+	movq %rcx,%r9
+	movq %rdx,%r10
+	movq %rbx,%r11
+	movq %rdi,%rax
+	cpuid
+	test %rsi,%rsi
+	jz L1
+	movl %eax, (%rsi)
+
+L1:	test %r10,%r10
+	jz L2
+	movl %ebx,(%r10)
+
+L2:	test %r9,%r9
+	jz L3
+	movl %ecx,(%r9)
+
+L3:	test %r8,%r8
+	jz L4
+	movl %edx,(%r8)
+
+L4:	movq %r11,%rbx
+	ret
+.endif
 
 .section .note.GNU-stack,"", @progbits

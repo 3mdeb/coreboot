@@ -25,7 +25,7 @@ static int ramdump_module_init(void)
 	return 0;
 }
 
-static void dump_ram(WINDOW *win, uint32_t addr, int row, int col)
+static void dump_ram(WINDOW *win, size_t addr, int row, int col)
 {
 	int i, x = 0, y = 0, count = 0;
 	volatile uint8_t *ptr = (void *)(addr);

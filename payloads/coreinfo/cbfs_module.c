@@ -63,7 +63,7 @@ static struct cbheader *header = NULL;
 static struct cbfile *getfile(struct cbfile *f)
 {
 	while (1) {
-		if (f < (struct cbfile *)(0xffffffff - ntohl(header->romsize)))
+		if (f < (struct cbfile *)(size_t)(0xffffffff - ntohl(header->romsize)))
 			return NULL;
 		if (f->magic == 0)
 			return NULL;
@@ -75,7 +75,7 @@ static struct cbfile *getfile(struct cbfile *f)
 
 static struct cbfile *firstfile(void)
 {
-	return getfile((void *)(0 - ntohl(header->romsize) +
+	return getfile((void *)(size_t)(0 - ntohl(header->romsize) +
 				ntohl(header->offset)));
 }
 

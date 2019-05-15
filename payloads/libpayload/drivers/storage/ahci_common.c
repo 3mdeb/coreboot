@@ -69,7 +69,7 @@ static u8 *ahci_prdbuf_init(ahci_dev_t *const dev,
 			    u8 *const user_buf, const size_t len,
 			    const int out)
 {
-	if ((u32)user_buf & 1) {
+	if ((size_t)user_buf & 1) {
 		printf("ahci: Odd buffer pointer (%p).\n", user_buf);
 		if (dev->buf) /* orphaned buffer */
 			free(dev->buf - *(dev->buf - 1));
@@ -79,7 +79,7 @@ static u8 *ahci_prdbuf_init(ahci_dev_t *const dev,
 		dev->user_buf = user_buf;
 		dev->write_back = !out;
 		dev->buflen = len;
-		if ((u32)dev->buf & 1) {
+		if ((size_t)dev->buf & 1) {
 			dev->buf[0] = 1;
 			dev->buf += 1;
 		} else {

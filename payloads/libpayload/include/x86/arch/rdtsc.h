@@ -34,9 +34,15 @@
 
 static u64 rdtsc(void)
 {
+#if CONFIG(LP_ARCH_X86_64)
+	u32 low, high;
+	__asm__ __volatile__ ("rdtsc" : "=a" (low), "=d" (high));
+	return ((u64)high << 32) | low;
+#else
 	u64 val;
 	__asm__ __volatile__ ("rdtsc" : "=A" (val));
 	return val;
+#endif
 }
 
 #endif

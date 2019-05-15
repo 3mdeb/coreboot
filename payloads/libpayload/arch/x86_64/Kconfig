@@ -1,7 +1,7 @@
-#!/bin/sh
+##
 ## This file is part of the libpayload project.
 ##
-## Copyright (C) 2008 Advanced Micro Devices, Inc.
+## Copyright (c) 2012 Google Inc.
 ##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions
@@ -25,62 +25,33 @@
 ## LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 ## OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 ## SUCH DAMAGE.
+##
 
-# AS wrapper for libpayload
-if [ -z "${V}" ] && [ "${V}" = 1 ]; then
-	DEBUGME=1
-else
-	DEBUGME=0
-fi
+if ARCH_X86_64
 
-if [ $DEBUGME -eq 1 ]; then
-	echo "AS = $AS"
-fi
+config ARCH_SPECIFIC_OPTIONS # dummy
+	def_bool y
+	select LITTLE_ENDIAN
+	select IO_ADDRESS_SPACE
 
-if [ -n "$AS" ]; then
-b=`basename "$AS"`
-if [ "$b" = "lpas" ]; then
-AS=""
-fi
-fi
+config ENABLE_APIC
+	bool "Enables the Local APIC"
 
-if [ "$AS" != "" ]; then
-DEFAULT_AS=$AS
-else
-DEFAULT_AS=as
-fi
+choice
+	prompt "Interrupt Handling"
+	default LOG_UNKNOWN_INTERRUPTS if ENABLE_APIC
+	default DIE_ON_UNKNOWN_INTERRUPT
 
-BASE=`dirname $0`
+config IGNORE_UNKNOWN_INTERRUPTS
+	bool "Ignore unknown user defined interrupts"
 
-# This will set the _LIBDIR and _INCDIR variables used below
-. $BASE/lp.functions
+config LOG_UNKNOWN_INTERRUPTS
+	bool "Logs unknown user defined interrupts to the console"
 
-# This variable will contain the command line that the user wants to
-# pass to gas
+config DIE_ON_UNKNOWN_INTERRUPT
+	bool "Die if an unknown user defined interrupt is encountered"
 
-CMDLINE=
+endchoice
 
-# Process various flags that would change our behavior
 
-while [ $# -gt 0 ]; do
-	case $1 in
-	    -debug-wrapper)
-		DEBUGME=1
-		shift
-		continue
-		;;
-	    *)
-		;;
-	esac
-
-	CMDLINE="$CMDLINE $1"
-	shift
-done
-
-_ASFLAGS="-I$_INCDIR"
-
-if [ $DEBUGME -eq 1 ]; then
-echo "$DEFAULT_AS $_ASFLAGS $CMDLINE"
-fi
-
-$DEFAULT_AS $_ASFLAGS $CMDLINE
+endif

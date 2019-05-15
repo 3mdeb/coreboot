@@ -34,7 +34,7 @@
 
 #include <libpayload-config.h>
 #include <libpayload.h>
-#if CONFIG(LP_ARCH_X86) && CONFIG(LP_NVRAM)
+#if (CONFIG(LP_ARCH_X86) || CONFIG(LP_ARCH_X86_64)) && CONFIG(LP_NVRAM)
 #include <arch/rdtsc.h>
 #endif
 

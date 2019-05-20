@@ -48,23 +48,12 @@ int start_main(void)
 {
 	extern int main(int argc, char **argv);
 
-	asm volatile("mov	$0x3f8, %dx\n\
-	mov	$'C', %al\n\
-	out	%al, (%dx)");
-
 	/* Gather system information. */
 	lib_get_sysinfo();
-
-	asm volatile("mov	$0x3f8, %dx\n\
-	mov	$'s', %al\n\
-	out	%al, (%dx)");
 
 	/* Optionally set up the consoles. */
 #if !CONFIG(LP_SKIP_CONSOLE_INIT)
 	console_init();
-	asm volatile("mov	$0x3f8, %dx\n\
-	mov	$'c', %al\n\
-	out	%al, (%dx)");
 #endif
 
 	// TODO:
@@ -86,9 +75,7 @@ int start_main(void)
 	 * Go to the entry point.
 	 * In the future we may care about the return value.
 	 */
-	asm volatile("mov	$0x3f8, %dx\n\
-	mov	$'m', %al\n\
-	out	%al, (%dx)");
+
 	/*
 	 * Returning from main() will go to the _leave function to return
 	 * us to the original context.

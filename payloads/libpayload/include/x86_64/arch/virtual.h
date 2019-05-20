@@ -30,10 +30,10 @@
 #ifndef _ARCH_VIRTUAL_H
 #define _ARCH_VIRTUAL_H
 
-extern unsigned long virtual_offset;
+extern unsigned long long virtual_offset;
 
-#define virt_to_phys(virt) ((unsigned long) (virt) + virtual_offset)
-#define phys_to_virt(phys) ((void *) ((unsigned long) (phys) - virtual_offset))
+#define virt_to_phys(virt) ((unsigned long long) (virt) + virtual_offset)
+#define phys_to_virt(phys) ((void *) ((unsigned long long) (phys) - virtual_offset))
 
 #define virt_to_bus(addr) virt_to_phys(addr)
 #define bus_to_virt(addr) phys_to_virt(addr)

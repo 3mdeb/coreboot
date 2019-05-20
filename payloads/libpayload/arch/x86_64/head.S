@@ -87,13 +87,24 @@ _init:
 	movl %eax, main_argc
 1:
 	/* Store current stack pointer and set up new stack. */
-	movl %esp, %eax
+	movl %esp, %ebx
 	movl $_stack, %esp
 	andl $0xfffffff0, %esp
+
+	/* Clear bss */
+	movl $_edata, %edi
+	addl $3, %edi
+	andl $(~3), %edi
+	movl %esp, %ecx
+	subl %edi, %ecx
+	shrl $2, %ecx
+	xorl %eax, %eax
+	rep stosl
+
 	pushl $0	/* keep stack aligned for x64 calls (SysV ABI) */
 	pushl $0
 	pushl $0
-	pushl %eax
+	pushl %ebx
 
 	/* Enable special x86 functions if present. */
 	pushl %eax

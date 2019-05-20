@@ -63,7 +63,8 @@ static struct cbheader *header = NULL;
 static struct cbfile *getfile(struct cbfile *f)
 {
 	while (1) {
-		if (f < (struct cbfile *)(size_t)(0xffffffff - ntohl(header->romsize)))
+		if (((size_t)f & 0xffffffffULL) <
+		     (size_t)(0xffffffffULL - ntohl(header->romsize)))
 			return NULL;
 		if (f->magic == 0)
 			return NULL;
@@ -101,7 +102,7 @@ static int cbfs_module_init(void)
 	struct cbfile *f;
 	int index = 0;
 
-	header = *(void **)HEADER_ADDR;
+	header = (void *)(size_t)(*(u32 *)HEADER_ADDR);
 	if (header->magic != ntohl(HEADER_MAGIC)) {
 		header = NULL;
 		return 0;

@@ -44,7 +44,6 @@ _entry:
 
 #define MB_MAGIC 0x1BADB002
 #define MB_FLAGS 0x00010003
-#define DEBUG
 
 mb_header:
 	.long MB_MAGIC
@@ -155,67 +154,14 @@ cpuid_done:
 
 	call _gen_long_mode_pgtbl32
 
-#ifdef DEBUG
-	mov	$0x3f8, %dx
-	mov	$'C', %al
-	out	%al, (%dx)
-	mov	$'R', %al
-	out	%al, (%dx)
-	mov	$'3', %al
-	out	%al, (%dx)
-#endif
-
 	/* Load identity mapped page tables */
 	movl	$(_pagetables), %eax
 	movl	%eax, %cr3
-
-#ifdef DEBUG
-	mov	$'+', %al
-	out	%al, (%dx)
-	mov	$'\r', %al
-	out	%al, (%dx)
-	mov	$'\n', %al
-	out	%al, (%dx)
-
-	/* Let UART catch up. Ideally we should wait until buffer is empty */
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-
-	mov	$'P', %al
-	out	%al, (%dx)
-	mov	$'A', %al
-	out	%al, (%dx)
-	mov	$'E', %al
-	out	%al, (%dx)
-#endif
 
 	/* Enable PAE */
 	movl	%cr4, %eax
 	btsl	$5, %eax
 	movl	%eax, %cr4
-
-#ifdef DEBUG
-	mov	$'+', %al
-	out	%al, (%dx)
-	mov	$'\r', %al
-	out	%al, (%dx)
-	mov	$'\n', %al
-	out	%al, (%dx)
-
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-
-	mov	$'L', %al
-	out	%al, (%dx)
-	mov	$'M', %al
-	out	%al, (%dx)
-	mov	$'E', %al
-	out	%al, (%dx)
-#endif
 
 	/* Enable long mode */
 	movl	$0xC0000080, %ecx	/* 0xC0000080 = IA32_EFER */
@@ -223,75 +169,15 @@ cpuid_done:
 	btsl	$8, %eax
 	wrmsr
 
-#ifdef DEBUG
-	mov	$0x3f8, %dx
-	mov	$'+', %al
-	out	%al, (%dx)
-	mov	$'\r', %al
-	out	%al, (%dx)
-	mov	$'\n', %al
-	out	%al, (%dx)
-
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-
-	mov	$'P', %al
-	out	%al, (%dx)
-	mov	$'G', %al
-	out	%al, (%dx)
-#endif
-
 	/* Enable paging */
 	movl	%cr0, %eax
 	btsl	$31, %eax
 	movl	%eax, %cr0
 
-#ifdef DEBUG
-	mov	$'+', %al
-	out	%al, (%dx)
-	mov	$'\r', %al
-	out	%al, (%dx)
-	mov	$'\n', %al
-	out	%al, (%dx)
-
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-
-	mov	$'>', %al
-	out	%al, (%dx)
-#endif
-
 	/* Use long jump to switch to 64-bit code segment */
 	ljmp $0x18, $1f
 .code64
 1:
-
-#ifdef DEBUG
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-
-	mov	$'G', %al
-	out	%al, (%dx)
-	mov	$'o', %al
-	out	%al, (%dx)
-	mov	$'!', %al
-	out	%al, (%dx)
-	mov	$'\r', %al
-	out	%al, (%dx)
-	mov	$'\n', %al
-	out	%al, (%dx)
-
-	movl	$2000000, %ecx
-8:
-	nop
-	loop 8b
-#endif
 
 	/* Let's rock. */
 	call start_main
@@ -306,7 +192,7 @@ cpuid_done:
 	push %rax
 
 	/* Set  32-bit code segment and ss */
-	mov	$0x10, %rcx
+	mov	$0x08, %rcx
 	call	SetCodeSelector
 
 .code32
@@ -373,8 +259,8 @@ gdt:
 gdt_end:
 
 
-/* Page table attributes: WB, User+Supervisor, Present, Writeable */
-#define PAGE_ATTRIBUTES 0x007
+/* Page table attributes: WB, Supervisor, Present, Writeable */
+#define PAGE_ATTRIBUTES 0x003
 
 /*
  * Creates identity mapped page entries.

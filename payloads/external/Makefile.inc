@@ -47,6 +47,17 @@ ifneq ($(strip $(call strip_quotes,$(CONFIG_PAYLOAD_OPTIONS))),)
       ADDITIONAL_PAYLOAD_CONFIG+=$(strip $(call strip_quotes,$(CONFIG_PAYLOAD_OPTIONS)))
 endif
 
+ifeq ($(CONFIG_BAREFLANK_SECONDARY_PAYLOAD),y)
+cbfs-files-y += $(CONFIG_CBFS_PREFIX)/realpayload
+$(CONFIG_CBFS_PREFIX)/realpayload-file := $(CONFIG_PAYLOAD_FILE)
+ifeq ($(CONFIG_PAYLOAD_IS_FLAT_BINARY),y)
+$(CONFIG_CBFS_PREFIX)/realpayload-type := flat-binary
+else
+$(CONFIG_CBFS_PREFIX)/realpayload-type := payload
+endif
+$(CONFIG_CBFS_PREFIX)/realpayload-compression := $(CBFS_PAYLOAD_COMPRESS_FLAG)
+$(CONFIG_CBFS_PREFIX)/realpayload-options := $(ADDITIONAL_PAYLOAD_CONFIG)
+else
 cbfs-files-y += $(CONFIG_CBFS_PREFIX)/payload
 $(CONFIG_CBFS_PREFIX)/payload-file := $(CONFIG_PAYLOAD_FILE)
 ifeq ($(CONFIG_PAYLOAD_IS_FLAT_BINARY),y)
@@ -56,6 +67,7 @@ $(CONFIG_CBFS_PREFIX)/payload-type := payload
 endif
 $(CONFIG_CBFS_PREFIX)/payload-compression := $(CBFS_PAYLOAD_COMPRESS_FLAG)
 $(CONFIG_CBFS_PREFIX)/payload-options := $(ADDITIONAL_PAYLOAD_CONFIG)
+endif
 
 cbfs-files-$(CONFIG_INCLUDE_CONFIG_FILE) += payload_config
 payload_config-file := $(PAYLOAD_CONFIG)

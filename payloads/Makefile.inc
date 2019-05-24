@@ -13,6 +13,11 @@
 ## GNU General Public License for more details.
 ##
 
+cbfs-files-$(CONFIG_BAREFLANK_SECONDARY_PAYLOAD) += img/bareflank
+img/bareflank-file := payloads/bareflank/build/bareflank.elf
+img/bareflank-type := payload
+img/bareflank-compression := $(CBFS_SECONDARY_PAYLOAD_COMPRESS_FLAG)
+
 cbfs-files-$(CONFIG_COREINFO_SECONDARY_PAYLOAD) += img/coreinfo
 img/coreinfo-file := payloads/coreinfo/build/coreinfo.elf
 img/coreinfo-type := payload
@@ -24,6 +29,7 @@ img/nvramcui-type := payload
 img/nvramcui-compression := $(CBFS_SECONDARY_PAYLOAD_COMPRESS_FLAG)
 
 PAYLOADS_LIST=\
+payloads/bareflank \
 payloads/coreinfo \
 payloads/nvramcui \
 payloads/libpayload \
@@ -37,6 +43,9 @@ payloads/external/tianocore \
 payloads/external/GRUB2 \
 payloads/external/LinuxBoot \
 payloads/external/Yabits \
+
+payloads/bareflank/build/bareflank.elf bareflank:
+	$(MAKE) -C payloads/bareflank defaultbuild
 
 payloads/coreinfo/build/coreinfo.elf coreinfo:
 	$(MAKE) -C payloads/coreinfo defaultbuild

@@ -33,8 +33,7 @@ CFLAGS += -mpreferred-stack-boundary=4
 head.o-y += head.S
 libc-y += main.c sysinfo.c
 libc-y += timer.c coreboot.c util.S
-# TODO: exec.S in the next line - back to protected mode
-libc-y += virtual.c
+libc-y += virtual.c exec.S
 libc-y += selfboot.c
 # TODO:
 #libc-y += exception_asm.S exception.c

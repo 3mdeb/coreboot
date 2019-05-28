@@ -151,6 +151,12 @@ cpuid_done:
 	lgdt	%cs:gdtptr
 	ljmp $0x08, $1f
 1:
+	movl	$0x10, %eax
+	movl	%eax, %ds
+	movl	%eax, %es
+	movl	%eax, %ss
+	movl	%eax, %fs
+	movl	%eax, %gs
 
 	call _gen_long_mode_pgtbl32
 
@@ -183,6 +189,7 @@ cpuid_done:
 	call start_main
 
 	/* %eax has the return value - pass it on unmolested */
+_leave:
 	/* Just in case */
 	cli
 

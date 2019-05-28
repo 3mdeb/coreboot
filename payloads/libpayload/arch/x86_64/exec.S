@@ -36,10 +36,20 @@
 .align 4
 .text
 
+.code64
 .global i386_do_exec
 	.type i386_do_exec,@function
 
 i386_do_exec:
+	pushq %rbx
+	pushq %rbp
+	pushq %rdx
+	pushq %rcx
+
+	movq $0x08, %rcx
+	call SetCodeSelector
+
+.code32
 	pushl %ebp
 	movl %esp, %ebp
 
@@ -48,14 +58,25 @@ i386_do_exec:
 	pushl %esi
 	pushl %edi
 
+	/* Disable paging */
+	movl	%cr0, %eax
+	andl	$0x7FFFFFFF, %eax
+	movl	%eax, %cr0
+
+	/* Disable long mode */
+	movl	$0xC0000080, %ecx
+	rdmsr
+	btrl	$8, %eax
+	wrmsr
+
 	/* Push argc and argv on to the stack.
 	 *
 	 * We need to put a dummy value inbetween, as argc should be at offset
 	 * 0x10, according to the payload API.
 	 */
-	pushl 12(%ebp)
+	pushl %esi		/* argc */
 	pushl $0
-	pushl 16(%ebp)
+	pushl 12(%ebp)	/* argv, saved on stack */
 
 	/* Push a "magic" number on the stack - the other payload will use this
 	 * as a clue that the argc and argv values on the stack are sane.
@@ -63,7 +84,7 @@ i386_do_exec:
 	pushl $0x12345678
 
 	/* Jump to the code */
-	call *8(%ebp)
+	call *%edi
 	/* %eax has the return value */
 
 	/* Skip over the argc/argv stuff still on the stack.
@@ -78,7 +99,36 @@ i386_do_exec:
 	popl %ebp
 
 	/* Get pointer to return value and save the return value in it. */
-	movl 16(%esp), %ecx
+	movl (%esp), %ecx
 	movl %eax, (%ecx)
 
+	/* Use long jump to switch to 64-bit code segment */
+	ljmp $0x18, $1f
+.code64
+1:
+	popq %rcx
+	popq %rdx
+	popq %rbp
+	popq %rbx
+
 	ret
+
+SetCodeSelector:
+	# pop the return address from stack
+	pop	%rbx
+
+	# save rsp because we need to push it after ss
+	mov	%rsp, %rdx
+
+	# use iret to jump to a 32-bit offset in a new code segment
+	# iret will pop cs:rip, flags, then ss:rsp
+	mov	%ss, %ax	# need to push ss..
+	push	%rax		# push ss instuction not valid in x64 mode,
+				# so use ax
+	push	%rdx		# the rsp to load
+	pushfq			# push rflags
+	push	%rcx		# cx is code segment selector from caller
+	push	%rbx		# push the IP for the next instruction
+
+	# the iretq will behave like ret, with the new cs/ss value loaded
+	iretq

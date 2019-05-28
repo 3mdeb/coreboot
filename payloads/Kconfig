@@ -158,4 +158,20 @@ config TINT_SECONDARY_PAYLOAD
 source "payloads/external/*/Kconfig.secondary"
 
 endmenu # "Secondary Payloads"
+
+menu "Reserve RAM for payload"
+
+config CUSTOM_RAM_RES_ADDR
+	hex "Base address for reserved memory"
+	default 0
+	help
+	  If a payload needs some preallocated memory this field specifies
+	  starting address of reserved memory region.
+
+config CUSTOM_RAM_RES_SIZE
+	hex "Size of reserved memory"
+	default 0
+	help
+	  Size (in bytes) of reserved memory region.
+endmenu
 endmenu

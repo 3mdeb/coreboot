@@ -96,6 +96,28 @@ static void bootmem_init(void)
 
 	bootmem_arch_add_ranges();
 	bootmem_platform_add_ranges();
+
+	if (CONFIG_CUSTOM_RAM_RES_SIZE != 0) {
+		const struct range_entry *r;
+		size_t start = CONFIG_CUSTOM_RAM_RES_ADDR;
+		size_t end = CONFIG_CUSTOM_RAM_RES_ADDR + CONFIG_CUSTOM_RAM_RES_SIZE;
+		memranges_each_entry(r, bm) {
+			/* All further bootmem entries are beyond this range. */
+			if (end <= range_entry_base(r))
+				break;
+
+			if (start >= range_entry_base(r) && end <= range_entry_end(r)) {
+				if (range_entry_tag(r) == BM_MEM_RAM) {
+					bootmem_add_range(CONFIG_CUSTOM_RAM_RES_ADDR,
+					    CONFIG_CUSTOM_RAM_RES_SIZE, BM_MEM_RESERVED);
+					return;
+				}
+			}
+		}
+		printk(BIOS_ERR, "ERROR: Tried to reserve memory %lx - %lx,"
+		    " but it is not RAM\n", start, end);
+		die("Check CUSTOM_RAM_RES_ADDR and CUSTOM_RAM_RES_ADDR\n");
+	}
 }
 
 void bootmem_add_range(uint64_t start, uint64_t size,

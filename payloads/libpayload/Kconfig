@@ -153,7 +153,8 @@ config BASE_ADDRESS
 	default 0x04000000 if ARCH_ARM
 	default 0x80100000 if ARCH_ARM64
 	default 0x00000000 if ARCH_MIPS
-	default 0x00100000 if ARCH_X86 || ARCH_X86_64
+	default 0x00100000 if ARCH_X86
+	default 0x21000000 if ARCH_X86_64
 	help
 	  This is the base address for the payload.
 

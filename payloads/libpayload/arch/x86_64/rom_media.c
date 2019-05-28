@@ -54,7 +54,7 @@ static void *x86_rom_map(struct cbfs_media *media, size_t offset, size_t count) 
 	if ((uint64_t)offset > (uint64_t)0xf0000000)
 		ptr = (void*)offset;
 	else
-		ptr = (void*)(0 - (uint64_t)media->context + offset);
+		ptr = (void*)(0x100000000ULL - (uint64_t)media->context + offset);
 	return ptr;
 }
 
@@ -80,8 +80,8 @@ int init_x86rom_cbfs_media(struct cbfs_media *media) {
 	// 0xfffffffc, and the pointer is still a memory-mapped address.
 	// Since the CBFS core always use ROM offset, we need to figure out
 	// header->romsize even before media is initialized.
-	struct cbfs_header *header = (struct cbfs_header*)
-			*(uint64_t*)(0xfffffffc);
+	struct cbfs_header *header = (struct cbfs_header*)(size_t)
+			*(uint32_t*)(0xfffffffc);
 	if (CBFS_HEADER_MAGIC != ntohl(header->magic)) {
 #if CONFIG(LP_ROM_SIZE)
 		printk(BIOS_ERR, "Invalid CBFS master header at %p\n", header);

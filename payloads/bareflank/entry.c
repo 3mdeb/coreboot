@@ -25,6 +25,12 @@
 #include <bfconstants.h>
 #include <bfdriverinterface.h>
 
+#include <libpayload.h>
+#include <cbfs.h>
+#include <lzma.h>
+
+extern void i386_do_exec(void* addr, int argc, char **argv, int *ret);
+
 /* -------------------------------------------------------------------------- */
 /* Global                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -121,12 +127,57 @@ failure:
     return BF_IOCTL_FAILURE;
 }
 
+static void cbfs_run_payload(struct cbfs_payload *pay)
+{
+    struct cbfs_payload_segment *seg = &pay->segments;
+    for (;;) {
+        void *src = (void*)pay + ntohl(seg->offset);
+        void *dest = (void*)ntohll(seg->load_addr);
+        u32 src_len = ntohl(seg->len);
+        u32 dest_len = ntohl(seg->mem_len);
+        switch (seg->type) {
+        case PAYLOAD_SEGMENT_BSS:
+            printf("BSS segment %d@%p\n", dest_len, dest);
+            memset(dest, 0, dest_len);
+            break;
+        case PAYLOAD_SEGMENT_ENTRY: {
+            printf("Calling addr %p\n", dest);
+            i386_do_exec(dest, 0, NULL, NULL);
+            return;
+        }
+        default:
+            printf("Segment %x %d@%p -> %d@%p\n", seg->type, src_len, src,
+                        dest_len, dest);
+            if (seg->compression == ntohl(CBFS_COMPRESS_NONE)) {
+                if (src_len > dest_len)
+                    src_len = dest_len;
+                memcpy(dest, src, src_len);
+            } else if (CONFIG_LP_LZMA
+                       && seg->compression == ntohl(CBFS_COMPRESS_LZMA)) {
+                int ret = ulzman(src, src_len, dest, dest_len);
+                if (ret < 0)
+                    return;
+                src_len = ret;
+            } else {
+                printf("No support for compression type %x\n", seg->compression);
+                return;
+            }
+            if (dest_len > src_len)
+                memset(dest + src_len, 0, dest_len - src_len);
+            break;
+        }
+        seg++;
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Entry / Exit                                                               */
 /* -------------------------------------------------------------------------- */
 
 int main(void)
 {
+    void *payload = NULL;
+
     printf("\n");
     printf("  ___                __ _           _   \n");
     printf(" | _ ) __ _ _ _ ___ / _| |__ _ _ _ | |__\n");
@@ -144,6 +195,8 @@ int main(void)
     ioctl_load_vmm();
     ioctl_start_vmm();
 
-    // TODO: do not return, start next stage instead
+    payload = cbfs_load_payload(CBFS_DEFAULT_MEDIA, "img/seabios");
+
+    cbfs_run_payload(payload);
     return 0;
 }

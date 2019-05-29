@@ -100,7 +100,7 @@ struct sysinfo_t {
 	void *vboot_workbuf;
 	uint32_t vboot_workbuf_size;
 
-#if CONFIG(LP_ARCH_X86)
+#if CONFIG(LP_ARCH_X86) || CONFIG(LP_ARCH_X86_64)
 	int x86_rom_var_mtrr_index;
 #endif
 

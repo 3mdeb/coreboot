@@ -1,4 +1,4 @@
-#!/bin/sh
+##
 ## This file is part of the libpayload project.
 ##
 ## Copyright (C) 2008 Advanced Micro Devices, Inc.
@@ -25,62 +25,28 @@
 ## LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 ## OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 ## SUCH DAMAGE.
+##
 
-# AS wrapper for libpayload
-if [ -z "${V}" ] && [ "${V}" = 1 ]; then
-	DEBUGME=1
-else
-	DEBUGME=0
-fi
+# x64 needs at least 16 bytes (PSB=4, default)
+CFLAGS += -mpreferred-stack-boundary=4
 
-if [ $DEBUGME -eq 1 ]; then
-	echo "AS = $AS"
-fi
+head.o-y += head.S
+libc-y += main.c sysinfo.c
+libc-y += timer.c coreboot.c util.S
+libc-y += virtual.c exec.S
+libc-y += selfboot.c
+# TODO:
+#libc-y += exception_asm.S exception.c
+libc-y += delay.c
 
-if [ -n "$AS" ]; then
-b=`basename "$AS"`
-if [ "$b" = "lpas" ]; then
-AS=""
-fi
-fi
+# Will fall back to default_memXXX() in libc/memory.c if GPL not allowed.
+libc-$(CONFIG_LP_GPL) += string.c
 
-if [ "$AS" != "" ]; then
-DEFAULT_AS=$AS
-else
-DEFAULT_AS=as
-fi
+libgdb-y += gdb.c
 
-BASE=`dirname $0`
+libcbfs-$(CONFIG_LP_CBFS) += rom_media.c
 
-# This will set the _LIBDIR and _INCDIR variables used below
-. $BASE/lp.functions
+# Multiboot support is configurable
+libc-$(CONFIG_LP_MULTIBOOT) += multiboot.c
 
-# This variable will contain the command line that the user wants to
-# pass to gas
-
-CMDLINE=
-
-# Process various flags that would change our behavior
-
-while [ $# -gt 0 ]; do
-	case $1 in
-	    -debug-wrapper)
-		DEBUGME=1
-		shift
-		continue
-		;;
-	    *)
-		;;
-	esac
-
-	CMDLINE="$CMDLINE $1"
-	shift
-done
-
-_ASFLAGS="-I$_INCDIR"
-
-if [ $DEBUGME -eq 1 ]; then
-echo "$DEFAULT_AS $_ASFLAGS $CMDLINE"
-fi
-
-$DEFAULT_AS $_ASFLAGS $CMDLINE
+libc-$(CONFIG_LP_ENABLE_APIC) += apic.c

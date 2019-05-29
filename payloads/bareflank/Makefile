@@ -100,7 +100,7 @@ $(coreinfo_obj)/%.S.o: $(src)/%.S libpayload
 
 $(coreinfo_obj)/%.o: $(src)/%.c libpayload
 	printf "    LPCC       $(subst $(CURDIR)/,,$(@))\n"
-	$(LPCC) $(CFLAGS) -c -o $@ $<
+	$(LPCC) $(CFLAGS) -c -o $@ $< -DCONFIG_CBFS_PREFIX=\"$(CONFIG_CBFS_PREFIX)\"
 
 else
 real-all: config

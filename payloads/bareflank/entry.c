@@ -195,8 +195,11 @@ int main(void)
     ioctl_load_vmm();
     ioctl_start_vmm();
 
-    payload = cbfs_load_payload(CBFS_DEFAULT_MEDIA, "img/seabios");
+    payload = cbfs_load_payload(CBFS_DEFAULT_MEDIA, CONFIG_CBFS_PREFIX "/realpayload");
 
     cbfs_run_payload(payload);
+
+    printf("Should not get here...\n");
+
     return 0;
 }

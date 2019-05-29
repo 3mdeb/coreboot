@@ -13,10 +13,10 @@
 ## GNU General Public License for more details.
 ##
 
-cbfs-files-$(CONFIG_BAREFLANK_SECONDARY_PAYLOAD) += img/bareflank
-img/bareflank-file := payloads/bareflank/build/bareflank.elf
-img/bareflank-type := payload
-img/bareflank-compression := $(CBFS_SECONDARY_PAYLOAD_COMPRESS_FLAG)
+cbfs-files-$(CONFIG_BAREFLANK_SECONDARY_PAYLOAD) += $(CONFIG_CBFS_PREFIX)/payload
+$(CONFIG_CBFS_PREFIX)/payload-file := payloads/bareflank/build/bareflank.elf
+$(CONFIG_CBFS_PREFIX)/payload-type := payload
+$(CONFIG_CBFS_PREFIX)/payload-compression := $(CBFS_SECONDARY_PAYLOAD_COMPRESS_FLAG)
 
 cbfs-files-$(CONFIG_COREINFO_SECONDARY_PAYLOAD) += img/coreinfo
 img/coreinfo-file := payloads/coreinfo/build/coreinfo.elf
@@ -45,7 +45,7 @@ payloads/external/LinuxBoot \
 payloads/external/Yabits \
 
 payloads/bareflank/build/bareflank.elf bareflank:
-	$(MAKE) -C payloads/bareflank defaultbuild
+	$(MAKE) -C payloads/bareflank defaultbuild CONFIG_CBFS_PREFIX=$(CONFIG_CBFS_PREFIX)
 
 payloads/coreinfo/build/coreinfo.elf coreinfo:
 	$(MAKE) -C payloads/coreinfo defaultbuild

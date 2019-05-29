@@ -81,8 +81,6 @@ int get_coreboot_info(struct sysinfo_t *info)
 
 	if (ret)
 		ret = cb_parse_header(phys_to_virt(0x000f0000), 0x1000, info);
-	if (ret)
-		ret = cb_parse_header(phys_to_virt(0x7add1000), 0x1000, info);
 
 	return ret;
 }

@@ -52,7 +52,7 @@ HOSTCXXFLAGS := -I$(srck) -I$(objk)
 LIBPAYLOAD_PATH := $(realpath ../libpayload)
 LIBPAYLOAD_OBJ := $(coreinfo_obj)/libpayload
 HAVE_LIBPAYLOAD := $(wildcard $(LIBPAYLOAD_OBJ)/lib/libpayload.a)
-LIBPAYLOAD_CONFIG ?= configs/defconfig-tinycurses
+LIBPAYLOAD_CONFIG ?= configs/defconfig-tinycurses-64
 OBJCOPY ?= objcopy
 
 INCLUDES = -I$(coreinfo_obj) -include $(LIBPAYLOAD_OBJ)/include/kconfig.h -I$(src)/../../src/commonlib/include
@@ -72,7 +72,7 @@ $(if $(wildcard .xcompile),,$(eval $(shell ../../util/xcompile/xcompile $(XGCCPA
 	\mv -f $@.tmp $@ 2> /dev/null || rm -f $@.tmp $@
 
 CONFIG_COMPILER_GCC := y
-ARCH-y     := x86_32
+ARCH-y     := x86_64
 
 include .xcompile
 

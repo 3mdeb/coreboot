@@ -27,25 +27,29 @@
  * SUCH DAMAGE.
  */
 
-	.align 4
+	.align 16
 	.global exception_stack_end
 exception_stack_end:
-	.long 0
+	.quad 0
 	.global exception_state
 exception_state:
-	.long 0
+	.quad 0
 
 /* Some temporary variables which are used while saving exception state. */
 vector:
-	.long 0
+	.quad 0
 error_code:
-	.long 0
-old_esp:
-	.long 0
-old_eax:
-	.long 0
+	.quad 0
+old_rsp:
+	.quad 0
+old_rax:
+	.quad 0
+old_rdx:
+	.quad 0
 
-	.align 8
+	.align 16
+
+.code64
 
 /*
  * Each exception vector has a small stub associated with it which sets aside
@@ -56,15 +60,15 @@ old_eax:
 
 	.macro stub num
 exception_stub_\num:
-	movl	$0, error_code
-	movl	$\num, vector
+	movq	$0, error_code
+	movq	$\num, vector
 	jmp	exception_common
 	.endm
 
 	.macro stub_err num
 exception_stub_\num:
-	popl	error_code
-	movl	$\num, vector
+	popq	error_code
+	movq	$\num, vector
 	jmp	exception_common
 	.endm
 
@@ -120,34 +124,48 @@ exception_common:
 	 * exception stack. eax points to the old stack which has the
 	 * exception ip, cs, and flags.
 	 */
-	mov	%esp, old_esp
-	addl	$12, old_esp
-	mov	%eax, old_eax
-	mov	%esp, %eax
-	mov	exception_stack_end, %esp
+	movq	%rax, old_rax
+	movq	24(%rsp), %rax
+	movq	%rax, old_rsp
+	movq	%rdx, old_rdx
+	movq	%rsp, %rax
+	movq	exception_stack_end, %rsp
 
 	/*
 	 * Push values onto the top of the exception stack to form an
 	 * exception state structure.
 	 */
-	pushl	vector
-	pushl	error_code
-	pushl	%gs
-	pushl	%fs
-	pushl	%es
-	pushl	%ds
-	pushl	%ss
-	pushl	4(%eax)
-	pushl	8(%eax)
-	pushl	(%eax)
-	pushl	%edi
-	pushl	%esi
-	pushl	%ebp
-	pushl	old_esp
-	pushl	%ebx
-	pushl	%edx
-	pushl	%ecx
-	pushl	old_eax
+	pushq	vector
+	pushq	error_code
+	mov	%gs, %rdx
+	pushq	%rdx
+	mov	%fs, %rdx
+	pushq	%rdx
+	mov	%es, %rdx
+	pushq	%rdx
+	mov	%ds, %rdx
+	pushq	%rdx
+	mov	%ss, %rdx
+	pushq	%rdx
+	pushq	8(%rax)
+	pushq	16(%rax)
+	pushq	(%rax)
+	pushq	%r15
+	pushq	%r14
+	pushq	%r13
+	pushq	%r12
+	pushq	%r11
+	pushq	%r10
+	pushq	%r9
+	pushq	%r8
+	pushq	%rdi
+	pushq	%rsi
+	pushq	%rbp
+	pushq	old_rsp
+	pushq	%rbx
+	pushq	old_rdx
+	pushq	%rcx
+	pushq	old_rax
 
 	/*
 	 * Call the C exception handler. It will find the exception state
@@ -155,68 +173,54 @@ exception_common:
 	 * passing parameters means we don't have to worry about what ABI
 	 * is being used.
 	 */
-	mov	%esp, exception_state
+	movq	%rsp, exception_state
 	call	exception_dispatch
 
 	/*
 	 * Restore state from the exception state structure, including any
 	 * changes that might have been made.
 	 */
-	popl	old_eax
-	popl	%ecx
-	popl	%edx
-	popl	%ebx
-	popl	old_esp
+	popq	old_rax
+	popq	%rcx
+	popq	old_rdx
+	popq	%rbx
+	popq	old_rsp
 
-	mov	old_esp, %eax
-	subl	$12, %eax
+	movq	old_rsp, %rax
+	andq	$~(0xf), %rax
+	subq	$40, %rax
 
-	popl	%ebp
-	popl	%esi
-	popl	%edi
-	popl	(%eax)
-	popl	8(%eax)
-	popl	4(%eax)
-	popl	%ss
-	popl	%ds
-	popl	%es
-	popl	%fs
-	popl	%gs
+	popq	%rbp
+	popq	%rsi
+	popq	%rdi
+	popq	%r8
+	popq	%r9
+	popq	%r10
+	popq	%r11
+	popq	%r12
+	popq	%r13
+	popq	%r14
+	popq	%r15
+	popq	(%rax)
+	popq	16(%rax)
+	popq	8(%rax)
+	popq	%rdx
+	mov	%rdx, %ss
+	popq	%rdx
+	mov	%rdx, %ds
+	popq	%rdx
+	mov	%rdx, %es
+	popq	%rdx
+	mov	%rdx, %fs
+	popq	%rdx
+	mov	%rdx, %gs
 
-	mov	%eax, %esp
-	mov	old_eax, %eax
+	movq	%rax, %rsp
+	movq	old_rax, %rax
+	movq	old_rdx, %rdx
 
 	/* Return from the exception. */
-	iretl
-
-/*
- * We need segment selectors for the IDT, so we need to know where things are
- * in the GDT. We set one up here which is pretty standard and largely copied
- * from coreboot.
- */
-	.align 8
-gdt:
-	/* selgdt 0, unused */
-	.word 0x0000, 0x0000
-	.byte 0x00, 0x00, 0x00, 0x00
-
-	/* selgdt 8, unused */
-	.word 0x0000, 0x0000
-	.byte 0x00, 0x00, 0x00, 0x00
-
-	/* selgdt 0x10, flat 4GB code segment */
-        .word 0xffff, 0x0000
-	.byte 0x00, 0x9b, 0xcf, 0x00
-
-	/* selgdt 0x18, flat 4GB data segment */
-	.word 0xffff, 0x0000
-	.byte 0x00, 0x93, 0xcf, 0x00
-gdt_end:
-
-/* GDT pointer for use with lgdt */
-gdt_ptr:
-	.word	gdt_end - gdt - 1
-	.long	gdt
+	iretq
 
 	/*
 	 * Record the target and construct the actual entry at init time. This
@@ -224,8 +228,8 @@ gdt_ptr:
 	 * for us.
 	 */
 	.macro interrupt_gate target
-	.long \target
-	.long \target
+	.quad \target
+	.quad \target
 	.endm
 
 	.altmacro
@@ -280,42 +284,34 @@ idt_end:
 /* IDT pointer for use with lidt */
 idt_ptr:
 	.word idt_end - idt - 1
-	.long idt
+	.quad idt
 
 	.global exception_init_asm
 exception_init_asm:
-	/* Save eax so we can use it as a temporary variable. */
-	pushl	%eax
-
-	/* Install the GDT. */
-	lgdt	gdt_ptr
-	/* Load the segment registers from it. */
-	ljmp	$0x10, $1f
-1:	movl	$0x18, %eax
-	movl	%eax, %ds
-	movl	%eax, %es
-	movl	%eax, %ss
-	movl	%eax, %fs
-	movl	%eax, %gs
-
 	/*
 	 * Loop over the entries which start out as two copies of the target
 	 * address. We can turn them into real interrupt gates by selectively
 	 * replacing certain bit fields.
 	 */
-	movl	$idt, %eax
+	movq	$idt, %rax
+	movq	$0x00008e0000180000, %rcx
 1:
-	andl	$0x0000ffff, (%eax)
-	orl	$0x00100000, (%eax)
-	andl	$0xffff0000, 4(%eax)
-	orl	$0x0000ee00, 4(%eax)
-	addl	$8, %eax
-	cmp	$idt_end, %eax
+	movq	(%rax), %rdi
+	movq	%rdi, %rsi
+	movq	%rdi, %rdx
+	andl	$0xffff0000, %esi
+	shlq	$32, %rsi
+	andq	$0x0000ffff, %rdx
+	orq	%rdx, %rsi
+	orq	%rcx, %rsi
+	movq	%rsi, (%rax)
+	shrq	$32, %rdi
+	movq	%rdi, 8(%rax)
+	addq	$16, %rax
+	cmpq	$idt_end, %rax
 	jne	1b
 
 	/* Install the IDT. */
 	lidt	idt_ptr
 
-	/* Restore eax and return to the caller. */
-	popl	%eax
 	ret

@@ -43,30 +43,38 @@ struct exception_state
 {
 	/* Careful: x86/gdb.c currently relies on the size and order of regs. */
 	struct {
-		u32 eax;
-		u32 ecx;
-		u32 edx;
-		u32 ebx;
-		u32 esp;
-		u32 ebp;
-		u32 esi;
-		u32 edi;
-		u32 eip;
-		u32 eflags;
-		u32 cs;
-		u32 ss;
-		u32 ds;
-		u32 es;
-		u32 fs;
-		u32 gs;
+		u64 rax;
+		u64 rcx;
+		u64 rdx;
+		u64 rbx;
+		u64 rsp;
+		u64 rbp;
+		u64 rsi;
+		u64 rdi;
+		u64 r8;
+		u64 r9;
+		u64 r10;
+		u64 r11;
+		u64 r12;
+		u64 r13;
+		u64 r14;
+		u64 r15;
+		u64 rip;
+		u64 rflags;
+		u64 cs;
+		u64 ss;
+		u64 ds;
+		u64 es;
+		u64 fs;
+		u64 gs;
 	} regs;
-	u32 error_code;
-	u32 vector;
+	u64 error_code;
+	u64 vector;
 } __packed;
 extern struct exception_state *exception_state;
 
-extern u32 exception_stack[];
-extern u32 *exception_stack_end;
+extern u64 exception_stack[];
+extern u64 *exception_stack_end;
 
 enum {
 	EXC_DE = 0, /* Divide by zero */

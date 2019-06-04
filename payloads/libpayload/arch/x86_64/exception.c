@@ -35,7 +35,7 @@
 
 #define IF_FLAG				(1 << 9)
 
-u32 exception_stack[0x400] __attribute__((aligned(8)));
+u64 exception_stack[0x400] __attribute__((aligned(8)));
 
 static interrupt_handler handlers[256];
 
@@ -61,9 +61,9 @@ static const char *names[EXC_COUNT] = {
 	[EXC_SX]  = "Security",
 };
 
-static void print_segment_error_code(u32 code)
+static void print_segment_error_code(u64 code)
 {
-	printf("%#x - descriptor %#x in the ", code, (code >> 3) & 0x1FFF);
+	printf("%#llx - descriptor %#llx in the ", code, (code >> 3) & 0x1FFF);
 	if (code & (0x1 << 1)) {
 		printf("IDT");
 	} else {
@@ -78,9 +78,9 @@ static void print_segment_error_code(u32 code)
 		printf(", internal to the CPU");
 }
 
-static void print_page_fault_error_code(u32 code)
+static void print_page_fault_error_code(u64 code)
 {
-	printf("%#x -", code);
+	printf("%#llx -", code);
 	if (code & (0x1 << 0))
 		printf(" page protection");
 	else
@@ -99,22 +99,22 @@ static void print_page_fault_error_code(u32 code)
 		printf(", instruction fetch");
 }
 
-static void print_raw_error_code(u32 code)
+static void print_raw_error_code(u64 code)
 {
-	printf("%#x", code);
+	printf("%#llx", code);
 }
 
 static void dump_stack(uintptr_t addr, size_t bytes)
 {
 	int i, j;
-	const int line = 8;
-	uint32_t *ptr = (uint32_t *)(addr & ~(line * sizeof(*ptr) - 1));
+	const int line = 4;
+	u64 *ptr = (u64 *)(addr & ~(line * sizeof(*ptr) - 1));
 
 	printf("Dumping stack:\n");
 	for (i = bytes / sizeof(*ptr); i >= 0; i -= line) {
 		printf("%p: ", ptr + i);
 		for (j = i; j < i + line; j++)
-			printf("%08x ", *(ptr + j));
+			printf("%016llx ", *(ptr + j));
 		printf("\n");
 	}
 }
@@ -144,28 +144,36 @@ static void dump_exception_state(void)
 		break;
 	}
 	printf("\n");
-	printf("EIP:    0x%08x\n", exception_state->regs.eip);
-	printf("CS:     0x%04x\n", exception_state->regs.cs);
-	printf("EFLAGS: 0x%08x\n", exception_state->regs.eflags);
-	printf("EAX:    0x%08x\n", exception_state->regs.eax);
-	printf("ECX:    0x%08x\n", exception_state->regs.ecx);
-	printf("EDX:    0x%08x\n", exception_state->regs.edx);
-	printf("EBX:    0x%08x\n", exception_state->regs.ebx);
-	printf("ESP:    0x%08x\n", exception_state->regs.esp);
-	printf("EBP:    0x%08x\n", exception_state->regs.ebp);
-	printf("ESI:    0x%08x\n", exception_state->regs.esi);
-	printf("EDI:    0x%08x\n", exception_state->regs.edi);
-	printf("DS:     0x%04x\n", exception_state->regs.ds);
-	printf("ES:     0x%04x\n", exception_state->regs.es);
-	printf("SS:     0x%04x\n", exception_state->regs.ss);
-	printf("FS:     0x%04x\n", exception_state->regs.fs);
-	printf("GS:     0x%04x\n", exception_state->regs.gs);
+	printf("RIP:    0x%016llx\n", exception_state->regs.rip);
+	printf("CS:     0x%04llx\n",  exception_state->regs.cs);
+	printf("RFLAGS: 0x%016llx\n", exception_state->regs.rflags);
+	printf("RAX:    0x%016llx\n", exception_state->regs.rax);
+	printf("RCX:    0x%016llx\n", exception_state->regs.rcx);
+	printf("RDX:    0x%016llx\n", exception_state->regs.rdx);
+	printf("RBX:    0x%016llx\n", exception_state->regs.rbx);
+	printf("RSP:    0x%016llx\n", exception_state->regs.rsp);
+	printf("RBP:    0x%016llx\n", exception_state->regs.rbp);
+	printf("RSI:    0x%016llx\n", exception_state->regs.rsi);
+	printf("RDI:    0x%016llx\n", exception_state->regs.rdi);
+	printf("R8:     0x%016llx\n", exception_state->regs.r8);
+	printf("R9:     0x%016llx\n", exception_state->regs.r9);
+	printf("R10:    0x%016llx\n", exception_state->regs.r10);
+	printf("R11:    0x%016llx\n", exception_state->regs.r11);
+	printf("R12:    0x%016llx\n", exception_state->regs.r12);
+	printf("R13:    0x%016llx\n", exception_state->regs.r13);
+	printf("R14:    0x%016llx\n", exception_state->regs.r14);
+	printf("R15:    0x%016llx\n", exception_state->regs.r15);
+	printf("DS:     0x%04llx\n",  exception_state->regs.ds);
+	printf("ES:     0x%04llx\n",  exception_state->regs.es);
+	printf("SS:     0x%04llx\n",  exception_state->regs.ss);
+	printf("FS:     0x%04llx\n",  exception_state->regs.fs);
+	printf("GS:     0x%04llx\n",  exception_state->regs.gs);
 }
 
 void exception_dispatch(void)
 {
 	die_if(exception_state->vector >= ARRAY_SIZE(handlers),
-	       "Invalid vector %u\n", exception_state->vector);
+	       "Invalid vector %llu\n", exception_state->vector);
 
 	u8 vec = exception_state->vector;
 
@@ -185,7 +193,7 @@ void exception_dispatch(void)
 	       vec);
 
 	dump_exception_state();
-	dump_stack(exception_state->regs.esp, 512);
+	dump_stack(exception_state->regs.rsp, 512);
 	/* We don't call apic_eoi because we don't want to ack the interrupt and
 	   allow another interrupt to wake the processor. */
 	halt();
@@ -207,14 +215,14 @@ void set_interrupt_handler(u8 vector, interrupt_handler handler)
 	handlers[vector] = handler;
 }
 
-static uint32_t eflags(void)
+static u64 rflags(void)
 {
-	uint32_t eflags;
+	u64 rflags;
 	asm volatile(
 		"pushf\n\t"
 		"pop %0\n\t"
-	: "=rm" (eflags));
-	return eflags;
+	: "=rm" (rflags));
+	return rflags;
 }
 
 void enable_interrupts(void)
@@ -234,5 +242,5 @@ void disable_interrupts(void)
 
 int interrupts_enabled(void)
 {
-	return !!(eflags() & IF_FLAG);
+	return !!(rflags() & IF_FLAG);
 }

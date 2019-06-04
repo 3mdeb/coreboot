@@ -28,15 +28,14 @@
 ##
 
 # x64 needs at least 16 bytes (PSB=4, default)
-CFLAGS += -mpreferred-stack-boundary=4
+CFLAGS += -mpreferred-stack-boundary=4 -mno-red-zone
 
 head.o-y += head.S
 libc-y += main.c sysinfo.c
 libc-y += timer.c coreboot.c util.S
 libc-y += virtual.c exec.S
 libc-y += selfboot.c
-# TODO:
-#libc-y += exception_asm.S exception.c
+libc-y += exception_asm.S exception.c
 libc-y += delay.c
 
 # Will fall back to default_memXXX() in libc/memory.c if GPL not allowed.

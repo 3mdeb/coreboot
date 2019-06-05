@@ -35,7 +35,7 @@ ARCHDIR-$(CONFIG_LP_ARCH_ARM)     := arm
 ARCHDIR-$(CONFIG_LP_ARCH_ARM64)   := arm64
 ARCHDIR-$(CONFIG_LP_ARCH_MIPS)    := mips
 ARCHDIR-$(CONFIG_LP_ARCH_X86)     := x86
-ARCHDIR-$(CONFIG_LP_ARCH_X86_64)  := x86_64
+ARCHDIR-$(CONFIG_LP_ARCH_X86_64)  := x86
 DESTDIR ?= install
 
 real-target: lib
@@ -94,7 +94,7 @@ $(obj)/head.o: $(obj)/arch/$(ARCHDIR-y)/head.head.o.o
 	printf "    CP         $(subst $(CURDIR)/,,$(@))\n"
 	cp $^ $@
 
-install: real-target
+install: real-target arch/$(ARCHDIR-y)/libpayload.ldscript
 	printf "    INSTALL    $(DESTDIR)/libpayload/lib\n"
 	install -m 755 -d $(DESTDIR)/libpayload/lib
 	for lib in $(library-targets); do \

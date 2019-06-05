@@ -31,6 +31,7 @@
 #define _ARCH_EXCEPTION_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 void exception_init_asm(void);
 void exception_dispatch(void);
@@ -42,31 +43,60 @@ int interrupts_enabled(void);
 struct exception_state
 {
 	/* Careful: x86/gdb.c currently relies on the size and order of regs. */
+#if CONFIG(LP_ARCH_X86_64)
 	struct {
-		u32 eax;
-		u32 ecx;
-		u32 edx;
-		u32 ebx;
-		u32 esp;
-		u32 ebp;
-		u32 esi;
-		u32 edi;
-		u32 eip;
-		u32 eflags;
-		u32 cs;
-		u32 ss;
-		u32 ds;
-		u32 es;
-		u32 fs;
-		u32 gs;
+		size_t rax;
+		size_t rcx;
+		size_t rdx;
+		size_t rbx;
+		size_t rsp;
+		size_t rbp;
+		size_t rsi;
+		size_t rdi;
+		size_t r8;
+		size_t r9;
+		size_t r10;
+		size_t r11;
+		size_t r12;
+		size_t r13;
+		size_t r14;
+		size_t r15;
+		size_t rip;
+		size_t rflags;
+		size_t cs;
+		size_t ss;
+		size_t ds;
+		size_t es;
+		size_t fs;
+		size_t gs;
 	} regs;
-	u32 error_code;
-	u32 vector;
+#else
+	struct {
+		size_t eax;
+		size_t ecx;
+		size_t edx;
+		size_t ebx;
+		size_t esp;
+		size_t ebp;
+		size_t esi;
+		size_t edi;
+		size_t eip;
+		size_t eflags;
+		size_t cs;
+		size_t ss;
+		size_t ds;
+		size_t es;
+		size_t fs;
+		size_t gs;
+	} regs;
+#endif
+	size_t error_code;
+	size_t vector;
 } __packed;
 extern struct exception_state *exception_state;
 
-extern u32 exception_stack[];
-extern u32 *exception_stack_end;
+extern uintptr_t exception_stack[];
+extern uintptr_t *exception_stack_end;
 
 enum {
 	EXC_DE = 0, /* Divide by zero */

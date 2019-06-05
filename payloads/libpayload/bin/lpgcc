@@ -93,8 +93,8 @@ if [ "$CONFIG_LP_ARCH_X86" = "y" ]; then
   _ARCH=x86
 fi
 if [ "$CONFIG_LP_ARCH_X86_64" = "y" ]; then
-  _ARCHINCDIR=$_INCDIR/x86_64
-  _ARCHLIBDIR=$_LIBDIR/x86_64
+  _ARCHINCDIR=$_INCDIR/x86
+  _ARCHLIBDIR=$_LIBDIR/x86
   _ARCHEXTRA="-m64 "
   _ARCH=x86_64
 fi

@@ -1,7 +1,7 @@
 /*
  * This file is part of the libpayload project.
  *
- * Copyright (C) 2018 Google LLC
+ * Copyright (C) 2008 Advanced Micro Devices, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,38 +27,67 @@
  * SUCH DAMAGE.
  */
 
-#include <libpayload.h>
-#include <arch/apic.h>
+#include <kconfig.h>
+#if CONFIG(LP_ARCH_X86_64)
+OUTPUT_FORMAT(elf64-x86-64)
+OUTPUT_ARCH(i386:x86-64)
+#else
+OUTPUT_FORMAT(elf32-i386)
+OUTPUT_ARCH(i386)
+#endif
 
-/* The pause instruction can delay 10-140 CPU cycles, so avoid calling it when
- * getting close to finishing. Depending on the timer source, the timer can be
- * running at CPU frequency, bus frequency, or some arbitrary value. We assume
- * that the timer is running at the CPU frequency. */
-#define PAUSE_THRESHOLD_TICKS		150
+ENTRY(_entry)
 
-/* Let's assume APIC interrupts take at least 100us */
-#define APIC_INTERRUPT_LATENCY_NS	(100 * NSECS_PER_USEC)
-
-
-void arch_ndelay(uint64_t ns)
+SECTIONS
 {
-	uint64_t delta = ns * timer_hz() / NSECS_PER_SEC;
-	uint64_t pause_delta = 0;
-	uint64_t apic_us = 0;
-	uint64_t start = timer_raw_value();
+	. = CONFIG_LP_BASE_ADDRESS;
 
-	if (ns > APIC_INTERRUPT_LATENCY_NS)
-		apic_us = (ns - APIC_INTERRUPT_LATENCY_NS) / NSECS_PER_USEC;
+	. = ALIGN(16);
+	_start = .;
 
-	if (CONFIG(LP_ENABLE_APIC) && apic_initialized() && apic_us)
-		apic_delay(apic_us);
+	.text : {
+		*(.text._entry)
+		*(.text)
+		*(.text.*)
+	}
 
-	if (delta > PAUSE_THRESHOLD_TICKS)
-		pause_delta = delta - PAUSE_THRESHOLD_TICKS;
+	.rodata : {
+		*(.rodata)
+		*(.rodata.*)
+	}
 
-	while (timer_raw_value() - start < pause_delta)
-		asm volatile("pause\n\t");
+	.data : {
+		*(.data)
+		*(.data.*)
+	}
 
-	while (timer_raw_value() - start < delta)
-		continue;
+	_edata = .;
+
+	.bss : {
+		*(.sbss)
+		*(.sbss.*)
+		*(.bss)
+		*(.bss.*)
+		*(COMMON)
+
+		/* Stack and heap */
+
+		. = ALIGN(16);
+		_heap = .;
+		. += CONFIG_LP_HEAP_SIZE;
+		. = ALIGN(16);
+		_eheap = .;
+
+		_estack = .;
+		. += CONFIG_LP_STACK_SIZE;
+		. = ALIGN(16);
+		_stack = .;
+	}
+
+	_end = .;
+
+	/DISCARD/ : {
+		*(.comment)
+		*(.note*)
+	}
 }

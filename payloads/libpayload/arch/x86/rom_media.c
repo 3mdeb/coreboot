@@ -51,10 +51,10 @@ static void *x86_rom_map(struct cbfs_media *media, size_t offset, size_t count) 
 	// mapped location. To workaround that, we handle >0xf0000000 as real
 	// memory pointer.
 
-	if ((uint32_t)offset > (uint32_t)0xf0000000)
+	if ((size_t)offset > (size_t)0xf0000000)
 		ptr = (void*)offset;
 	else
-		ptr = (void*)(0 - (uint32_t)media->context + offset);
+		ptr = (void*)(size_t)(0x100000000ULL - (size_t)media->context + offset);
 	return ptr;
 }
 
@@ -80,7 +80,7 @@ int init_x86rom_cbfs_media(struct cbfs_media *media) {
 	// 0xfffffffc, and the pointer is still a memory-mapped address.
 	// Since the CBFS core always use ROM offset, we need to figure out
 	// header->romsize even before media is initialized.
-	struct cbfs_header *header = (struct cbfs_header*)
+	struct cbfs_header *header = (struct cbfs_header*)(size_t)
 			*(uint32_t*)(0xfffffffc);
 	if (CBFS_HEADER_MAGIC != ntohl(header->magic)) {
 #if CONFIG(LP_ROM_SIZE)
@@ -91,7 +91,7 @@ int init_x86rom_cbfs_media(struct cbfs_media *media) {
 #endif
 	} else {
 		uint32_t romsize = ntohl(header->romsize);
-		media->context = (void*)romsize;
+		media->context = (void*)(size_t)romsize;
 #if CONFIG(LP_ROM_SIZE)
 		if (CONFIG_LP_ROM_SIZE != romsize)
 			printk(BIOS_INFO, "Warning: rom size unmatch (%d/%d)\n",

@@ -27,15 +27,28 @@
 ## SUCH DAMAGE.
 ##
 
+
+ifeq ($(CONFIG_LP_ARCH_X86_64),y)
+# x64 needs at least 16-byte aligned stack (PSB=4)
+CFLAGS += -mpreferred-stack-boundary=4 -mno-red-zone
+else
 CFLAGS += -mpreferred-stack-boundary=2
+endif
 
 head.o-y += head.S
+
 libc-y += main.c sysinfo.c
 libc-y += timer.c coreboot.c util.S
-libc-y += exec.S virtual.c
+libc-y += virtual.c
 libc-y += selfboot.c
-libc-y += exception_asm.S exception.c
+libc-y += exception.c
 libc-y += delay.c
+
+ifeq ($(CONFIG_LP_ARCH_X86_64),y)
+libc-y += exec64.S exception_asm64.S
+else
+libc-y += exec.S exception_asm.S
+endif
 
 # Will fall back to default_memXXX() in libc/memory.c if GPL not allowed.
 libc-$(CONFIG_LP_GPL) += string.c
@@ -48,3 +61,7 @@ libcbfs-$(CONFIG_LP_CBFS) += rom_media.c
 libc-$(CONFIG_LP_MULTIBOOT) += multiboot.c
 
 libc-$(CONFIG_LP_ENABLE_APIC) += apic.c
+
+arch/$(ARCHDIR-y)/libpayload.ldscript: $(obj)/libpayload-config.h FORCE
+	gcc -E -x c -Iinclude -I$(obj) arch/$(ARCHDIR-y)/libpayload.ldscript.in | grep -v "^#" > arch/$(ARCHDIR-y)/libpayload.ldscript
+FORCE:

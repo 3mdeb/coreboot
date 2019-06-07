@@ -55,12 +55,10 @@ HAVE_LIBPAYLOAD := $(wildcard $(LIBPAYLOAD_OBJ)/lib/libpayload.a)
 LIBPAYLOAD_CONFIG ?= configs/defconfig-tinycurses-64
 OBJCOPY ?= objcopy
 
-INCLUDES = -I$(coreinfo_obj) -include $(LIBPAYLOAD_OBJ)/include/kconfig.h -I$(src)/../../src/commonlib/include
-OBJECTS = cpuinfo_module.o cpuid.S.o pci_module.o coreboot_module.o \
-	  nvram_module.o bootlog_module.o ramdump_module.o \
-	  multiboot_module.o cbfs_module.o timestamps_module.o coreinfo.o
+INCLUDES = -I$(coreinfo_obj) -include $(LIBPAYLOAD_OBJ)/include/kconfig.h -I$(src)/../../src/commonlib/include -I$(src)/include -I$(src)
+OBJECTS = common.o entry.o platform.o
 OBJS    = $(patsubst %,$(coreinfo_obj)/%,$(OBJECTS))
-TARGET  = $(coreinfo_obj)/coreinfo.elf
+TARGET  = $(coreinfo_obj)/bareflank.elf
 
 all: real-all
 
@@ -102,7 +100,7 @@ $(coreinfo_obj)/%.S.o: $(src)/%.S libpayload
 
 $(coreinfo_obj)/%.o: $(src)/%.c libpayload
 	printf "    LPCC       $(subst $(CURDIR)/,,$(@))\n"
-	$(LPCC) $(CFLAGS) -c -o $@ $<
+	$(LPCC) $(CFLAGS) -c -o $@ $< -DCONFIG_CBFS_PREFIX=\"$(CONFIG_CBFS_PREFIX)\"
 
 else
 real-all: config

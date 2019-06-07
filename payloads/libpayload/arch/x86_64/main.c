@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  */
 
-//#include <exception.h>
+#include <exception.h>
 #include <libpayload.h>
 #include <arch/apic.h>
 
@@ -56,15 +56,13 @@ int start_main(void)
 	console_init();
 #endif
 
-	// TODO:
-/*	exception_init();
+	exception_init();
 
 	if (CONFIG(LP_ENABLE_APIC)) {
 		apic_init();
 
 		enable_interrupts();
 	}
-*/
 
 	/*
 	 * Any other system init that has to happen before the

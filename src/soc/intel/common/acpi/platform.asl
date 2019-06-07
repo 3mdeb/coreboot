@@ -17,6 +17,9 @@
 
 #include <include/console/post_codes.h>
 
+External(\_SB.MPTS, MethodObj)
+External(\_SB.MWAK, MethodObj)
+
 /* Port 80 POST */
 
 OperationRegion (POST, SystemIO, CONFIG_POST_IO_PORT, 1)
@@ -34,10 +37,10 @@ Method (_PTS, 1)
 {
 	Store (POST_OS_ENTER_PTS, DBG0)
 
-#if CONFIG(SOC_INTEL_COMMON_ACPI_EC_PTS_WAK)
-	/* Call EC _PTS handler */
-	\_SB.PCI0.LPCB.EC0.PTS (Arg0)
-#endif
+	If (CondRefOf (\_SB.MPTS))
+	{
+		\_SB.MPTS (Arg0)
+	}
 }
 
 /* The _WAK method is called on system wakeup */
@@ -46,10 +49,10 @@ Method (_WAK, 1)
 {
 	Store (POST_OS_ENTER_WAKE, DBG0)
 
-#if CONFIG(SOC_INTEL_COMMON_ACPI_EC_PTS_WAK)
-	/* Call EC _WAK handler */
-	\_SB.PCI0.LPCB.EC0.WAK (Arg0)
-#endif
+	If (CondRefOf (\_SB.MWAK))
+	{
+		\_SB.MWAK (Arg0)
+	}
 
 	Return (Package(){0,0})
 }

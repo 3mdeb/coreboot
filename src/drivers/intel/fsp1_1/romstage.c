@@ -18,7 +18,6 @@
 #include <stddef.h>
 #include <arch/acpi.h>
 #include <arch/cbfs.h>
-#include <arch/early_variables.h>
 #include <assert.h>
 #include <console/console.h>
 #include <cbmem.h>
@@ -38,70 +37,15 @@
 #include <timestamp.h>
 #include <vendorcode/google/chromeos/chromeos.h>
 
-asmlinkage void *romstage_main(FSP_INFO_HEADER *fih)
-{
-	void *top_of_stack;
-	struct pei_data pei_data;
-	struct romstage_params params = {
-		.pei_data = &pei_data,
-		.chipset_context = fih,
-	};
-
-	post_code(0x30);
-
-	timestamp_add_now(TS_START_ROMSTAGE);
-
-	/* Load microcode before RAM init */
-	if (CONFIG(SUPPORT_CPU_UCODE_IN_CBFS))
-		intel_update_microcode_from_cbfs();
-
-	memset(&pei_data, 0, sizeof(pei_data));
-
-	/* Display parameters */
-	if (!CONFIG(NO_MMCONF_SUPPORT))
-		printk(BIOS_SPEW, "CONFIG_MMCONF_BASE_ADDRESS: 0x%08x\n",
-			CONFIG_MMCONF_BASE_ADDRESS);
-	printk(BIOS_INFO, "Using FSP 1.1\n");
-
-	/* Display FSP banner */
-	print_fsp_info(fih);
-
-	/* Stash FSP version. */
-	params.fsp_version = fsp_version(fih);
-
-	/* Get power state */
-	params.power_state = fill_power_state();
-
-	/* Call into mainboard. */
-	mainboard_romstage_entry(&params);
-	soc_after_ram_init(&params);
-	post_code(0x38);
-
-	top_of_stack = setup_stack_and_mtrrs();
-
-	printk(BIOS_DEBUG, "Calling FspTempRamExit API\n");
-	timestamp_add_now(TS_FSP_TEMP_RAM_EXIT_START);
-	return top_of_stack;
-}
-
-void *cache_as_ram_stage_main(FSP_INFO_HEADER *fih)
-{
-	return romstage_main(fih);
-}
-
-/* Entry from the mainboard. */
-void romstage_common(struct romstage_params *params)
+static void raminit_common(struct romstage_params *params)
 {
 	bool s3wake;
 	struct region_device rdev;
-	struct pei_data *pei_data;
 
 	post_code(0x32);
 
 	timestamp_add_now(TS_BEFORE_INITRAM);
 
-	pei_data = params->pei_data;
-	pei_data->boot_mode = params->power_state->prev_sleep_state;
 	s3wake = params->power_state->prev_sleep_state == ACPI_S3;
 
 	if (CONFIG(ELOG_BOOT_COUNT) && !s3wake)
@@ -112,9 +56,9 @@ void romstage_common(struct romstage_params *params)
 	post_code(0x33);
 
 	/* Check recovery and MRC cache */
-	params->pei_data->saved_data_size = 0;
-	params->pei_data->saved_data = NULL;
-	if (!params->pei_data->disable_saved_data) {
+	params->saved_data_size = 0;
+	params->saved_data = NULL;
+	if (!params->disable_saved_data) {
 		if (vboot_recovery_mode_enabled()) {
 			/* Recovery mode does not use MRC cache */
 			printk(BIOS_DEBUG,
@@ -124,12 +68,11 @@ void romstage_common(struct romstage_params *params)
 							params->fsp_version,
 							&rdev))) {
 			/* MRC cache found */
-			params->pei_data->saved_data_size =
-				region_device_sz(&rdev);
-			params->pei_data->saved_data = rdev_mmap_full(&rdev);
+			params->saved_data_size = region_device_sz(&rdev);
+			params->saved_data = rdev_mmap_full(&rdev);
 			/* Assume boot device is memory mapped. */
 			assert(CONFIG(BOOT_DEVICE_MEMORY_MAPPED));
-		} else if (params->pei_data->boot_mode == ACPI_S3) {
+		} else if (s3wake) {
 			/* Waking from S3 and no cache. */
 			printk(BIOS_DEBUG,
 			       "No MRC cache found in S3 resume path.\n");
@@ -147,15 +90,15 @@ void romstage_common(struct romstage_params *params)
 
 	/* Save MRC output */
 	if (CONFIG(CACHE_MRC_SETTINGS)) {
-		printk(BIOS_DEBUG, "MRC data at %p %d bytes\n",
-			pei_data->data_to_save, pei_data->data_to_save_size);
-		if ((params->pei_data->boot_mode != ACPI_S3)
-			&& (params->pei_data->data_to_save_size != 0)
-			&& (params->pei_data->data_to_save != NULL))
+		printk(BIOS_DEBUG, "MRC data at %p %zu bytes\n",
+			params->data_to_save, params->data_to_save_size);
+		if (!s3wake
+			&& (params->data_to_save_size != 0)
+			&& (params->data_to_save != NULL))
 			mrc_cache_stash_data(MRC_TRAINING_DATA,
 				params->fsp_version,
-				params->pei_data->data_to_save,
-				params->pei_data->data_to_save_size);
+				params->data_to_save,
+				params->data_to_save_size);
 	}
 
 	/* Save DIMM information */
@@ -169,11 +112,45 @@ void romstage_common(struct romstage_params *params)
 		full_reset();
 }
 
-void after_cache_as_ram_stage(void)
+void cache_as_ram_stage_main(FSP_INFO_HEADER *fih)
 {
-	/* Load the ramstage. */
-	run_ramstage();
-	die("ERROR - Failed to load ramstage!");
+	struct romstage_params params = {
+		.chipset_context = fih,
+	};
+
+	post_code(0x30);
+
+	timestamp_add_now(TS_START_ROMSTAGE);
+
+	/* Load microcode before RAM init */
+	if (CONFIG(SUPPORT_CPU_UCODE_IN_CBFS))
+		intel_update_microcode_from_cbfs();
+
+	/* Display parameters */
+	if (!CONFIG(NO_MMCONF_SUPPORT))
+		printk(BIOS_SPEW, "CONFIG_MMCONF_BASE_ADDRESS: 0x%08x\n",
+			CONFIG_MMCONF_BASE_ADDRESS);
+	printk(BIOS_INFO, "Using FSP 1.1\n");
+
+	/* Display FSP banner */
+	print_fsp_info(fih);
+
+	/* Stash FSP version. */
+	params.fsp_version = fsp_version(fih);
+
+	/* Get power state */
+	params.power_state = fill_power_state();
+
+	/* Board initialization before and after RAM is enabled */
+	mainboard_pre_raminit(&params);
+
+	post_code(0x31);
+
+	/* Initialize memory */
+	raminit_common(&params);
+
+	soc_after_ram_init(&params);
+	post_code(0x38);
 }
 
 /* Initialize the power state */
@@ -183,13 +160,8 @@ __weak struct chipset_power_state *fill_power_state(void)
 }
 
 /* Board initialization before and after RAM is enabled */
-__weak void mainboard_romstage_entry(
-	struct romstage_params *params)
+__weak void mainboard_pre_raminit(struct romstage_params *params)
 {
-	post_code(0x31);
-
-	/* Initialize memory */
-	romstage_common(params);
 }
 
 /* Save the DIMM information for SMBIOS table 17 */
@@ -343,23 +315,9 @@ __weak int mrc_cache_stash_data(int type, uint32_t version,
 	return -1;
 }
 
-/* Transition RAM from off or self-refresh to active */
-__weak void raminit(struct romstage_params *params)
-{
-	post_code(POST_MEM_PREINIT_PREP_START);
-	die("ERROR - No RAM initialization specified!\n");
-}
-
 /* Display the memory configuration */
 __weak void report_memory_config(void)
 {
-}
-
-/* Choose top of stack and setup MTRRs */
-__weak void *setup_stack_and_mtrrs(void)
-{
-	die("ERROR - Must specify top of stack!\n");
-	return NULL;
 }
 
 /* SOC initialization after RAM is enabled */

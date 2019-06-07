@@ -19,6 +19,9 @@ config CPU_SPECIFIC_OPTIONS
 	#select AP_IN_SIPI_WAIT
 	select TSC_SYNC_MFENCE
 	select CPU_INTEL_COMMON
+	select NO_FIXED_XIP_ROM_SIZE
+	select PARALLEL_MP
+	select CACHE_RELOCATED_RAMSTAGE_OUTSIDE_CBMEM
 
 config BOOTBLOCK_CPU_INIT
 	string
@@ -28,8 +31,8 @@ config SMM_TSEG_SIZE
 	hex
 	default 0x800000
 
-config XIP_ROM_SIZE
+config SMM_RESERVED_SIZE
 	hex
-	default 0x20000
+	default 0x100000
 
 endif

@@ -13,11 +13,8 @@
  * GNU General Public License for more details.
  */
 
-/* This needs to be pulled in first so that the handoff code below and
- * peek into the vb2 data structures. Additionally, vboot doesn't currently
- * include what it uses in its own headers. Provide the types it's after.
- * TODO: fix this necessity. */
-#define NEED_VB20_INTERNALS
+#define NEED_VB20_INTERNALS  /* Peeking into vb2_shared_data */
+
 #include <stddef.h>
 #include <stdint.h>
 #include <vb2_api.h>
@@ -43,7 +40,7 @@ static void fill_vboot_handoff(struct vboot_handoff *vboot_handoff,
 {
 	VbSharedDataHeader *vb_sd =
 		(VbSharedDataHeader *)vboot_handoff->shared_data;
-	uint32_t *oflags = &vboot_handoff->init_params.out_flags;
+	uint32_t *oflags = &vboot_handoff->out_flags;
 
 	vb_sd->flags |= VBSD_BOOT_FIRMWARE_VBOOT2;
 
@@ -64,29 +61,12 @@ static void fill_vboot_handoff(struct vboot_handoff *vboot_handoff,
 			vb_sd->flags |= VBSD_BOOT_REC_SWITCH_ON;
 		*oflags |= VB_INIT_OUT_ENABLE_RECOVERY;
 		*oflags |= VB_INIT_OUT_CLEAR_RAM;
-		*oflags |= VB_INIT_OUT_ENABLE_DISPLAY;
-		*oflags |= VB_INIT_OUT_ENABLE_USB_STORAGE;
 	}
 	if (vb2_sd->flags & VB2_SD_FLAG_DEV_MODE_ENABLED) {
 		*oflags |= VB_INIT_OUT_ENABLE_DEVELOPER;
 		*oflags |= VB_INIT_OUT_CLEAR_RAM;
-		*oflags |= VB_INIT_OUT_ENABLE_DISPLAY;
-		*oflags |= VB_INIT_OUT_ENABLE_USB_STORAGE;
 		vb_sd->flags |= VBSD_BOOT_DEV_SWITCH_ON;
 		vb_sd->flags |= VBSD_LF_DEV_SWITCH_ON;
-	}
-	/* TODO: Set these in depthcharge */
-	if (CONFIG(VBOOT_OPROM_MATTERS)) {
-		vb_sd->flags |= VBSD_OPROM_MATTERS;
-		/*
-		 * Inform vboot if the display was enabled by dev/rec
-		 * mode or was requested by vboot kernel phase.
-		 */
-		if ((*oflags & VB_INIT_OUT_ENABLE_DISPLAY) ||
-		    vboot_wants_oprom()) {
-			vb_sd->flags |= VBSD_OPROM_LOADED;
-			*oflags |= VB_INIT_OUT_ENABLE_DISPLAY;
-		}
 	}
 
 	/* In vboot1, VBSD_FWB_TRIED is

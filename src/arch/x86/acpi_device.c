@@ -377,7 +377,7 @@ void acpi_device_write_i2c(const struct acpi_i2c *i2c)
 	desc_length = acpi_device_write_zero_len();
 
 	/* Byte 3: Revision ID */
-	acpigen_emit_byte(ACPI_SERIAL_BUS_REVISION_ID);
+	acpigen_emit_byte(ACPI_I2C_SERIAL_BUS_REVISION_ID);
 
 	/* Byte 4: Resource Source Index is Reserved */
 	acpigen_emit_byte(0);
@@ -401,7 +401,7 @@ void acpi_device_write_i2c(const struct acpi_i2c *i2c)
 	acpigen_emit_word(i2c->mode_10bit);
 
 	/* Byte 9: Type Specific Revision ID */
-	acpigen_emit_byte(ACPI_SERIAL_BUS_REVISION_ID);
+	acpigen_emit_byte(ACPI_I2C_TYPE_SPECIFIC_REVISION_ID);
 
 	/* Byte 10-11: I2C Type Data Length */
 	type_length = acpi_device_write_zero_len();
@@ -435,7 +435,7 @@ void acpi_device_write_spi(const struct acpi_spi *spi)
 	desc_length = acpi_device_write_zero_len();
 
 	/* Byte 3: Revision ID */
-	acpigen_emit_byte(ACPI_SERIAL_BUS_REVISION_ID);
+	acpigen_emit_byte(ACPI_SPI_SERIAL_BUS_REVISION_ID);
 
 	/* Byte 4: Resource Source Index is Reserved */
 	acpigen_emit_byte(0);
@@ -464,7 +464,7 @@ void acpi_device_write_spi(const struct acpi_spi *spi)
 	acpigen_emit_word(flags);
 
 	/* Byte 9: Type Specific Revision ID */
-	acpigen_emit_byte(ACPI_SERIAL_BUS_REVISION_ID);
+	acpigen_emit_byte(ACPI_SPI_TYPE_SPECIFIC_REVISION_ID);
 
 	/* Byte 10-11: SPI Type Data Length */
 	type_length = acpi_device_write_zero_len();
@@ -740,6 +740,9 @@ size_t acpi_dp_add_property_list(struct acpi_dp *dp,
 	const struct acpi_dp *prop;
 	size_t i, properties_added = 0;
 
+	if (!dp || !property_list)
+		return 0;
+
 	for (i = 0; i < property_count; i++) {
 		prop = &property_list[i];
 
@@ -775,6 +778,9 @@ size_t acpi_dp_add_property_list(struct acpi_dp *dp,
 struct acpi_dp *acpi_dp_add_integer(struct acpi_dp *dp, const char *name,
 				    uint64_t value)
 {
+	if (!dp)
+		return NULL;
+
 	struct acpi_dp *new = acpi_dp_new(dp, ACPI_DP_TYPE_INTEGER, name);
 
 	if (new)
@@ -786,6 +792,9 @@ struct acpi_dp *acpi_dp_add_integer(struct acpi_dp *dp, const char *name,
 struct acpi_dp *acpi_dp_add_string(struct acpi_dp *dp, const char *name,
 				   const char *string)
 {
+	if (!dp)
+		return NULL;
+
 	struct acpi_dp *new = acpi_dp_new(dp, ACPI_DP_TYPE_STRING, name);
 
 	if (new)
@@ -797,6 +806,9 @@ struct acpi_dp *acpi_dp_add_string(struct acpi_dp *dp, const char *name,
 struct acpi_dp *acpi_dp_add_reference(struct acpi_dp *dp, const char *name,
 				      const char *reference)
 {
+	if (!dp)
+		return NULL;
+
 	struct acpi_dp *new = acpi_dp_new(dp, ACPI_DP_TYPE_REFERENCE, name);
 
 	if (new)
@@ -810,7 +822,7 @@ struct acpi_dp *acpi_dp_add_child(struct acpi_dp *dp, const char *name,
 {
 	struct acpi_dp *new;
 
-	if (!child || child->type != ACPI_DP_TYPE_TABLE)
+	if (!dp || !child || child->type != ACPI_DP_TYPE_TABLE)
 		return NULL;
 
 	new = acpi_dp_new(dp, ACPI_DP_TYPE_CHILD, name);
@@ -826,7 +838,7 @@ struct acpi_dp *acpi_dp_add_array(struct acpi_dp *dp, struct acpi_dp *array)
 {
 	struct acpi_dp *new;
 
-	if (!array || array->type != ACPI_DP_TYPE_TABLE)
+	if (!dp || !array || array->type != ACPI_DP_TYPE_TABLE)
 		return NULL;
 
 	new = acpi_dp_new(dp, ACPI_DP_TYPE_ARRAY, array->name);
@@ -842,7 +854,7 @@ struct acpi_dp *acpi_dp_add_integer_array(struct acpi_dp *dp, const char *name,
 	struct acpi_dp *dp_array;
 	int i;
 
-	if (len <= 0)
+	if (!dp || len <= 0)
 		return NULL;
 
 	dp_array = acpi_dp_new_table(name);
@@ -862,6 +874,9 @@ struct acpi_dp *acpi_dp_add_gpio(struct acpi_dp *dp, const char *name,
 				 const char *ref, int index, int pin,
 				 int active_low)
 {
+	if (!dp)
+		return NULL;
+
 	struct acpi_dp *gpio = acpi_dp_new_table(name);
 
 	if (!gpio)

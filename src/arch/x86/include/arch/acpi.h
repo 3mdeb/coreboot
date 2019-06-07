@@ -56,11 +56,11 @@
 #define OEM_ID			"COREv4"    /* Must be exactly 6 bytes long! */
 
 #if !defined(__ASSEMBLER__) && !defined(__ACPI__) && !defined(__ROMCC__)
-#include <stdint.h>
 #include <commonlib/helpers.h>
 #include <device/device.h>
 #include <uuid.h>
 #include <cper.h>
+#include <types.h>
 
 #define RSDP_SIG		"RSD PTR "  /* RSDT pointer signature */
 #define ASLC			"CORE"      /* Must be exactly 4 bytes long! */
@@ -335,9 +335,9 @@ enum {
 };
 
 enum dmar_flags {
-	DMAR_INTR_REMAP			= 1,
-	DMAR_X2APIC_OPT_OUT		= 2,
-	DMA_CTRL_PLATFORM_OPT_IN_FLAG	= 3,
+	DMAR_INTR_REMAP			= 1 << 0,
+	DMAR_X2APIC_OPT_OUT		= 1 << 1,
+	DMA_CTRL_PLATFORM_OPT_IN_FLAG	= 1 << 2,
 };
 
 typedef struct dmar_entry {
@@ -365,6 +365,22 @@ typedef struct dmar_atsr_entry {
 	u8 reserved;
 	u16 segment;
 } __packed dmar_atsr_entry_t;
+
+typedef struct dmar_rhsa_entry {
+	u16 type;
+	u16 length;
+	u32 reserved;
+	u64 base_address;
+	u32 proximity_domain;
+} __packed dmar_rhsa_entry_t;
+
+typedef struct dmar_andd_entry {
+	u16 type;
+	u16 length;
+	u8 reserved[3];
+	u8 device_number;
+	u8 device_name[];
+} __packed dmar_andd_entry_t;
 
 /* DMAR (DMA Remapping Reporting Structure) */
 typedef struct acpi_dmar {
@@ -822,14 +838,12 @@ void acpi_create_ivrs(acpi_ivrs_t *ivrs,
 		      unsigned long (*acpi_fill_ivrs)(acpi_ivrs_t *ivrs_struct,
 		      unsigned long current));
 
-#if ENV_RAMSTAGE && !defined(__SIMPLE_DEVICE__)
 void acpi_create_hpet(acpi_hpet_t *hpet);
 unsigned long acpi_write_hpet(struct device *device, unsigned long start,
 			      acpi_rsdp_t *rsdp);
 
 /* cpu/intel/speedstep/acpi.c */
 void generate_cpu_entries(struct device *device);
-#endif
 
 void acpi_create_mcfg(acpi_mcfg_t *mcfg);
 
@@ -850,6 +864,10 @@ unsigned long acpi_create_dmar_rmrr(unsigned long current, u16 segment,
 				    u64 bar, u64 limit);
 unsigned long acpi_create_dmar_atsr(unsigned long current, u8 flags,
 				    u16 segment);
+unsigned long acpi_create_dmar_rhsa(unsigned long current, u64 base_addr,
+				    u32 proximity_domain);
+unsigned long acpi_create_dmar_andd(unsigned long current, u8 device_number,
+				    const char *device_name);
 void acpi_dmar_drhd_fixup(unsigned long base, unsigned long current);
 void acpi_dmar_rmrr_fixup(unsigned long base, unsigned long current);
 void acpi_dmar_atsr_fixup(unsigned long base, unsigned long current);

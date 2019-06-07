@@ -14,13 +14,11 @@
  */
 
 #include <arch/cpu.h>
-#include <arch/early_variables.h>
 #include <arch/symbols.h>
 #include <assert.h>
 #include <cpu/x86/mtrr.h>
 #include <cpu/x86/msr.h>
 #include <cbmem.h>
-#include <chip.h>
 #include <console/console.h>
 #include <device/pci_def.h>
 #include <fsp/util.h>
@@ -36,6 +34,8 @@
 #include <string.h>
 #include <timestamp.h>
 #include <security/vboot/vboot_common.h>
+
+#include "../chip.h"
 
 #define FSP_SMBIOS_MEMORY_INFO_GUID	\
 {	\
@@ -125,6 +125,7 @@ static void save_dimm_info(void)
 				src_dimm->DimmId,
 				(const char *)src_dimm->ModulePartNum,
 				sizeof(src_dimm->ModulePartNum),
+				src_dimm->SpdSave + SPD_SAVE_OFFSET_SERIAL,
 				memory_info_hob->DataWidth);
 			index++;
 		}
@@ -263,14 +264,6 @@ static void soc_memory_init_params(FSP_M_CONFIG *m_cfg,
 	int i;
 	uint32_t mask = 0;
 
-	/*
-	 * Set IGD stolen size to 64MB.  The FBC hardware for skylake does not
-	 * have access to the bios_reserved range so it always assumes 8MB is
-	 * used and so the kernel will avoid the last 8MB of the stolen window.
-	 * With the default stolen size of 32MB(-8MB) there is not enough space
-	 * for FBC to work with a high resolution panel.
-	 */
-	m_cfg->IgdDvmt50PreAlloc = 2;
 	m_cfg->MmioSize = 0x800; /* 2GB in MB */
 	m_cfg->TsegSize = CONFIG_SMM_TSEG_SIZE;
 	m_cfg->IedSize = CONFIG_IED_REGION_SIZE;
@@ -310,14 +303,20 @@ static void soc_primary_gfx_config_params(FSP_M_CONFIG *m_cfg,
 		 * the FSP does not initialize this device
 		 */
 		m_cfg->InternalGfx = 0;
-		if (config->PrimaryDisplay == Display_iGFX)
-			m_cfg->PrimaryDisplay = Display_Auto;
-		else
-			m_cfg->PrimaryDisplay = config->PrimaryDisplay;
+		m_cfg->IgdDvmt50PreAlloc = 0;
 	} else {
 		m_cfg->InternalGfx = 1;
-		m_cfg->PrimaryDisplay = config->PrimaryDisplay;
+		/*
+		 * Set IGD stolen size to 64MB.  The FBC hardware for skylake
+		 * does not have access to the bios_reserved range so it always
+		 * assumes 8MB is used and so the kernel will avoid the last
+		 * 8MB of the stolen window. With the default stolen size of
+		 * 32MB(-8MB) there is not enough space for FBC to work with
+		 * a high resolution panel
+		 */
+		m_cfg->IgdDvmt50PreAlloc = 2;
 	}
+	m_cfg->PrimaryDisplay = config->PrimaryDisplay;
 }
 
 void platform_fsp_memory_init_params_cb(FSPM_UPD *mupd, uint32_t version)

@@ -18,14 +18,13 @@
 #include <cpu/x86/cache.h>
 #include <device/pci_def.h>
 #include <device/pci_ops.h>
-#include <arch/io.h>
+#include <cf9_reset.h>
 #include <device/mmio.h>
 #include <device/device.h>
 #include <lib.h>
 #include <pc80/mc146818rtc.h>
 #include <spd.h>
 #include <string.h>
-#include <halt.h>
 #include "raminit.h"
 #include "i945.h"
 #include "chip.h"
@@ -247,13 +246,13 @@ static void sdram_detect_errors(struct sys_info *sysinfo)
 	u8 reg8;
 	u8 do_reset = 0;
 
-	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xa2);
+	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2);
 
 	if (reg8 & ((1<<7)|(1<<2))) {
 		if (reg8 & (1<<2)) {
 			printk(BIOS_DEBUG, "SLP S4# Assertion Width Violation.\n");
 			/* Write back clears bit 2 */
-			pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8);
+			pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2, reg8);
 			do_reset = 1;
 
 		}
@@ -261,27 +260,25 @@ static void sdram_detect_errors(struct sys_info *sysinfo)
 		if (reg8 & (1<<7)) {
 			printk(BIOS_DEBUG, "DRAM initialization was interrupted.\n");
 			reg8 &= ~(1<<7);
-			pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8);
+			pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2, reg8);
 			do_reset = 1;
 		}
 
 		/* Set SLP_S3# Assertion Stretch Enable */
-		reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xa4); /* GEN_PMCON_3 */
+		reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_3);
 		reg8 |= (1 << 3);
-		pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa4, reg8);
+		pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_3, reg8);
 
 		if (do_reset) {
 			printk(BIOS_DEBUG, "Reset required.\n");
-			outb(0x00, 0xcf9);
-			outb(0x0e, 0xcf9);
-			halt(); /* Wait for reset! */
+			full_reset();
 		}
 	}
 
 	/* Set DRAM initialization bit in ICH7 */
-	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xa2);
+	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2);
 	reg8 |= (1<<7);
-	pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8);
+	pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2, reg8);
 
 	/* clear self refresh status if check is disabled or not a resume */
 	if (!CONFIG(CHECK_SLFRCS_ON_RESUME)
@@ -303,9 +300,7 @@ static void sdram_detect_errors(struct sys_info *sysinfo)
 
 	if (do_reset) {
 		printk(BIOS_DEBUG, "Reset required.\n");
-		outb(0x00, 0xcf9);
-		outb(0x0e, 0xcf9);
-		halt(); /* Wait for reset! */
+		full_reset();
 	}
 }
 
@@ -1811,9 +1806,9 @@ static void sdram_program_memory_frequency(struct sys_info *sysinfo)
 	 */
 	goto cache_code;
 vco_update:
-	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xa2);
+	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2);
 	reg8 &= ~(1 << 7);
-	pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8);
+	pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2, reg8);
 
 	clkcfg &= ~(1 << 10);
 	MCHBAR32(CLKCFG) = clkcfg;
@@ -2549,29 +2544,19 @@ static void sdram_jedec_enable(struct sys_info *sysinfo)
 	u32 bankaddr = 0, tmpaddr, mrsaddr = 0;
 
 	for (i = 0, nonzero = -1; i < 8; i++) {
-		if (sysinfo->banksize[i]  == 0)
+		if (sysinfo->banksize[i] == 0)
 			continue;
 
 		printk(BIOS_DEBUG, "jedec enable sequence: bank %d\n", i);
-		switch (i) {
-		case 0:
-			/* Start at address 0 */
-			bankaddr = 0;
-			break;
-		case 4:
-			if (sysinfo->interleaved) {
+
+		if (nonzero != -1) {
+			if (sysinfo->interleaved && nonzero < 4 && i >= 4) {
 				bankaddr = 0x40;
-				break;
-			}
-		default:
-			if (nonzero != -1) {
+			} else {
 				printk(BIOS_DEBUG, "bankaddr from bank size of rank %d\n", nonzero);
 				bankaddr += sysinfo->banksize[nonzero] <<
 					(sysinfo->interleaved ? 26 : 25);
-				break;
 			}
-			/* No populated bank hit before. Start at address 0 */
-			bankaddr = 0;
 		}
 
 		/* We have a bank with a non-zero size.. Remember it
@@ -2827,9 +2812,9 @@ void sdram_initialize(int boot_path, const u8 *spd_addresses)
 	sdram_enable_rcomp();
 
 	/* Tell ICH7 that we're done */
-	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), 0xa2);
+	reg8 = pci_read_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2);
 	reg8 &= ~(1 << 7);
-	pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8);
+	pci_write_config8(PCI_DEV(0, 0x1f, 0), GEN_PMCON_2, reg8);
 
 	printk(BIOS_DEBUG, "RAM initialization finished.\n");
 

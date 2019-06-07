@@ -23,6 +23,23 @@
 #ifndef __ACPI__
 #include <types.h>
 
+/* GPIO community IOSF sideband clock gating */
+#define MISCCFG_GPSIDEDPCGEN	(1 << 5)
+/* GPIO community RCOMP clock gating */
+#define MISCCFG_GPRCOMPCDLCGEN	(1 << 4)
+/* GPIO community RTC clock gating */
+#define MISCCFG_GPRTCDLCGEN	(1 << 3)
+/* GFX controller clock gating */
+#define MISCCFG_GSXSLCGEN	(1 << 2)
+/* GPIO community partition clock gating */
+#define MISCCFG_GPDPCGEN	(1 << 1)
+/* GPIO community local clock gating */
+#define MISCCFG_GPDLCGEN	(1 << 0)
+/* Enable GPIO community power management configuration */
+#define MISCCFG_ENABLE_GPIO_PM_CONFIG (MISCCFG_GPSIDEDPCGEN | \
+	MISCCFG_GPRCOMPCDLCGEN | MISCCFG_GPRTCDLCGEN | MISCCFG_GSXSLCGEN \
+	| MISCCFG_GPDPCGEN | MISCCFG_GPDLCGEN)
+
 /*
  * GPIO numbers may not be contiguous and instead will have a different
  * starting pin number for each pad group.
@@ -105,8 +122,10 @@ struct pad_community {
 	gpio_t		first_pad;   /* first pad in community */
 	gpio_t		last_pad;    /* last pad in community */
 	uint16_t	host_own_reg_0; /* offset to Host Ownership Reg 0 */
-	uint16_t	gpi_smi_sts_reg_0; /* offset to GPI SMI EN Reg 0 */
-	uint16_t	gpi_smi_en_reg_0; /* offset to GPI SMI STS Reg 0 */
+	uint16_t	gpi_int_sts_reg_0; /* offset to GPI Int STS Reg 0 */
+	uint16_t	gpi_int_en_reg_0; /* offset to GPI Int Enable Reg 0 */
+	uint16_t	gpi_smi_sts_reg_0; /* offset to GPI SMI STS Reg 0 */
+	uint16_t	gpi_smi_en_reg_0; /* offset to GPI SMI EN Reg 0 */
 	uint16_t	pad_cfg_base; /* offset to first PAD_GFG_DW0 Reg */
 	uint8_t		gpi_status_offset;  /* specifies offset in struct
 						gpi_status */
@@ -206,6 +225,15 @@ uint8_t gpio_get_pad_portid(const gpio_t pad);
  */
 uint32_t soc_gpio_pad_config_fixup(const struct pad_config *cfg,
 						int dw_reg, uint32_t reg_val);
+
+/*
+ * Function to reset/clear the GPI Interrupt Enable & Status registers for
+ * all GPIO pad communities.
+ */
+void gpi_clear_int_cfg(void);
+
+/* The function performs GPIO Power Management programming. */
+void gpio_pm_configure(const uint8_t *misccfg_pm_values, size_t num);
 
 #endif
 #endif /* _SOC_INTELBLOCKS_GPIO_H_ */

@@ -47,6 +47,17 @@ ifneq ($(strip $(call strip_quotes,$(CONFIG_PAYLOAD_OPTIONS))),)
       ADDITIONAL_PAYLOAD_CONFIG+=$(strip $(call strip_quotes,$(CONFIG_PAYLOAD_OPTIONS)))
 endif
 
+ifeq ($(CONFIG_BAREFLANK_SECONDARY_PAYLOAD),y)
+cbfs-files-y += $(CONFIG_CBFS_PREFIX)/realpayload
+$(CONFIG_CBFS_PREFIX)/realpayload-file := $(CONFIG_PAYLOAD_FILE)
+ifeq ($(CONFIG_PAYLOAD_IS_FLAT_BINARY),y)
+$(CONFIG_CBFS_PREFIX)/realpayload-type := flat-binary
+else
+$(CONFIG_CBFS_PREFIX)/realpayload-type := payload
+endif
+$(CONFIG_CBFS_PREFIX)/realpayload-compression := $(CBFS_PAYLOAD_COMPRESS_FLAG)
+$(CONFIG_CBFS_PREFIX)/realpayload-options := $(ADDITIONAL_PAYLOAD_CONFIG)
+else
 cbfs-files-y += $(CONFIG_CBFS_PREFIX)/payload
 $(CONFIG_CBFS_PREFIX)/payload-file := $(CONFIG_PAYLOAD_FILE)
 ifeq ($(CONFIG_PAYLOAD_IS_FLAT_BINARY),y)
@@ -56,6 +67,7 @@ $(CONFIG_CBFS_PREFIX)/payload-type := payload
 endif
 $(CONFIG_CBFS_PREFIX)/payload-compression := $(CBFS_PAYLOAD_COMPRESS_FLAG)
 $(CONFIG_CBFS_PREFIX)/payload-options := $(ADDITIONAL_PAYLOAD_CONFIG)
+endif
 
 cbfs-files-$(CONFIG_INCLUDE_CONFIG_FILE) += payload_config
 payload_config-file := $(PAYLOAD_CONFIG)
@@ -229,7 +241,9 @@ endif
 ifeq ($(CONFIG_BUILD_IPXE),y)
 PXE_ROM_FILE:=payloads/external/iPXE/ipxe/ipxe.rom
 endif
-
+ifeq ($(CONFIG_PXE_ADD_SCRIPT),y)
+PXE_CONFIG_SCRIPT:=$(abspath $(patsubst "%",%,$(CONFIG_PXE_SCRIPT)))
+endif
 ifeq ($(CONFIG_CONSOLE_SERIAL)$(CONFIG_DRIVERS_UART_8250IO),yy)
 IPXE_UART=COM$(call int-add,$(CONFIG_UART_FOR_CONSOLE) 1)
 endif
@@ -244,7 +258,7 @@ cbfs-files-$(CONFIG_PXE_ROM)$(CONFIG_BUILD_IPXE) += pci$(CONFIG_PXE_ROM_ID).rom
 pci$(CONFIG_PXE_ROM_ID).rom-file := $(PXE_ROM_FILE)
 pci$(CONFIG_PXE_ROM_ID).rom-type := raw
 
-payloads/external/iPXE/ipxe/ipxe.rom ipxe: $(DOTCONFIG)
+payloads/external/iPXE/ipxe/ipxe.rom ipxe: $(DOTCONFIG) $(PXE_CONFIG_SCRIPT)
 	$(MAKE) -C payloads/external/iPXE all \
 	CROSS_COMPILE="$(CROSS_COMPILE_$(ARCH-ramstage-y))" \
 	PXE_ROM_PCI_ID=$(PXE_ROM_PCI_ID) \
@@ -253,6 +267,9 @@ payloads/external/iPXE/ipxe/ipxe.rom ipxe: $(DOTCONFIG)
 	CONSOLE_SERIAL=$(IPXE_SERIAL_CONSOLE) \
 	IPXE_UART=$(IPXE_UART) \
 	CONFIG_TTYS0_BAUD=$(CONFIG_TTYS0_BAUD) \
+	CONFIG_SCRIPT=$(PXE_CONFIG_SCRIPT) \
+	CONFIG_HAS_SCRIPT=$(CONFIG_PXE_ADD_SCRIPT) \
+	CONFIG_PXE_NO_PROMT=$(CONFIG_PXE_NO_PROMT) \
 	MFLAGS= MAKEFLAGS=
 
 # LinuxBoot

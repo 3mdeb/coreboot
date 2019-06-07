@@ -12,12 +12,12 @@
 
 choice
 	prompt "Timer driver"
-	default TIMER_NONE if !ARCH_X86
-	default TIMER_RDTSC if ARCH_X86
+	default TIMER_NONE if !(ARCH_X86 || ARCH_X86_64)
+	default TIMER_RDTSC if ARCH_X86 || ARCH_X86_64
 
 config TIMER_RDTSC
 	bool "x86 rdtsc"
-	depends on ARCH_X86
+	depends on ARCH_X86 || ARCH_X86_64
 
 config TIMER_NONE
 	bool "None"

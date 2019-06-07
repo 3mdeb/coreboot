@@ -43,7 +43,9 @@
 #include <device/pci_ops.h>
 #include <arch/acpi.h>
 #include <string.h>
+#include <types.h>
 #include <device/dram/ddr3.h>
+
 #include "s3utils.h"
 #include "mct_d_gcc.h"
 #include "mct_d.h"
@@ -3808,7 +3810,7 @@ static void HTMemMapInit_D(struct MCTStatStruc *pMCTstat,
 {
 	u8 Node;
 	u32 NextBase, BottomIO;
-	u8 _MemHoleRemap, DramHoleBase, DramHoleOffset;
+	u8 _MemHoleRemap, DramHoleBase;
 	u32 HoleSize, DramSelBaseAddr;
 
 	u32 val;
@@ -3867,7 +3869,6 @@ static void HTMemMapInit_D(struct MCTStatStruc *pMCTstat,
 					if ((DramSelBaseAddr > 0) && (DramSelBaseAddr < BottomIO))
 						base = DramSelBaseAddr;
 					val = ((base + HoleSize) >> (24-8)) & 0xFF;
-					DramHoleOffset = val;
 					val <<= 8; /* shl 16, rol 24 */
 					val |= DramHoleBase << 24;
 					val |= 1  << DramHoleValid;
@@ -5164,9 +5165,7 @@ static u8 AutoConfig_D(struct MCTStatStruc *pMCTstat,
 		/* Special Jedec SPD diagnostic bit - "enable all clocks" */
 		if (!(pDCTstat->Status & (1<<SB_DiagClks))) {
 			const u8 *p;
-			const u32 *q;
 			p = Tab_ManualCLKDis;
-			q = (u32 *)p;
 
 			byte = mctGet_NVbits(NV_PACK_TYPE);
 			if (byte == PT_L1)
@@ -5418,7 +5417,7 @@ static void StitchMemory_D(struct MCTStatStruc *pMCTstat,
 	u8 b = 0;
 	u32 nxtcsBase, curcsBase;
 	u8 p, q;
-	u32 Sizeq, BiggestBank;
+	u32 BiggestBank;
 	u8 _DSpareEn;
 
 	u16 word;
@@ -5471,7 +5470,6 @@ static void StitchMemory_D(struct MCTStatStruc *pMCTstat,
 					val >>= 19;
 					val++;
 					val <<= 19;
-					Sizeq = val;  /* never used */
 					if (val > BiggestBank) {
 						/*Bingo! possibly Map this chip-select next! */
 						BiggestBank = val;
@@ -6983,7 +6981,6 @@ static void SetODTTriState(struct MCTStatStruc *pMCTstat,
 	u32 index_reg = 0x98;
 	u8 cs;
 	u8 odt;
-	u8 max_dimms;
 
 	dev = pDCTstat->dev_dct;
 
@@ -6993,7 +6990,6 @@ static void SetODTTriState(struct MCTStatStruc *pMCTstat,
 		/* FIXME: skip for Ax */
 
 		/* Tri-state unused ODTs when motherboard termination is available */
-		max_dimms = (u8) mctGet_NVbits(NV_MAX_DIMMS);
 		odt = 0x0f;	/* ODT tri-state setting */
 
 		if (pDCTstat->Status & (1 <<SB_Registered)) {

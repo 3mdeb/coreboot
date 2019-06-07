@@ -82,7 +82,7 @@ static inline __attribute__((always_inline)) void write32(volatile void *addr, u
 static inline unsigned int inl(int port)
 {
 	unsigned long val;
-	__asm__ __volatile__("inl %w1, %0" : "=a"(val) : "Nd"(port));
+	__asm__ __volatile__("inl %w1, %k0" : "=a"(val) : "Nd"(port));
 	return val;
 }
 
@@ -102,7 +102,7 @@ static inline unsigned char inb(int port)
 
 static inline void outl(unsigned int val, int port)
 {
-	__asm__ __volatile__("outl %0, %w1" : : "a"(val), "Nd"(port));
+	__asm__ __volatile__("outl %k0, %w1" : : "a"(val), "Nd"(port));
 }
 
 static inline void outw(unsigned short val, int port)

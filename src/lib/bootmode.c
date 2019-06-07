@@ -17,7 +17,6 @@
 #include <bootmode.h>
 #include <vendorcode/google/chromeos/chromeos.h>
 
-#if ENV_RAMSTAGE
 static int gfx_init_done = -1;
 
 int gfx_get_init_done(void)
@@ -31,16 +30,17 @@ void gfx_set_init_done(int done)
 {
 	gfx_init_done = done;
 }
-#endif
 
 int display_init_required(void)
 {
-	/* For vboot always honor vboot_handoff_skip_display_init(). */
+	/* For vboot, always honor VBOOT_WD_FLAG_DISPLAY_INIT. */
 	if (CONFIG(VBOOT)) {
-		/* Must always select OPROM_MATTERS when using this function. */
-		if (!CONFIG(VBOOT_OPROM_MATTERS))
+		/* Must always select MUST_REQUEST_DISPLAY when using this
+		   function. */
+		if (!CONFIG(VBOOT_MUST_REQUEST_DISPLAY))
 			dead_code();
-		return !vboot_handoff_skip_display_init();
+		return vboot_get_working_data()->flags
+			& VBOOT_WD_FLAG_DISPLAY_INIT;
 	}
 
 	/* By default always initialize display. */

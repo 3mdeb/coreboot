@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  */
 
+#define NEED_VB20_INTERNALS  /* Peeking into vb2_shared_data */
+
 #include <assert.h>
 #include <bootmode.h>
 #include <bootstate.h>
@@ -162,10 +164,8 @@ int vboot_recovery_mode_memory_retrain(void)
 
 int vboot_developer_mode_enabled(void)
 {
-	if (cbmem_possibly_online() && vboot_handoff_check_developer_flag())
-		return 1;
-
-	return 0;
+	return cbmem_possibly_online() &&
+		vboot_get_working_data()->flags & VBOOT_WD_FLAG_DEVELOPER_MODE;
 }
 
 #if CONFIG(VBOOT_NO_BOARD_SUPPORT)

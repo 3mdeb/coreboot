@@ -30,8 +30,8 @@ static const struct pad_config gpio_table[] = {
 	PAD_CFG_GPI_INT(GPP_A6, NONE, PLTRST, LEVEL),
 	/* A7  : PP3300_SOC_A */
 	PAD_NC(GPP_A7, NONE),
-	/* A8  : EMR_GARAGE_DET */
-	PAD_CFG_GPI_GPIO_DRIVER(GPP_A8, NONE, DEEP),
+	/* A8  : PEN_GARAGE_DET_L */
+	PAD_CFG_GPI_GPIO_DRIVER_SCI(GPP_A8, NONE, DEEP, LEVEL, NONE),
 	/* A9  : ESPI_CLK */
 	/* A10 : FPMCU_PCH_BOOT1 */
 	PAD_CFG_GPO(GPP_A10, 0, DEEP),
@@ -339,17 +339,15 @@ static const struct pad_config gpio_table[] = {
 	/* G4  : SD_DATA3 */
 	PAD_CFG_NF(GPP_G4, NONE, DEEP, NF1),
 	/* G5  : SD_CD# */
-	PAD_CFG_NF(GPP_G5, NONE, DEEP, NF1),
+	PAD_CFG_NF(GPP_G5, NONE, PLTRST, NF1),
 	/* G6  : SD_CLK */
 	PAD_CFG_NF(GPP_G6, NONE, DEEP, NF1),
 	/* G7  : SD_WP => NC */
 	PAD_NC(GPP_G7, DN_20K),
 	/*
 	 * H0  : HP_INT_L
-	 * TODO Configure it back to invert mode, when
-	 * ITSS IPCx configuration is fixed in FSP.
 	 */
-	PAD_CFG_GPI_APIC(GPP_H0, NONE, PLTRST, LEVEL, NONE),
+	PAD_CFG_GPI_INT(GPP_H0, NONE, PLTRST, LEVEL),
 	/* H1  : CNV_RF_RESET_L */
 	PAD_CFG_NF(GPP_H1, NONE, DEEP, NF3),
 	/* H2  : CNV_CLKREQ0 */
@@ -428,7 +426,7 @@ static const struct pad_config s5_sleep_gpio_table[] = {
 	PAD_CFG_GPO(GPP_A18, 0, DEEP), /* EN_PP3300_WWAN */
 };
 
-const struct pad_config * __weak variant_sleep_gpio_table(
+const struct pad_config *__weak variant_sleep_gpio_table(
 	u8 slp_typ, size_t *num)
 {
 	if (slp_typ == ACPI_S5) {
@@ -441,6 +439,8 @@ const struct pad_config * __weak variant_sleep_gpio_table(
 
 /* GPIOs needed prior to ramstage. */
 static const struct pad_config early_gpio_table[] = {
+	/* A12 : FPMCU_RST_ODL */
+	PAD_CFG_GPO(GPP_A12, 0, DEEP),
 	/* B15 : H1_SLAVE_SPI_CS_L */
 	PAD_CFG_NF(GPP_B15, NONE, DEEP, NF1),
 	/* B16 : H1_SLAVE_SPI_CLK */

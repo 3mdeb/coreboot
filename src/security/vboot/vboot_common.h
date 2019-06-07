@@ -39,7 +39,8 @@ int vboot_check_recovery_request(void);
  * vboot shared data as well as the flags from VbInit.
  */
 struct vboot_handoff {
-	VbInitParams init_params;
+	uint32_t reserved0;  /* originally from VbInitParams */
+	uint32_t out_flags;
 	uint32_t selected_firmware;
 	char shared_data[VB_SHARED_DATA_MIN_SIZE];
 } __packed;
@@ -60,9 +61,7 @@ int vboot_get_handoff_info(void **addr, uint32_t *size);
  * Returns 0 for flag if false
  * Returns value read for other fields
  */
-int vboot_handoff_skip_display_init(void);
 int vboot_handoff_check_recovery_flag(void);
-int vboot_handoff_check_developer_flag(void);
 int vboot_handoff_get_recovery_reason(void);
 
 /* ============================ VBOOT REBOOT ============================== */

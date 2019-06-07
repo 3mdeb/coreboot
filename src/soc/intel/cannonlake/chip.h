@@ -20,7 +20,9 @@
 
 #include <intelblocks/chip.h>
 #include <drivers/i2c/designware/dw_i2c.h>
+#include <intelblocks/gpio.h>
 #include <intelblocks/gspi.h>
+#include <smbios.h>
 #include <stdint.h>
 #include <soc/gpio.h>
 #include <soc/pch.h>
@@ -167,10 +169,10 @@ struct soc_intel_cannonlake_config {
 	/* PCIe output clocks type to Pcie devices.
 	 * 0-23: PCH rootport, 0x70: LAN, 0x80: unspecified but in use,
 	 * 0xFF: not used */
-	uint8_t PcieClkSrcUsage[CONFIG_MAX_ROOT_PORTS];
+	uint8_t PcieClkSrcUsage[CONFIG_MAX_PCIE_CLOCKS];
 	/* PCIe ClkReq-to-ClkSrc mapping, number of clkreq signal assigned to
 	 * clksrc. */
-	uint8_t PcieClkSrcClkReq[CONFIG_MAX_ROOT_PORTS];
+	uint8_t PcieClkSrcClkReq[CONFIG_MAX_PCIE_CLOCKS];
 	/* PCIe LTR(Latency Tolerance Reporting) mechanism */
 	uint8_t PcieRpLtrEnable[CONFIG_MAX_ROOT_PORTS];
 	/* Enable/Disable HotPlug support for Root Port */
@@ -292,15 +294,6 @@ struct soc_intel_cannonlake_config {
 	 */
 	uint8_t PchPmSlpAMinAssert;
 
-	/* Desired platform debug type. */
-	enum {
-		DebugConsent_Disabled,
-		DebugConsent_DCI_DBC,
-		DebugConsent_DCI,
-		DebugConsent_USB3_DBC,
-		DebugConsent_XDP, /* XDP/Mipi60 */
-		DebugConsent_USB2_DBC,
-	} DebugConsent;
 	/*
 	 * SerialIO device mode selection:
 	 *
@@ -351,9 +344,6 @@ struct soc_intel_cannonlake_config {
 
 	/* Enable Pch iSCLK */
 	uint8_t pch_isclk;
-
-	/* Intel VT configuration */
-	uint8_t VtdDisable;
 
 	/*
 	 * Acoustic Noise Mitigation
@@ -409,6 +399,28 @@ struct soc_intel_cannonlake_config {
 
 	/* Unlock all GPIO Pads */
 	uint8_t PchUnlockGpioPads;
+
+	/* Enable GBE wakeup */
+	uint8_t LanWakeFromDeepSx;
+	uint8_t WolEnableOverride;
+
+	/*
+	 * Override GPIO PM configuration:
+	 * 0: Use FSP default GPIO PM program,
+	 * 1: coreboot to override GPIO PM program
+	 */
+	uint8_t gpio_override_pm;
+	/*
+	 * GPIO PM configuration: 0 to disable, 1 to enable power gating
+	 * Bit 6-7: Reserved
+	 * Bit 5: MISCCFG_GPSIDEDPCGEN
+	 * Bit 4: MISCCFG_GPRCOMPCDLCGEN
+	 * Bit 3: MISCCFG_GPRTCDLCGEN
+	 * Bit 2: MISCCFG_GSXLCGEN
+	 * Bit 1: MISCCFG_GPDPCGEN
+	 * Bit 0: MISCCFG_GPDLCGEN
+	 */
+	uint8_t gpio_pm[TOTAL_GPIO_COMM];
 };
 
 typedef struct soc_intel_cannonlake_config config_t;

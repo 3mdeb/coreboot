@@ -15,7 +15,7 @@
  * GNU General Public License for more details.
  */
 
-#include <arch/io.h>
+#include <cf9_reset.h>
 #include <device/pnp_ops.h>
 #include <device/pci_ops.h>
 #include <console/console.h>
@@ -23,7 +23,6 @@
 #include <cpu/intel/speedstep.h>
 #include <cpu/x86/bist.h>
 #include <cpu/x86/msr.h>
-#include <halt.h>
 #include <northbridge/intel/x4x/iomap.h>
 #include <northbridge/intel/x4x/x4x.h>
 #include <southbridge/intel/common/gpio.h>
@@ -191,8 +190,7 @@ void mainboard_romstage_entry(unsigned long bist)
 	if (!s3_resume && setup_sio_gpio()) {
 		printk(BIOS_DEBUG,
 		       "Needs reset to configure CPU BSEL straps\n");
-		outb(0xe, 0xcf9);
-		halt();
+		full_reset();
 	}
 
 	sdram_initialize(boot_path, spd_addrmap);

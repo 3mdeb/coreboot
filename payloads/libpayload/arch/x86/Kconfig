@@ -27,7 +27,7 @@
 ## SUCH DAMAGE.
 ##
 
-if ARCH_X86
+if ARCH_X86 || ARCH_X86_64
 
 config ARCH_SPECIFIC_OPTIONS # dummy
 	def_bool y

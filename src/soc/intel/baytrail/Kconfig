@@ -43,7 +43,7 @@ config CPU_SPECIFIC_OPTIONS
 	select CPU_HAS_L2_ENABLE_MSR
 
 config VBOOT
-	select VBOOT_OPROM_MATTERS
+	select VBOOT_MUST_REQUEST_DISPLAY
 	select VBOOT_STARTS_IN_ROMSTAGE
 
 config BOOTBLOCK_CPU_INIT
@@ -167,5 +167,15 @@ config REFCODE_BLOB_FILE
 	 The path and filename to the file to be added to cbfs.
 
 endif # HAVE_REFCODE_BLOB
+
+config VGA_BIOS_ID
+	string
+	depends on VGA_BIOS
+	default "8086,0f31"
+
+config VGA_BIOS_FILE
+	string
+	depends on VGA_BIOS
+	default "pci8086,0f31.rom"
 
 endif

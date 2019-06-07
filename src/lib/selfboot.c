@@ -46,6 +46,17 @@ static void cbfs_decode_payload_segment(struct cbfs_payload_segment *segment,
 	segment->mem_len     = read_be32(&src->mem_len);
 }
 
+static int payload_target_custom_reserved_ram(uint64_t start, uint64_t size)
+{
+	if (start >= CONFIG_CUSTOM_RAM_RES_ADDR &&
+	      (start + size) <= (CONFIG_CUSTOM_RAM_RES_ADDR + CONFIG_CUSTOM_RAM_RES_SIZE)) {
+		printk(BIOS_DEBUG, "Payload being loaded in reserved memory.\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int segment_targets_type(void *dest, unsigned long memsz,
 		enum bootmem_type dest_type)
 {
@@ -54,6 +65,9 @@ static int segment_targets_type(void *dest, unsigned long memsz,
 		return 1;
 
 	if (payload_arch_usable_ram_quirk(d, memsz))
+		return 1;
+
+	if (payload_target_custom_reserved_ram(d, memsz))
 		return 1;
 
 	printk(BIOS_ERR, "SELF segment doesn't target RAM: 0x%p, %lu bytes\n", dest, memsz);
@@ -146,10 +160,10 @@ static int check_payload_segments(struct cbfs_payload_segment *cbfssegs,
 {
 	uint8_t *dest;
 	size_t memsz;
-	struct cbfs_payload_segment *first_segment, *seg, segment;
+	struct cbfs_payload_segment *seg, segment;
 	enum bootmem_type dest_type = *(enum bootmem_type *)args;
 
-	for (first_segment = seg = cbfssegs;; ++seg) {
+	for (seg = cbfssegs;; ++seg) {
 		printk(BIOS_DEBUG, "Checking segment from ROM address 0x%p\n", seg);
 		cbfs_decode_payload_segment(&segment, seg);
 		dest = (uint8_t *)(uintptr_t)segment.load_addr;

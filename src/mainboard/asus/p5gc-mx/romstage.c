@@ -18,7 +18,7 @@
 // __PRE_RAM__ means: use "unsigned" for device, not a struct.
 
 #include <stdint.h>
-#include <arch/io.h>
+#include <cf9_reset.h>
 #include <device/pnp_ops.h>
 #include <device/pci_ops.h>
 #include <device/pci_def.h>
@@ -28,7 +28,6 @@
 #include <console/console.h>
 #include <cpu/x86/bist.h>
 #include <cpu/intel/romstage.h>
-#include <halt.h>
 #include <northbridge/intel/i945/i945.h>
 #include <northbridge/intel/i945/raminit.h>
 #include <southbridge/intel/i82801gx/i82801gx.h>
@@ -214,8 +213,7 @@ void mainboard_romstage_entry(unsigned long bist)
 	if (!s3resume && setup_sio_gpio(c_bsel)) {
 		printk(BIOS_DEBUG,
 			"Needs reset to configure CPU BSEL straps\n");
-		outb(0xe, 0xcf9);
-		halt();
+		full_reset();
 	}
 
 	/* Enable SPD ROMs and DDR-II DRAM */

@@ -15,7 +15,6 @@
  */
 
 #include <boot/coreboot_tables.h>
-#include <console/console.h>
 #include <ec/google/chromeec/ec.h>
 #include <ec/google/chromeec/ec_commands.h>
 #include <gpio.h>
@@ -28,9 +27,6 @@ void fill_lb_gpios(struct lb_gpios *gpios)
 	struct lb_gpio chromeos_gpios[] = {
 		/* Write Protect: active low */
 		{-1, ACTIVE_LOW, !get_write_protect_state(), "write protect"},
-
-		/* Recovery: active high */
-		{-1, ACTIVE_HIGH, get_recovery_mode_switch(), "recovery"},
 
 		/* TODO: Power: active low / high depending on board id */
 		{GPIO(X5), ACTIVE_LOW, -1, "power"},

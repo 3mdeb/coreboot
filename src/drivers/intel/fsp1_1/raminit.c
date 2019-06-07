@@ -28,6 +28,7 @@
 
 void raminit(struct romstage_params *params)
 {
+	const bool s3wake = params->power_state->prev_sleep_state == ACPI_S3;
 	const EFI_GUID bootldr_tolum_guid = FSP_BOOTLOADER_TOLUM_HOB_GUID;
 	EFI_HOB_RESOURCE_DESCRIPTOR *cbmem_root;
 	FSP_INFO_HEADER *fsp_header;
@@ -46,7 +47,6 @@ void raminit(struct romstage_params *params)
 	u32 *mrc_hob;
 	u32 fsp_reserved_bytes;
 	MEMORY_INIT_UPD *original_params;
-	struct pei_data *pei_ptr;
 	EFI_STATUS status;
 	VPD_DATA_REGION *vpd_ptr;
 	UPD_DATA_REGION *upd_ptr;
@@ -80,10 +80,9 @@ void raminit(struct romstage_params *params)
 
 	/* Zero fill RT Buffer data and start populating fields. */
 	memset(&fsp_rt_common_buffer, 0, sizeof(fsp_rt_common_buffer));
-	pei_ptr = params->pei_data;
-	if (pei_ptr->boot_mode == ACPI_S3) {
+	if (s3wake) {
 		fsp_rt_common_buffer.BootMode = BOOT_ON_S3_RESUME;
-	} else if (pei_ptr->saved_data != NULL) {
+	} else if (params->saved_data != NULL) {
 		fsp_rt_common_buffer.BootMode =
 			BOOT_ASSUMING_NO_CONFIGURATION_CHANGES;
 	} else {
@@ -93,7 +92,7 @@ void raminit(struct romstage_params *params)
 	fsp_rt_common_buffer.BootLoaderTolumSize = cbmem_overhead_size();
 
 	/* Get any board specific changes */
-	fsp_memory_init_params.NvsBufferPtr = (void *)pei_ptr->saved_data;
+	fsp_memory_init_params.NvsBufferPtr = (void *)params->saved_data;
 	fsp_memory_init_params.RtBufferPtr = &fsp_rt_common_buffer;
 	fsp_memory_init_params.HobListPtr = &hob_list_ptr;
 
@@ -131,7 +130,8 @@ void raminit(struct romstage_params *params)
 
 	printk(BIOS_DEBUG, "FspMemoryInit returned 0x%08x\n", status);
 	if (status != EFI_SUCCESS)
-		die("ERROR - FspMemoryInit failed to initialize memory!\n");
+		die_with_post_code(POST_RAM_FAILURE,
+			"ERROR - FspMemoryInit failed to initialize memory!\n");
 
 	/* Locate the FSP reserved memory area */
 	fsp_reserved_bytes = 0;
@@ -158,7 +158,7 @@ void raminit(struct romstage_params *params)
 
 	/* Migrate CAR data */
 	printk(BIOS_DEBUG, "0x%p: cbmem_top\n", cbmem_top());
-	if (pei_ptr->boot_mode != ACPI_S3) {
+	if (!s3wake) {
 		cbmem_initialize_empty_id_size(CBMEM_ID_FSP_RESERVED_MEMORY,
 			fsp_reserved_bytes);
 	} else if (cbmem_initialize_id_size(CBMEM_ID_FSP_RESERVED_MEMORY,
@@ -196,9 +196,6 @@ void raminit(struct romstage_params *params)
 	}
 
 #if CONFIG(DISPLAY_HOBS)
-	if (hob_list_ptr == NULL)
-		die("ERROR - HOB pointer is NULL!\n");
-
 	/*
 	 * Verify that FSP is generating the required HOBs:
 	 *	7.1: FSP_BOOTLOADER_TEMP_MEMORY_HOB only produced for FSP 1.0
@@ -220,7 +217,7 @@ void raminit(struct romstage_params *params)
 	}
 	hob_ptr.Raw = get_next_guid_hob(&mrc_guid, hob_list_ptr);
 	if (hob_ptr.Raw == NULL) {
-		if (params->pei_data->saved_data == NULL) {
+		if (params->saved_data == NULL) {
 			printk(BIOS_ERR, "7.3: FSP_NON_VOLATILE_STORAGE_HOB missing!\n");
 			fsp_verification_failure = 1;
 		}
@@ -245,7 +242,10 @@ void raminit(struct romstage_params *params)
 			"ERROR - Missing one or more required FSP HOBs!\n");
 
 	/* Display the HOBs */
-	print_hob_type_structure(0, hob_list_ptr);
+	if (hob_list_ptr != NULL)
+		print_hob_type_structure(0, hob_list_ptr);
+	else
+		printk(BIOS_ERR, "ERROR - HOB pointer is NULL!\n");
 #endif
 
 	/* Get the address of the CBMEM region for the FSP reserved memory */
@@ -275,14 +275,16 @@ void raminit(struct romstage_params *params)
 			printk(BIOS_DEBUG,
 				"0x%08x: Chipset reserved bytes reported by FSP\n",
 				(unsigned int)delta_bytes);
-			die("Please verify the chipset reserved size\n");
+			die_with_post_code(POST_INVALID_VENDOR_BINARY,
+				"Please verify the chipset reserved size\n");
 		}
 #endif
 	}
 
 	/* Verify the FSP 1.1 HOB interface */
 	if (fsp_verification_failure)
-		die("ERROR - coreboot's requirements not met by FSP binary!\n");
+		die_with_post_code(POST_INVALID_VENDOR_BINARY,
+				   "ERROR - coreboot's requirements not met by FSP binary!\n");
 
 	/* Display the memory configuration */
 	report_memory_config();
@@ -294,8 +296,8 @@ void raminit(struct romstage_params *params)
 			"Memory Configuration Data Hob not present\n");
 	else if (!vboot_recovery_mode_enabled()) {
 		/* Do not save MRC data in recovery path */
-		pei_ptr->data_to_save = GET_GUID_HOB_DATA(mrc_hob);
-		pei_ptr->data_to_save_size = ALIGN(
+		params->data_to_save = GET_GUID_HOB_DATA(mrc_hob);
+		params->data_to_save_size = ALIGN(
 			((u32)GET_HOB_LENGTH(mrc_hob)), 16);
 	}
 }

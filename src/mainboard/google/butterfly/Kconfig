@@ -40,16 +40,12 @@ config VGA_BIOS_FILE
 	string
 	default "pci8086,0106.rom"
 
-config MAINBOARD_PCI_SUBSYSTEM_VENDOR_ID
-	hex
-	default 0x1ae0
-
-config MAINBOARD_PCI_SUBSYSTEM_DEVICE_ID
-	hex
-	default 0xc000
-
 config MAINBOARD_VENDOR
 	string
 	default "Hewlett-Packard"
+
+config MAINBOARD_SMBIOS_MANUFACTURER
+	string
+	default "GOOGLE"
 
 endif # BOARD_GOOGLE_BUTTERFLY

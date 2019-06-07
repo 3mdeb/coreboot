@@ -15,6 +15,8 @@
 
 ifeq ($(CONFIG_SOUTHBRIDGE_INTEL_I82801GX),y)
 
+bootblock-y += bootblock_gcc.c
+
 ramstage-y += i82801gx.c
 ramstage-y += ac97.c
 ramstage-y += azalia.c
@@ -29,8 +31,6 @@ ramstage-y += usb.c
 ramstage-y += usb_ehci.c
 
 ramstage-srcs += src/mainboard/$(MAINBOARDDIR)/hda_verb.c
-
-ramstage-y += watchdog.c
 
 smm-$(CONFIG_HAVE_SMI_HANDLER) += smihandler.c
 

@@ -24,19 +24,18 @@
  * performs the final stage of initialization.
  */
 
-
-#define LHLT_DELAY	0x50000		/* I/O delay between post codes on failure */
-
+/* I/O delay between post codes on failure */
+#define LHLT_DELAY	0x50000
 	/*
 	 * Per FSP1.1 specs, following registers are preserved:
 	 * EBX, EDI, ESI, EBP, MM0, MM1
 	 *
 	 * Shift values to release MM2.
-	 * mm0 -> edi:  BIST value
+	 * mm0 -> ebx:  BIST value
 	 * mm1 -> mm0:  low 32-bits of TSC value
 	 * mm2 -> mm1:  high 32-bits of TSC value
 	 */
-	movd	%mm0, %edi
+	movd	%mm0, %ebx
 	movd	%mm1, %eax
 	movd	%eax, %mm0
 	movd	%mm2, %eax
@@ -80,8 +79,8 @@ find_fsp_ret:
 	/*
 	 *       BIST value is zero
 	 * eax:  TempRamInitApi address
+	 * ebx:  BIST value
 	 * ebp:  FSP_INFO_HEADER address
-	 * edi:  BIST value
 	 * esi:  Not used
 	 * mm0:  low 32-bits of TSC value
 	 * mm1:  high 32-bits of TSC value
@@ -91,13 +90,12 @@ find_fsp_ret:
 	jmp	*%eax
 
 CAR_init_done:
-	addl	$4, %esp
 
 	/*
 	 * ebp:  FSP_INFO_HEADER address
+	 * ebx:  BIST value
 	 * ecx:  Temp RAM base
 	 * edx:  Temp RAM top
-	 * edi:  BIST value
 	 * mm0:  low 32-bits of TSC value
 	 * mm1:  high 32-bits of TSC value
 	 */
@@ -110,49 +108,42 @@ CAR_init_done:
 
 	/*
 	 * ebp:  FSP_INFO_HEADER address
+	 * ebx:  BIST value
 	 * ecx:  Temp RAM base
 	 * edx:  Temp RAM top
-	 * edi:  BIST value
 	 * esp:  Top of stack in temp RAM
 	 * mm0:  low 32-bits of TSC value
 	 * mm1:  high 32-bits of TSC value
 	 */
 
-	/* Create cache_as_ram_params on stack */
-	pushl	%edx	/* bootloader CAR end */
-	pushl	%ecx	/* bootloader CAR begin */
-	pushl	%ebp	/* FSP_INFO_HEADER */
-	pushl	%edi	/* bist */
-	movd	%mm1, %eax
-	pushl	%eax	/* tsc[63:32] */
-	movd	%mm0, %eax
-	pushl	%eax	/* tsc[31:0] */
-	pushl	%esp	/* pointer to cache_as_ram_params */
-
-	/* Save FSP_INFO_HEADER location in ebx */
-	mov	%ebp, %ebx
-
 	/* coreboot assumes stack/heap region will be zero */
 	cld
 	movl	%ecx, %edi
 	neg	%ecx
-	/* Only clear up to current stack value. */
-	add	%esp, %ecx
+	/* Clear up to Temp Ram top. */
+	add	%edx, %ecx
 	shrl	$2, %ecx
 	xorl	%eax, %eax
 	rep	stosl
 
+	/* Need to align stack to 16 bytes at call instruction. Account for
+	the pushes below. */
+	andl	$0xfffffff0, %esp
+	subl	$4, %esp
+
+	/* Push BIST and initial timestamp on the stack */
+	pushl	%ebx	/* bist */
+	movd	%mm1, %eax
+	pushl	%eax	/* tsc[63:32] */
+	movd	%mm0, %eax
+	pushl	%eax	/* tsc[31:0] */
+
 before_romstage:
 	post_code(0x2A)
 
-	/* Call cache_as_ram_main(struct cache_as_ram_params *) */
-	call	cache_as_ram_main
-
-/* One will never return from cache_as_ram_main() in verstage so there's
- * no such thing as after RAM init. */
-#if !ENV_VERSTAGE
-#include "after_raminit.S"
-#endif
+	/* Call bootblock_c_entry_bist(uint64_t base_timestamp, uint32_t bist)
+	   in cpu/intel/car/romstage.c */
+	call	bootblock_c_entry_bist
 
 	movb	$0x69, %ah
 	jmp	.Lhlt
@@ -165,8 +156,8 @@ halt1:
 	 * 0x01 - FV signature, "_FVH" not present
 	 * 0x02 - FFS GUID not present
 	 * 0x03 - FSP INFO Header not found
-	 * 0x04 - ImageBase does not equal CONFIG_FSP_LOC - Is the FSP rebased to
-	 *        a different location, or does it need to be?
+	 * 0x04 - ImageBase does not equal CONFIG_FSP_LOC - Is the FSP rebased
+	 *	  to a different location, or does it need to be?
 	 * 0x05 - FSP INFO Header signature "FSPH" not found
 	 * 0x06 - FSP Image ID is not the expected ID.
 	 */
@@ -181,7 +172,8 @@ halt2:
 	 * 0x02 - FSP_INVALID_PARAMETER: Input parameters are invalid.
 	 * 0x03 - FSP_UNSUPPORTED: The FSP calling conditions were not met.
 	 * 0x07 - FSP_DEVICE_ERROR: Temp RAM initialization failed
-	 * 0x0E - FSP_NOT_FOUND: No valid microcode was found in the microcode region.
+	 * 0x0E - FSP_NOT_FOUND: No valid microcode was found in the microcode
+	 *	  region.
 	 * 0x14 - FSP_ALREADY_STARTED: Temp RAM initialization has been invoked
 	 */
 	movb	$0xBB, %ah
@@ -213,7 +205,7 @@ CAR_init_params:
 	.long	CONFIG_CPU_MICROCODE_CBFS_LOC		/* Microcode Location */
 	.long	CONFIG_CPU_MICROCODE_CBFS_LEN		/* Microcode Length */
 	.long	0xFFFFFFFF - CONFIG_ROM_SIZE + 1	/* Firmware Location */
-	.long	CONFIG_ROM_SIZE				/* Total Firmware Length */
+	.long	CONFIG_ROM_SIZE				/* Firmware Length */
 
 CAR_init_stack:
 	.long	CAR_init_done

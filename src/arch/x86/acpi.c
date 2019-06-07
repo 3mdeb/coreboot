@@ -218,6 +218,9 @@ void acpi_create_madt(acpi_madt_t *madt)
 
 	memset((void *)madt, 0, sizeof(acpi_madt_t));
 
+	if (!header)
+		return;
+
 	/* Fill out header fields. */
 	memcpy(header->signature, "APIC", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -229,7 +232,8 @@ void acpi_create_madt(acpi_madt_t *madt)
 	header->revision = get_acpi_table_revision(MADT);
 
 	madt->lapic_addr = LOCAL_APIC_ADDR;
-	madt->flags = 0x1; /* PCAT_COMPAT */
+	if (CONFIG(ACPI_HAVE_PCAT_8259))
+		madt->flags |= 1;
 
 	current = acpi_fill_madt(current);
 
@@ -246,6 +250,9 @@ void acpi_create_mcfg(acpi_mcfg_t *mcfg)
 	unsigned long current = (unsigned long)mcfg + sizeof(acpi_mcfg_t);
 
 	memset((void *)mcfg, 0, sizeof(acpi_mcfg_t));
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "MCFG", 4);
@@ -299,6 +306,9 @@ static void acpi_create_tcpa(acpi_tcpa_t *tcpa)
 
 	lasa = get_tcpa_log(&tcpa_log_len);
 	if (!lasa)
+		return;
+
+	if (!header)
 		return;
 
 	/* Fill out header fields. */
@@ -359,6 +369,9 @@ static void acpi_create_tpm2(acpi_tpm2_t *tpm2)
 	lasa = get_tpm2_log(&tpm2_log_len);
 	if (!lasa)
 		tpm2_log_len = 0;
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "TPM2", 4);
@@ -480,6 +493,9 @@ void acpi_create_srat(acpi_srat_t *srat,
 
 	memset((void *)srat, 0, sizeof(acpi_srat_t));
 
+	if (!header)
+		return;
+
 	/* Fill out header fields. */
 	memcpy(header->signature, "SRAT", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -506,6 +522,9 @@ void acpi_create_dmar(acpi_dmar_t *dmar, enum dmar_flags flags,
 	unsigned long current = (unsigned long)dmar + sizeof(acpi_dmar_t);
 
 	memset((void *)dmar, 0, sizeof(acpi_dmar_t));
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "DMAR", 4);
@@ -566,6 +585,33 @@ unsigned long acpi_create_dmar_atsr(unsigned long current, u8 flags,
 	atsr->segment = segment;
 
 	return atsr->length;
+}
+
+unsigned long acpi_create_dmar_rhsa(unsigned long current, u64 base_addr,
+	u32 proximity_domain)
+{
+	dmar_rhsa_entry_t *rhsa = (dmar_rhsa_entry_t *)current;
+	memset(rhsa, 0, sizeof(*rhsa));
+	rhsa->type = DMAR_RHSA;
+	rhsa->length = sizeof(*rhsa);
+	rhsa->base_address = base_addr;
+	rhsa->proximity_domain = proximity_domain;
+
+	return rhsa->length;
+}
+
+unsigned long acpi_create_dmar_andd(unsigned long current, u8 device_number,
+	const char *device_name)
+{
+	dmar_andd_entry_t *andd = (dmar_andd_entry_t *)current;
+	int andd_len = sizeof(dmar_andd_entry_t) + strlen(device_name) + 1;
+	memset(andd, 0, andd_len);
+	andd->type = DMAR_ANDD;
+	andd->length = andd_len;
+	andd->device_number = device_number;
+	memcpy(&andd->device_name, device_name, strlen(device_name));
+
+	return andd->length;
 }
 
 void acpi_dmar_drhd_fixup(unsigned long base, unsigned long current)
@@ -641,6 +687,9 @@ void acpi_create_slit(acpi_slit_t *slit,
 
 	memset((void *)slit, 0, sizeof(acpi_slit_t));
 
+	if (!header)
+		return;
+
 	/* Fill out header fields. */
 	memcpy(header->signature, "SLIT", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -665,6 +714,9 @@ void acpi_create_hpet(acpi_hpet_t *hpet)
 	acpi_addr_t *addr = &(hpet->addr);
 
 	memset((void *)hpet, 0, sizeof(acpi_hpet_t));
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "HPET", 4);
@@ -700,6 +752,9 @@ void acpi_create_vfct(struct device *device,
 
 	memset((void *)vfct, 0, sizeof(struct acpi_vfct));
 
+	if (!header)
+		return;
+
 	/* Fill out header fields. */
 	memcpy(header->signature, "VFCT", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -725,6 +780,9 @@ void acpi_create_ivrs(acpi_ivrs_t *ivrs,
 	unsigned long current = (unsigned long)ivrs + sizeof(acpi_ivrs_t);
 
 	memset((void *)ivrs, 0, sizeof(acpi_ivrs_t));
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "IVRS", 4);
@@ -779,6 +837,10 @@ void acpi_create_dbg2(acpi_dbg2_header_t *dbg2,
 	current = (uintptr_t)dbg2;
 	memset(dbg2, 0, sizeof(acpi_dbg2_header_t));
 	header = &(dbg2->header);
+
+	if (!header)
+		return;
+
 	header->revision = get_acpi_table_revision(DBG2);
 	memcpy(header->signature, "DBG2", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -898,6 +960,9 @@ static void acpi_write_rsdt(acpi_rsdt_t *rsdt, char *oem_id, char *oem_table_id)
 {
 	acpi_header_t *header = &(rsdt->header);
 
+	if (!header)
+		return;
+
 	/* Fill out header fields. */
 	memcpy(header->signature, "RSDT", 4);
 	memcpy(header->oem_id, oem_id, 6);
@@ -917,6 +982,9 @@ static void acpi_write_rsdt(acpi_rsdt_t *rsdt, char *oem_id, char *oem_table_id)
 static void acpi_write_xsdt(acpi_xsdt_t *xsdt, char *oem_id, char *oem_table_id)
 {
 	acpi_header_t *header = &(xsdt->header);
+
+	if (!header)
+		return;
 
 	/* Fill out header fields. */
 	memcpy(header->signature, "XSDT", 4);
@@ -1018,7 +1086,8 @@ unsigned long acpi_create_hest_error_source(acpi_hest_t *hest,
 
 	memcpy(pos, data, data_len);
 	len += data_len;
-	header->length += len;
+	if (header)
+		header->length += len;
 
 	return len;
 }
@@ -1030,6 +1099,9 @@ void acpi_write_hest(acpi_hest_t *hest,
 	acpi_header_t *header = &(hest->header);
 
 	memset(hest, 0, sizeof(acpi_hest_t));
+
+	if (!header)
+		return;
 
 	memcpy(header->signature, "HEST", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
@@ -1052,6 +1124,9 @@ void acpi_write_bert(acpi_bert_t *bert, uintptr_t region, size_t length)
 
 	memset(bert, 0, sizeof(acpi_bert_t));
 
+	if (!header)
+		return;
+
 	memcpy(header->signature, "BERT", 4);
 	memcpy(header->oem_id, OEM_ID, 6);
 	memcpy(header->oem_table_id, ACPI_TABLE_CREATOR, 8);
@@ -1073,6 +1148,10 @@ void acpi_create_fadt(acpi_fadt_t *fadt, acpi_facs_t *facs, void *dsdt)
 	acpi_header_t *header = &(fadt->header);
 
 	memset((void *) fadt, 0, sizeof(acpi_fadt_t));
+
+	if (!header)
+		return;
+
 	memcpy(header->signature, "FACP", 4);
 	header->length = sizeof(acpi_fadt_t);
 	header->revision = get_acpi_table_revision(FADT);

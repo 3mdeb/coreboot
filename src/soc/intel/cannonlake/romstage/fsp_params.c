@@ -14,7 +14,6 @@
  */
 
 #include <assert.h>
-#include <chip.h>
 #include <cpu/x86/msr.h>
 #include <console/console.h>
 #include <fsp/util.h>
@@ -24,6 +23,8 @@
 #include <soc/pci_devs.h>
 #include <soc/romstage.h>
 #include <vendorcode/google/chromeos/chromeos.h>
+
+#include "../chip.h"
 
 static void soc_memory_init_params(FSP_M_CONFIG *m_cfg, const config_t *config)
 {
@@ -65,10 +66,7 @@ static void soc_memory_init_params(FSP_M_CONFIG *m_cfg, const config_t *config)
 	m_cfg->VmxEnable = CONFIG(ENABLE_VMX);
 
 #if CONFIG(SOC_INTEL_COMMON_CANNONLAKE_BASE)
-	if (CONFIG(USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI))
-		m_cfg->SkipMpInit = 0;
-	else
-		m_cfg->SkipMpInit = !CONFIG_USE_INTEL_FSP_MP_INIT;
+	m_cfg->SkipMpInit = !CONFIG_USE_INTEL_FSP_MP_INIT;
 #endif
 
 	/* Set CpuRatio to match existing MSR value */
@@ -103,6 +101,7 @@ void platform_fsp_memory_init_params_cb(FSPM_UPD *mupd, uint32_t version)
 	assert(dev != NULL);
 	const config_t *config = dev->chip_info;
 	FSP_M_CONFIG *m_cfg = &mupd->FspmConfig;
+	FSP_M_TEST_CONFIG *tconfig = &mupd->FspmTestConfig;
 
 	soc_memory_init_params(m_cfg, config);
 
@@ -111,8 +110,13 @@ void platform_fsp_memory_init_params_cb(FSPM_UPD *mupd, uint32_t version)
 		m_cfg->SmbusEnable = 0;
 	else
 		m_cfg->SmbusEnable = smbus->enabled;
+
 	/* Set debug probe type */
-	m_cfg->PlatformDebugConsent = config->DebugConsent;
+	m_cfg->PlatformDebugConsent =
+		CONFIG_SOC_INTEL_CANNONLAKE_DEBUG_CONSENT;
+
+	/* Configure VT-d */
+	tconfig->VtdDisable = 0;
 
 	mainboard_memory_init_params(mupd);
 }

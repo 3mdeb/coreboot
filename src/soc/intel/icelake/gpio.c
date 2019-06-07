@@ -76,14 +76,17 @@ static const struct pad_group icl_community5_groups[] = {
 	INTEL_GPP_BASE(GPP_C0, GPP_S0, GPP_S7, 320),		/* GPP_S */
 };
 
-static const struct pad_community icl_communities[] = {
-	{ /* GPP G, B, A */
+static const struct pad_community icl_communities[TOTAL_GPIO_COMM] = {
+	/* GPP G, B, A */
+	[COMM_0] = {
 		.port = PID_GPIOCOM0,
 		.first_pad = GPP_G0,
 		.last_pad = GPP_A23,
 		.num_gpi_regs = NUM_GPIO_COM0_GPI_REGS,
 		.pad_cfg_base = PAD_CFG_BASE,
 		.host_own_reg_0 = HOSTSW_OWN_REG_0,
+		.gpi_int_sts_reg_0 = GPI_INT_STS_0,
+		.gpi_int_en_reg_0 = GPI_INT_EN_0,
 		.gpi_smi_sts_reg_0 = GPI_SMI_STS_0,
 		.gpi_smi_en_reg_0 = GPI_SMI_EN_0,
 		.max_pads_per_group = GPIO_MAX_NUM_PER_GROUP,
@@ -93,13 +96,17 @@ static const struct pad_community icl_communities[] = {
 		.num_reset_vals = ARRAY_SIZE(rst_map_com0),
 		.groups = icl_community0_groups,
 		.num_groups = ARRAY_SIZE(icl_community0_groups),
-	}, { /* GPP H, D, F */
+	},
+	/* GPP H, D, F */
+	[COMM_1] = {
 		.port = PID_GPIOCOM1,
 		.first_pad = GPP_H0,
 		.last_pad = GPP_F19,
 		.num_gpi_regs = NUM_GPIO_COM1_GPI_REGS,
 		.pad_cfg_base = PAD_CFG_BASE,
 		.host_own_reg_0 = HOSTSW_OWN_REG_0,
+		.gpi_int_sts_reg_0 = GPI_INT_STS_0,
+		.gpi_int_en_reg_0 = GPI_INT_EN_0,
 		.gpi_smi_sts_reg_0 = GPI_SMI_STS_0,
 		.gpi_smi_en_reg_0 = GPI_SMI_EN_0,
 		.max_pads_per_group = GPIO_MAX_NUM_PER_GROUP,
@@ -109,13 +116,17 @@ static const struct pad_community icl_communities[] = {
 		.num_reset_vals = ARRAY_SIZE(rst_map),
 		.groups = icl_community1_groups,
 		.num_groups = ARRAY_SIZE(icl_community1_groups),
-	}, { /* GPD */
+	},
+	 /* GPD */
+	[COMM_2] = {
 		.port = PID_GPIOCOM2,
 		.first_pad = GPD0,
 		.last_pad = GPD11,
 		.num_gpi_regs = NUM_GPIO_COM2_GPI_REGS,
 		.pad_cfg_base = PAD_CFG_BASE,
 		.host_own_reg_0 = HOSTSW_OWN_REG_0,
+		.gpi_int_sts_reg_0 = GPI_INT_STS_0,
+		.gpi_int_en_reg_0 = GPI_INT_EN_0,
 		.gpi_smi_sts_reg_0 = GPI_SMI_STS_0,
 		.gpi_smi_en_reg_0 = GPI_SMI_EN_0,
 		.max_pads_per_group = GPIO_MAX_NUM_PER_GROUP,
@@ -125,13 +136,17 @@ static const struct pad_community icl_communities[] = {
 		.num_reset_vals = ARRAY_SIZE(rst_map),
 		.groups = icl_community2_groups,
 		.num_groups = ARRAY_SIZE(icl_community2_groups),
-	}, { /* GPP C, E */
+	},
+	/* GPP C, E */
+	[COMM_3] = {
 		.port = PID_GPIOCOM4,
 		.first_pad = GPP_C0,
 		.last_pad = GPP_E23,
 		.num_gpi_regs = NUM_GPIO_COM4_GPI_REGS,
 		.pad_cfg_base = PAD_CFG_BASE,
 		.host_own_reg_0 = HOSTSW_OWN_REG_0,
+		.gpi_int_sts_reg_0 = GPI_INT_STS_0,
+		.gpi_int_en_reg_0 = GPI_INT_EN_0,
 		.gpi_smi_sts_reg_0 = GPI_SMI_STS_0,
 		.gpi_smi_en_reg_0 = GPI_SMI_EN_0,
 		.max_pads_per_group = GPIO_MAX_NUM_PER_GROUP,
@@ -141,13 +156,17 @@ static const struct pad_community icl_communities[] = {
 		.num_reset_vals = ARRAY_SIZE(rst_map),
 		.groups = icl_community4_groups,
 		.num_groups = ARRAY_SIZE(icl_community4_groups),
-	}, { /* GPP R, S */
+	},
+	/* GPP R, S */
+	[COMM_4] = {
 		.port = PID_GPIOCOM5,
 		.first_pad = GPP_R0,
 		.last_pad = GPP_S7,
 		.num_gpi_regs = NUM_GPIO_COM5_GPI_REGS,
 		.pad_cfg_base = PAD_CFG_BASE,
 		.host_own_reg_0 = HOSTSW_OWN_REG_0,
+		.gpi_int_sts_reg_0 = GPI_INT_STS_0,
+		.gpi_int_en_reg_0 = GPI_INT_EN_0,
 		.gpi_smi_sts_reg_0 = GPI_SMI_STS_0,
 		.gpi_smi_en_reg_0 = GPI_SMI_EN_0,
 		.max_pads_per_group = GPIO_MAX_NUM_PER_GROUP,

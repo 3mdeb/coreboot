@@ -1,10 +1,7 @@
 config CPU_INTEL_MODEL_206AX
 	bool
 
-config CPU_INTEL_MODEL_306AX
-	bool
-
-if CPU_INTEL_MODEL_206AX || CPU_INTEL_MODEL_306AX
+if CPU_INTEL_MODEL_206AX
 
 config CPU_SPECIFIC_OPTIONS
 	def_bool y
@@ -25,14 +22,11 @@ config CPU_SPECIFIC_OPTIONS
 	select CPU_INTEL_COMMON
 	select CACHE_RELOCATED_RAMSTAGE_OUTSIDE_CBMEM
 	select PARALLEL_MP
+	select NO_FIXED_XIP_ROM_SIZE
 
 config BOOTBLOCK_CPU_INIT
 	string
 	default "cpu/intel/model_206ax/bootblock.c"
-
-config XIP_ROM_SIZE
-	hex
-	default 0x20000 if USE_NATIVE_RAMINIT
 
 config SMM_TSEG_SIZE
 	hex

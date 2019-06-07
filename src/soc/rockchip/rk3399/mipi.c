@@ -14,20 +14,19 @@
  */
 
 #include <device/mmio.h>
-#include <assert.h>
 #include <console/console.h>
 #include <delay.h>
 #include <device/device.h>
 #include <edid.h>
 #include <gpio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
 #include <soc/addressmap.h>
 #include <soc/clock.h>
 #include <soc/display.h>
 #include <soc/mipi.h>
 #include <soc/soc.h>
+#include <types.h>
 #include <timer.h>
 
 static struct rk_mipi_dsi rk_mipi[2] = {

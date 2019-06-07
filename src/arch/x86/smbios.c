@@ -30,6 +30,9 @@
 #include <memory_info.h>
 #include <spd.h>
 #include <cbmem.h>
+#include <device/pci_ids.h>
+#include <device/pci_def.h>
+#include <device/pci.h>
 #if CONFIG(CHROMEOS)
 #include <vendorcode/google/chromeos/gnvs.h>
 #endif
@@ -48,6 +51,41 @@ static u8 smbios_checksum(u8 *p, u32 length)
 	while (length--)
 		ret += *p++;
 	return -ret;
+}
+
+/* Get the device type 41 from the dev struct */
+static u8 smbios_get_device_type_from_dev(struct device *dev)
+{
+	u16 pci_basesubclass = (dev->class >> 8) & 0xFFFF;
+
+	switch (pci_basesubclass) {
+	case PCI_CLASS_NOT_DEFINED:
+		return SMBIOS_DEVICE_TYPE_OTHER;
+	case PCI_CLASS_DISPLAY_VGA:
+	case PCI_CLASS_DISPLAY_XGA:
+	case PCI_CLASS_DISPLAY_3D:
+	case PCI_CLASS_DISPLAY_OTHER:
+		return SMBIOS_DEVICE_TYPE_VIDEO;
+	case PCI_CLASS_STORAGE_SCSI:
+		return SMBIOS_DEVICE_TYPE_SCSI;
+	case PCI_CLASS_NETWORK_ETHERNET:
+		return SMBIOS_DEVICE_TYPE_ETHERNET;
+	case PCI_CLASS_NETWORK_TOKEN_RING:
+		return SMBIOS_DEVICE_TYPE_TOKEN_RING;
+	case PCI_CLASS_MULTIMEDIA_VIDEO:
+	case PCI_CLASS_MULTIMEDIA_AUDIO:
+	case PCI_CLASS_MULTIMEDIA_PHONE:
+	case PCI_CLASS_MULTIMEDIA_OTHER:
+		return SMBIOS_DEVICE_TYPE_SOUND;
+	case PCI_CLASS_STORAGE_ATA:
+		return SMBIOS_DEVICE_TYPE_PATA;
+	case PCI_CLASS_STORAGE_SATA:
+		return SMBIOS_DEVICE_TYPE_SATA;
+	case PCI_CLASS_STORAGE_SAS:
+		return SMBIOS_DEVICE_TYPE_SAS;
+	default:
+		return SMBIOS_DEVICE_TYPE_UNKNOWN;
+	}
 }
 
 
@@ -140,7 +178,7 @@ void smbios_fill_dimm_manufacturer_from_id(uint16_t mod_id,
 	struct smbios_type17 *t)
 {
 	switch (mod_id) {
-	case 0x2c80:
+	case 0x9b85:
 		t->manufacturer = smbios_add_string(t->eos,
 						    "Crucial");
 		break;
@@ -172,9 +210,9 @@ void smbios_fill_dimm_manufacturer_from_id(uint16_t mod_id,
 		t->manufacturer = smbios_add_string(t->eos,
 						    "Hynix/Hyundai");
 		break;
-	case 0xb502:
+	case 0x3486:
 		t->manufacturer = smbios_add_string(t->eos,
-						    "SuperTalent");
+						    "Super Talent");
 		break;
 	case 0xcd04:
 		t->manufacturer = smbios_add_string(t->eos,
@@ -188,7 +226,7 @@ void smbios_fill_dimm_manufacturer_from_id(uint16_t mod_id,
 		t->manufacturer = smbios_add_string(t->eos,
 						    "Elpida");
 		break;
-	case 0xff2c:
+	case 0x2c80:
 		t->manufacturer = smbios_add_string(t->eos,
 						    "Micron");
 		break;
@@ -833,6 +871,41 @@ static int smbios_write_type7_cache_parameters(unsigned long *current,
 
 	return len;
 }
+int smbios_write_type9(unsigned long *current, int *handle,
+			const char *name, const enum misc_slot_type type,
+			const enum slot_data_bus_bandwidth bandwidth,
+			const enum misc_slot_usage usage,
+			const enum misc_slot_length length,
+			u8 slot_char1, u8 slot_char2, u8 bus, u8 dev_func)
+{
+	struct smbios_type9 *t = (struct smbios_type9 *)*current;
+	int len = sizeof(struct smbios_type9);
+
+	memset(t, 0, sizeof(struct smbios_type9));
+	t->type = SMBIOS_SYSTEM_SLOTS;
+	t->handle = *handle;
+	t->length = len - 2;
+	if (name)
+		t->slot_designation = smbios_add_string(t->eos, name);
+	else
+		t->slot_designation = smbios_add_string(t->eos, "SLOT");
+	t->slot_type = type;
+	/* TODO add slot_id supoort, will be "_SUN" for ACPI devices */
+	t->slot_data_bus_width = bandwidth;
+	t->current_usage = usage;
+	t->slot_length = length;
+	t->slot_characteristics_1 = slot_char1;
+	t->slot_characteristics_2 = slot_char2;
+	t->segment_group_number = 0;
+	t->bus_number = bus;
+	t->device_function_number = dev_func;
+	t->data_bus_width = SlotDataBusWidthOther;
+
+	len = t->length + smbios_string_table_len(t->eos);
+	*current += len;
+	*handle += 1;
+	return len;
+}
 
 static int smbios_write_type11(unsigned long *current, int *handle)
 {
@@ -927,7 +1000,7 @@ int smbios_write_type38(unsigned long *current, int *handle,
 
 int smbios_write_type41(unsigned long *current, int *handle,
 			const char *name, u8 instance, u16 segment,
-			u8 bus, u8 device, u8 function)
+			u8 bus, u8 device, u8 function, u8 device_type)
 {
 	struct smbios_type41 *t = (struct smbios_type41 *)*current;
 	int len = sizeof(struct smbios_type41);
@@ -937,7 +1010,7 @@ int smbios_write_type41(unsigned long *current, int *handle,
 	t->handle = *handle;
 	t->length = len - 2;
 	t->reference_designation = smbios_add_string(t->eos, name);
-	t->device_type = SMBIOS_DEVICE_TYPE_OTHER;
+	t->device_type = device_type;
 	t->device_status = 1;
 	t->device_type_instance = instance;
 	t->segment_group_number = segment;
@@ -964,6 +1037,88 @@ static int smbios_write_type127(unsigned long *current, int handle)
 	return len;
 }
 
+/* Generate Type41 entries from devicetree */
+static int smbios_walk_device_tree_type41(struct device *dev, int *handle,
+					unsigned long *current)
+{
+	static u8 type41_inst_cnt[SMBIOS_DEVICE_TYPE_COUNT + 1] = {};
+
+	if (dev->path.type != DEVICE_PATH_PCI)
+		return 0;
+	if (!dev->on_mainboard)
+		return 0;
+
+	u8 device_type = smbios_get_device_type_from_dev(dev);
+
+	if (device_type == SMBIOS_DEVICE_TYPE_OTHER ||
+	    device_type == SMBIOS_DEVICE_TYPE_UNKNOWN)
+		return 0;
+
+	if (device_type > SMBIOS_DEVICE_TYPE_COUNT)
+		return 0;
+
+	const char *name = get_pci_subclass_name(dev);
+
+	return smbios_write_type41(current, handle,
+					name, // name
+					type41_inst_cnt[device_type]++, // inst
+					0, // segment
+					dev->bus->secondary, //bus
+					PCI_SLOT(dev->path.pci.devfn), // device
+					PCI_FUNC(dev->path.pci.devfn), // func
+					device_type);
+}
+
+/* Generate Type9 entries from devicetree */
+static int smbios_walk_device_tree_type9(struct device *dev, int *handle,
+					 unsigned long *current)
+{
+	enum misc_slot_usage usage;
+	enum slot_data_bus_bandwidth bandwidth;
+	enum misc_slot_type type;
+	enum misc_slot_length length;
+
+	if (dev->path.type != DEVICE_PATH_PCI)
+		return 0;
+
+	if (!dev->smbios_slot_type && !dev->smbios_slot_data_width &&
+	    !dev->smbios_slot_designation && !dev->smbios_slot_length)
+		return 0;
+
+	if (dev_is_active_bridge(dev))
+		usage = SlotUsageInUse;
+	else if (dev->enabled)
+		usage = SlotUsageAvailable;
+	else
+		usage = SlotUsageUnknown;
+
+	if (dev->smbios_slot_data_width)
+		bandwidth = dev->smbios_slot_data_width;
+	else
+		bandwidth = SlotDataBusWidthUnknown;
+
+	if (dev->smbios_slot_type)
+		type = dev->smbios_slot_type;
+	else
+		type = SlotTypeUnknown;
+
+	if (dev->smbios_slot_length)
+		length = dev->smbios_slot_length;
+	else
+		length = SlotLengthUnknown;
+
+	return smbios_write_type9(current, handle,
+				  dev->smbios_slot_designation,
+				  type,
+				  bandwidth,
+				  usage,
+				  length,
+				  1,
+				  0,
+				  dev->bus->secondary,
+				  dev->path.pci.devfn);
+}
+
 static int smbios_walk_device_tree(struct device *tree, int *handle,
 	unsigned long *current)
 {
@@ -976,6 +1131,8 @@ static int smbios_walk_device_tree(struct device *tree, int *handle,
 				dev_name(dev));
 			len += dev->ops->get_smbios_data(dev, handle, current);
 		}
+		len += smbios_walk_device_tree_type9(dev, handle, current);
+		len += smbios_walk_device_tree_type41(dev, handle, current);
 	}
 	return len;
 }

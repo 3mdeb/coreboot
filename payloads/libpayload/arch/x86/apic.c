@@ -87,12 +87,12 @@ int apic_initialized(void)
 
 static inline uint32_t apic_read32(uint32_t offset)
 {
-	return read32((void *)(apic_bar + offset));
+	return read32((void *)(size_t)(apic_bar + offset));
 }
 
 static inline void apic_write32(uint32_t offset, uint32_t value)
 {
-	write32((void *)(apic_bar + offset), value);
+	write32((void *)(size_t)(apic_bar + offset), value);
 }
 
 uint8_t apic_id(void)
@@ -204,6 +204,7 @@ static void apic_reset_all_lvts(void)
 {
 	uint8_t max = apic_max_lvt_entries();
 	for (int i = 0; i <= max; ++i) {
+		if (i == 3) continue;	// FIXME: LVT LINT0 Register (FEE0 0350H), hack for SeaBIOS
 		uint32_t offset = APIC_LVT_TIMER + APIC_LVT_SIZE * i;
 		apic_write32(offset, APIC_MASKED_BIT);
 	}

@@ -28,9 +28,9 @@
  */
 
 #include <unistd.h>
+#include <stdint.h>
 
-unsigned long virtual_offset = 0;
-
+uintptr_t virtual_offset = 0;
 
 int getpagesize(void)
 {

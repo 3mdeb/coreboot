@@ -13,9 +13,9 @@
 ## GNU General Public License for more details.
 ##
 
-# 2017.3 - Last commit of March 2017
+# 2019.3 - Last commit of March 2019
 # When updating, change the name both here and in payloads/external/iPXE/Kconfig
-STABLE_COMMIT_ID=fd6d1f4660a37d75acba1c64e2e5f137307bbc31
+STABLE_COMMIT_ID=ebf2eaf515e46abd43bc798e7e4ba77bfe529218
 
 TAG-$(CONFIG_IPXE_MASTER)=origin/master
 TAG-$(CONFIG_IPXE_STABLE)=$(STABLE_COMMIT_ID)
@@ -54,14 +54,33 @@ ifeq ($(CONSOLE_SERIAL),yy)
 	sed 's|#define\s*COMCONSOLE.*|#define COMCONSOLE $(IPXE_UART)|' "$(project_dir)/src/config/serial.h" > "$(project_dir)/src/config/serial.h.tmp"
 	sed 's|#define\s*COMSPEED.*|#define COMSPEED $(CONFIG_TTYS0_BAUD)|'  "$(project_dir)/src/config/serial.h.tmp" > "$(project_dir)/src/config/serial.h"
 endif
+ifneq ($(filter y,$(CONFIG_HAS_SCRIPT) $(CONFIG_PXE_NO_PROMT)),)
+	cp "$(project_dir)/src/config/general.h" "$(project_dir)/src/config/general.h.cb"
+endif
+ifeq ($(CONFIG_HAS_SCRIPT),y)
+	sed 's|//#define\s*IMAGE_SCRIPT.*|#define IMAGE_SCRIPT|' "$(project_dir)/src/config/general.h" > "$(project_dir)/src/config/general.h.tmp"
+	mv "$(project_dir)/src/config/general.h.tmp" "$(project_dir)/src/config/general.h"
+endif
+ifeq ($(CONFIG_PXE_NO_PROMT),y)
+	sed 's|#define\s*BANNER_TIMEOUT.*|#define BANNER_TIMEOUT 0|' "$(project_dir)/src/config/general.h" > "$(project_dir)/src/config/general.h.tmp"
+	mv "$(project_dir)/src/config/general.h.tmp" "$(project_dir)/src/config/general.h"
+endif
 
-build: config
+build: config $(CONFIG_SCRIPT)
+ifeq ($(CONFIG_HAS_SCRIPT),y)
+	echo "    MAKE       $(project_name) $(TAG-y) EMBED=$(CONFIG_SCRIPT)"
+	$(MAKE) -C $(project_dir)/src bin/$(PXE_ROM_PCI_ID).rom EMBED=$(CONFIG_SCRIPT)
+else
 	echo "    MAKE       $(project_name) $(TAG-y)"
 	$(MAKE) -C $(project_dir)/src bin/$(PXE_ROM_PCI_ID).rom
+endif
 	cp $(project_dir)/src/bin/$(PXE_ROM_PCI_ID).rom $(project_dir)/ipxe.rom
 ifeq ($(CONSOLE_SERIAL),yy)
 	cp "$(project_dir)/src/config/console.h.cb" "$(project_dir)/src/config/console.h"
 	cp "$(project_dir)/src/config/serial.h.cb" "$(project_dir)/src/config/serial.h"
+endif
+ifneq ($(filter y,$(CONFIG_HAS_SCRIPT) $(CONFIG_PXE_NO_PROMT)),)
+	cp "$(project_dir)/src/config/general.h.cb" "$(project_dir)/src/config/general.h"
 endif
 
 clean:

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <strings.h>
 #include <commonlib/endian.h>
+#include <vb2_sha.h>
 
 #include "common.h"
 #include "cbfs_image.h"
@@ -1844,7 +1845,7 @@ struct cbfs_file_attribute *cbfs_file_next_attr(struct cbfs_file *file,
 
 	/* Is there enough space for another attribute? */
 	if ((uint8_t *)attr + ntohl(attr->len) +
-		sizeof(struct cbfs_file_attribute) >=
+		sizeof(struct cbfs_file_attribute) >
 		(uint8_t *)file + ntohl(file->offset))
 		return NULL;
 

@@ -72,16 +72,15 @@ chip soc/intel/cannonlake
 
 	# Enable Root port 9(x4) for NVMe.
 	register "PcieRpEnable[8]" = "1"
+	register "PcieRpLtrEnable[8]" = "1"
 	# RP 9 uses CLK SRC 1
 	register "PcieClkSrcUsage[1]" = "8"
 	# ClkReq-to-ClkSrc mapping for CLK SRC 1
 	register "PcieClkSrcClkReq[1]" = "1"
 
-	# GPIO for SD card detect
-	register "sdcard_cd_gpio" = "vSD3_CD_B"
-
 	# PCIe port 14 for M.2 E-key WLAN
 	register "PcieRpEnable[13]" = "1"
+	register "PcieRpLtrEnable[13]" = "1"
 	# RP 14 uses CLK SRC 3
 	register "PcieClkSrcUsage[3]" = "13"
 	register "PcieClkSrcClkReq[3]" = "3"
@@ -91,6 +90,16 @@ chip soc/intel/cannonlake
 	register "PchHdaAudioLinkSsp0" = "1"
 	register "PchHdaAudioLinkSsp1" = "1"
 	register "PchHdaAudioLinkDmic0" = "1"
+
+	# GPIO PM programming
+	register "gpio_override_pm" = "1"
+
+	# GPIO community PM configuration
+	register "gpio_pm[COMM_0]" = "MISCCFG_ENABLE_GPIO_PM_CONFIG"
+	register "gpio_pm[COMM_1]" = "MISCCFG_ENABLE_GPIO_PM_CONFIG"
+	register "gpio_pm[COMM_2]" = "MISCCFG_ENABLE_GPIO_PM_CONFIG"
+	register "gpio_pm[COMM_3]" = "MISCCFG_ENABLE_GPIO_PM_CONFIG"
+	register "gpio_pm[COMM_4]" = "MISCCFG_GPSIDEDPCGEN | MISCCFG_GPRTCDLCGEN | MISCCFG_GSXSLCGEN | MISCCFG_GPDPCGEN | MISCCFG_GPDLCGEN"
 
 	device cpu_cluster 0 on
 		device lapic 0 on end
@@ -204,7 +213,7 @@ chip soc/intel/cannonlake
 		device pci 16.4 off end # Management Engine Interface 3
 		device pci 16.5 off end # Management Engine Interface 4
 		device pci 17.0 on  end # SATA
-		device pci 19.0 on  end #I2C #4
+		device pci 19.0 on  end # I2C #4
 		device pci 19.1 off end # I2C #5
 		device pci 19.2 off end # UART #2
 		device pci 1a.0 off end # eMMC

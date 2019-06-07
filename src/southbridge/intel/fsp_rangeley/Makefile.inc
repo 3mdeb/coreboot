@@ -19,12 +19,11 @@ ifeq ($(CONFIG_SOUTHBRIDGE_INTEL_FSP_RANGELEY),y)
 ramstage-y += soc.c
 ramstage-y += lpc.c
 ramstage-y += sata.c
-ramstage-y += watchdog.c
 ramstage-y += spi.c
 ramstage-y += smbus.c
 ramstage-y += acpi.c
 
-romstage-y += early_usb.c early_smbus.c gpio.c early_spi.c early_init.c
+romstage-y += early_usb.c early_smbus.c gpio.c early_init.c
 romstage-y += romstage.c
 
 bootblock-$(CONFIG_USBDEBUG) += usb_debug.c

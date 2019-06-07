@@ -13,19 +13,18 @@
  * GNU General Public License for more details.
  */
 
-#include <chip.h>
 #include <console/console.h>
 #include <device/device.h>
 #include <device/pci.h>
 #include <fsp/api.h>
-#include <fsp/ppi/mp_service_ppi.h>
 #include <fsp/util.h>
-#include <intelblocks/mp_init.h>
 #include <intelblocks/xdci.h>
 #include <soc/intel/common/vbt.h>
 #include <soc/pci_devs.h>
 #include <soc/ramstage.h>
 #include <string.h>
+
+#include "chip.h"
 
 static const int serial_io_dev[] = {
 	PCH_DEVFN_I2C0,
@@ -120,6 +119,28 @@ static void ignore_gbe_ltr(void)
 	write8(pmcbase + LTR_IGN, reg8);
 }
 
+static void configure_gspi_cs(int idx, const config_t *config,
+			      uint8_t *polarity, uint8_t *enable,
+			      uint8_t *defaultcs)
+{
+	struct spi_cfg cfg;
+
+	/* If speed_mhz is set, infer that the port should be configured */
+	if (config->common_soc_config.gspi[idx].speed_mhz != 0) {
+		if (gspi_get_soc_spi_cfg(idx, &cfg) == 0) {
+			if (cfg.cs_polarity == SPI_POLARITY_LOW)
+				*polarity = 0;
+			else
+				*polarity = 1;
+
+			if (defaultcs != NULL)
+				*defaultcs = 0;
+			if (enable != NULL)
+				*enable = 1;
+		}
+	}
+}
+
 /* UPD parameters to be initialized before SiliconInit */
 void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 {
@@ -143,9 +164,6 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	for (i = 0; i < ARRAY_SIZE(params->Usb3OverCurrentPin); i++) {
 		params->Usb3OverCurrentPin[i] = 0;
 	}
-
-	if (CONFIG(USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI))
-		params->CpuMpPpi = (uintptr_t) mp_fill_ppi_services_data();
 
 	mainboard_silicon_init_params(params);
 
@@ -216,6 +234,10 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	params->DdiPortDDdc = config->DdiPortDDdc;
 	params->DdiPortFDdc = config->DdiPortFDdc;
 
+	/* WOL */
+	params->PchPmPcieWakeFromDeepSx = config->LanWakeFromDeepSx;
+	params->PchPmWolEnableOverride = config->WolEnableOverride;
+
 	/* S0ix */
 	params->PchPmSlpS0Enable = config->s0ix_enable;
 
@@ -250,9 +272,12 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 
 	/* Enable xDCI controller if enabled in devicetree and allowed */
 	dev = dev_find_slot(0, PCH_DEVFN_USBOTG);
-	if (!xdci_can_enable())
-		dev->enabled = 0;
-	params->XdciEnable = dev->enabled;
+	if (dev) {
+		if (!xdci_can_enable())
+			dev->enabled = 0;
+		params->XdciEnable = dev->enabled;
+	} else
+		params->XdciEnable = 0;
 
 	/* Set Debug serial port */
 	params->SerialIoDebugUartNumber = CONFIG_UART_FOR_CONSOLE;
@@ -260,9 +285,15 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	/* Enable CNVi Wifi if enabled in device tree */
 	dev = dev_find_slot(0, PCH_DEVFN_CNViWIFI);
 #if CONFIG(SOC_INTEL_COMETLAKE)
-	params->CnviMode = dev->enabled;
+	if (dev)
+		params->CnviMode = dev->enabled;
+	else
+		params->CnviMode = 0;
 #else
-	params->PchCnviMode = dev->enabled;
+	if (dev)
+		params->PchCnviMode = dev->enabled;
+	else
+		params->PchCnviMode = 0;
 #endif
 	/* PCI Express */
 	for (i = 0; i < ARRAY_SIZE(config->PcieClkSrcUsage); i++) {
@@ -348,6 +379,27 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 
 	/* Unlock all GPIO pads */
 	tconfig->PchUnlockGpioPads = config->PchUnlockGpioPads;
+
+	/*
+	 * GSPI Chip Select parameters
+	 * The GSPI driver assumes that CS0 is the used chip-select line,
+	 * therefore only CS0 is configured below.
+	 */
+#if CONFIG(SOC_INTEL_COMETLAKE)
+	configure_gspi_cs(0, config, &params->SerialIoSpi0CsPolarity[0],
+			&params->SerialIoSpi0CsEnable[0],
+			&params->SerialIoSpiDefaultCsOutput[0]);
+	configure_gspi_cs(1, config, &params->SerialIoSpi1CsPolarity[0],
+			&params->SerialIoSpi1CsEnable[0],
+			&params->SerialIoSpiDefaultCsOutput[1]);
+	configure_gspi_cs(2, config, &params->SerialIoSpi2CsPolarity[0],
+			&params->SerialIoSpi2CsEnable[0],
+			&params->SerialIoSpiDefaultCsOutput[2]);
+#else
+	for (i = 0; i < CONFIG_SOC_INTEL_COMMON_BLOCK_GSPI_MAX; i++)
+		configure_gspi_cs(i, config,
+				&params->SerialIoSpiCsPolarity[0], NULL, NULL);
+#endif
 }
 
 /* Mainboard GPIO Configuration */

@@ -59,6 +59,7 @@ static struct {
 	{ PCI_DEVICE_ID_INTEL_KBL_ID_H, "Kabylake-H" },
 	{ PCI_DEVICE_ID_INTEL_KBL_ID_S, "Kabylake-S" },
 	{ PCI_DEVICE_ID_INTEL_KBL_ID_DT, "Kabylake DT" },
+	{ PCI_DEVICE_ID_INTEL_KBL_ID_DT_2, "Kabylake DT 2" },
 };
 
 static struct {
@@ -71,6 +72,11 @@ static struct {
 	{ PCI_DEVICE_ID_INTEL_SPT_LP_Y_PREMIUM, "Skylake-Y Premium" },
 	{ PCI_DEVICE_ID_INTEL_SPT_H_PREMIUM, "Skylake PCH-H Premium" },
 	{ PCI_DEVICE_ID_INTEL_SPT_H_H110, "Skylake PCH-H H110" },
+	{ PCI_DEVICE_ID_INTEL_SPT_H_H170, "Skylake PCH-H H170" },
+	{ PCI_DEVICE_ID_INTEL_SPT_H_Z170, "Skylake PCH-H Z170" },
+	{ PCI_DEVICE_ID_INTEL_SPT_H_Q170, "Skylake PCH-H Q170" },
+	{ PCI_DEVICE_ID_INTEL_SPT_H_Q150, "Skylake PCH-H Q150" },
+	{ PCI_DEVICE_ID_INTEL_SPT_H_B150, "Skylake PCH-H B150" },
 	{ PCI_DEVICE_ID_INTEL_SPT_H_C236, "Skylake PCH-H C236" },
 	{ PCI_DEVICE_ID_INTEL_SPT_H_QM170, "Skylake PCH-H QM170" },
 	{ PCI_DEVICE_ID_INTEL_SPT_H_HM175, "Skylake PCH-H HM175" },

@@ -25,7 +25,6 @@
 #include <device/pci_ops.h>
 #include <arch/ioapic.h>
 #include <arch/acpi.h>
-#include "i82801gx.h"
 #include <cpu/x86/smm.h>
 #include <arch/acpigen.h>
 #include <arch/smp/mpspec.h>
@@ -33,12 +32,15 @@
 #include <string.h>
 #include <drivers/intel/gma/i915.h>
 #include <southbridge/intel/common/acpi_pirq_gen.h>
+#include <southbridge/intel/common/pmbase.h>
+
+#include "chip.h"
+#include "i82801gx.h"
 #include "nvs.h"
 
 #define NMI_OFF	0
 
 #define ENABLE_ACPI_MODE_IN_COREBOOT	0
-#define TEST_SMM_FLASH_LOCKDOWN		0
 
 typedef struct southbridge_intel_i82801gx_config config_t;
 
@@ -167,7 +169,7 @@ static void i82801gx_gpi_routing(struct device *dev)
 static void i82801gx_power_options(struct device *dev)
 {
 	u8 reg8;
-	u16 reg16, pmbase;
+	u16 reg16;
 	u32 reg32;
 	const char *state;
 	/* Get the chip configuration */
@@ -254,18 +256,16 @@ static void i82801gx_power_options(struct device *dev)
 	// Set the board's GPI routing.
 	i82801gx_gpi_routing(dev);
 
-	pmbase = pci_read_config16(dev, 0x40) & 0xfffe;
-
-	outl(config->gpe0_en, pmbase + GPE0_EN);
-	outw(config->alt_gp_smi_en, pmbase + ALT_GP_SMI_EN);
+	write_pmbase32(GPE0_EN, config->gpe0_en);
+	write_pmbase16(ALT_GP_SMI_EN, config->alt_gp_smi_en);
 
 	/* Set up power management block and determine sleep mode */
-	reg32 = inl(pmbase + 0x04); // PM1_CNT
+	reg32 = read_pmbase32(PM1_CNT);
 
 	reg32 &= ~(7 << 10);	// SLP_TYP
 	reg32 |= (1 << 1);	// enable C3->C0 transition on bus master
 	reg32 |= (1 << 0);	// SCI_EN
-	outl(reg32, pmbase + 0x04);
+	write_pmbase32(PM1_CNT, reg32);
 }
 
 static void i82801gx_configure_cstates(struct device *dev)
@@ -333,10 +333,6 @@ static void enable_clock_gating(void)
 #if CONFIG(HAVE_SMI_HANDLER)
 static void i82801gx_lock_smm(struct device *dev)
 {
-#if TEST_SMM_FLASH_LOCKDOWN
-	u8 reg8;
-#endif
-
 	if (!acpi_is_wakeup_s3()) {
 #if ENABLE_ACPI_MODE_IN_COREBOOT
 		printk(BIOS_DEBUG, "Enabling ACPI via APMC:\n");
@@ -351,33 +347,6 @@ static void i82801gx_lock_smm(struct device *dev)
 		printk(BIOS_DEBUG, "S3 wakeup, enabling ACPI via APMC\n");
 		outb(APM_CNT_ACPI_ENABLE, APM_CNT);
 	}
-
-#if TEST_SMM_FLASH_LOCKDOWN
-	/* Now try this: */
-	printk(BIOS_DEBUG, "Locking BIOS to RO... ");
-	reg8 = pci_read_config8(dev, 0xdc);	/* BIOS_CNTL */
-	printk(BIOS_DEBUG, " BLE: %s; BWE: %s\n", (reg8&2)?"on":"off",
-			(reg8&1)?"rw":"ro");
-	reg8 &= ~(1 << 0);			/* clear BIOSWE */
-	pci_write_config8(dev, 0xdc, reg8);
-	reg8 |= (1 << 1);			/* set BLE */
-	pci_write_config8(dev, 0xdc, reg8);
-	printk(BIOS_DEBUG, "ok.\n");
-	reg8 = pci_read_config8(dev, 0xdc);	/* BIOS_CNTL */
-	printk(BIOS_DEBUG, " BLE: %s; BWE: %s\n", (reg8&2)?"on":"off",
-			(reg8&1)?"rw":"ro");
-
-	printk(BIOS_DEBUG, "Writing:\n");
-	*(volatile u8 *)0xfff00000 = 0x00;
-	printk(BIOS_DEBUG, "Testing:\n");
-	reg8 |= (1 << 0);			/* set BIOSWE */
-	pci_write_config8(dev, 0xdc, reg8);
-
-	reg8 = pci_read_config8(dev, 0xdc);	/* BIOS_CNTL */
-	printk(BIOS_DEBUG, " BLE: %s; BWE: %s\n", (reg8&2)?"on":"off",
-			(reg8&1)?"rw":"ro");
-	printk(BIOS_DEBUG, "Done.\n");
-#endif
 }
 #endif
 
@@ -486,15 +455,15 @@ void acpi_fill_fadt(acpi_fadt_t *fadt)
 {
 	struct device *dev = pcidev_on_root(0x1f, 0);
 	config_t *chip = dev->chip_info;
-	u16 pmbase = pci_read_config16(dev, 0x40) & 0xfffe;
+	u16 pmbase = lpc_get_pmbase();
 
 	fadt->pm1a_evt_blk = pmbase;
 	fadt->pm1b_evt_blk = 0x0;
-	fadt->pm1a_cnt_blk = pmbase + 0x4;
+	fadt->pm1a_cnt_blk = pmbase + PM1_CNT;
 	fadt->pm1b_cnt_blk = 0x0;
-	fadt->pm2_cnt_blk = pmbase + 0x20;
-	fadt->pm_tmr_blk = pmbase + 0x8;
-	fadt->gpe0_blk = pmbase + 0x28;
+	fadt->pm2_cnt_blk = pmbase + PM2_CNT;
+	fadt->pm_tmr_blk = pmbase + PM1_TMR;
+	fadt->gpe0_blk = pmbase + GPE0_STS;
 	fadt->gpe1_blk = 0;
 
 	fadt->pm1_evt_len = 4;
@@ -532,7 +501,7 @@ void acpi_fill_fadt(acpi_fadt_t *fadt)
 	fadt->x_pm1a_cnt_blk.bit_width = 16;
 	fadt->x_pm1a_cnt_blk.bit_offset = 0;
 	fadt->x_pm1a_cnt_blk.access_size = ACPI_ACCESS_SIZE_WORD_ACCESS;
-	fadt->x_pm1a_cnt_blk.addrl = pmbase + 0x4;
+	fadt->x_pm1a_cnt_blk.addrl = pmbase + PM1_CNT;
 	fadt->x_pm1a_cnt_blk.addrh = 0x0;
 
 	fadt->x_pm1b_cnt_blk.space_id = 0;
@@ -546,21 +515,21 @@ void acpi_fill_fadt(acpi_fadt_t *fadt)
 	fadt->x_pm2_cnt_blk.bit_width = 8;
 	fadt->x_pm2_cnt_blk.bit_offset = 0;
 	fadt->x_pm2_cnt_blk.access_size = ACPI_ACCESS_SIZE_BYTE_ACCESS;
-	fadt->x_pm2_cnt_blk.addrl = pmbase + 0x20;
+	fadt->x_pm2_cnt_blk.addrl = pmbase + PM2_CNT;
 	fadt->x_pm2_cnt_blk.addrh = 0x0;
 
 	fadt->x_pm_tmr_blk.space_id = 1;
 	fadt->x_pm_tmr_blk.bit_width = 32;
 	fadt->x_pm_tmr_blk.bit_offset = 0;
 	fadt->x_pm_tmr_blk.access_size = ACPI_ACCESS_SIZE_DWORD_ACCESS;
-	fadt->x_pm_tmr_blk.addrl = pmbase + 0x8;
+	fadt->x_pm_tmr_blk.addrl = pmbase + PM1_TMR;
 	fadt->x_pm_tmr_blk.addrh = 0x0;
 
 	fadt->x_gpe0_blk.space_id = 1;
 	fadt->x_gpe0_blk.bit_width = 64;
 	fadt->x_gpe0_blk.bit_offset = 0;
 	fadt->x_gpe0_blk.access_size = ACPI_ACCESS_SIZE_DWORD_ACCESS;
-	fadt->x_gpe0_blk.addrl = pmbase + 0x28;
+	fadt->x_gpe0_blk.addrl = pmbase + GPE0_STS;
 	fadt->x_gpe0_blk.addrh = 0x0;
 
 	fadt->x_gpe1_blk.space_id = 0;

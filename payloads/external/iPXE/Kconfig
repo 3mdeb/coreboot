@@ -42,12 +42,12 @@ choice
 	depends on BUILD_IPXE
 
 config IPXE_STABLE
-	bool "2017.3"
+	bool "2019.3"
 	help
 	  iPXE uses a rolling release with no stable version, for
 	  reproducibility, use the last commit of a given month as the
 	  'stable' version.
-	  This is iPXE from the end of March, 2017.
+	  This is iPXE from the end of March, 2019.
 
 config IPXE_MASTER
 	bool "master"
@@ -86,6 +86,32 @@ config PXE_SERIAL_CONSOLE
 	  console this option might be helpful to avoid duplicated output.
 
 	  Unselect to let only SeaBIOS handle printing output.
+
+config PXE_NO_PROMT
+	bool "Do not show prompt to boot from PXE"
+	default n
+	depends on BUILD_IPXE
+	help
+	  Don't wait for the user to press Ctrl-B.
+	  The PXE still can be run as it shows up in SeaBIOS's payload list.
+
+config PXE_ADD_SCRIPT
+	bool "Embed an iPXE script for automated provisioning"
+	depends on BUILD_IPXE
+	default n
+	help
+	  Enable to embed a script that is run instead of an iPXE shell.
+
+config PXE_SCRIPT
+	string "Embedded iPXE script path and filename"
+	depends on PXE_ADD_SCRIPT
+	default ""
+	help
+	  Path to a script that is embedded into the iPXE binary.
+	  Example: startup.ipxe
+
+	  Uses the ipxe script instead showing the prompt:
+	  "Press Ctrl-B to start iPXE..."
 
 endmenu
 endif

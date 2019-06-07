@@ -27,8 +27,6 @@ config SOC_INTEL_WHISKEYLAKE
 	bool
 	default n
 	select SOC_INTEL_COMMON_CANNONLAKE_BASE
-	select FSP_PEIM_TO_PEIM_INTERFACE
-	select USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI
 	help
 	  Intel Whiskeylake support
 
@@ -36,12 +34,6 @@ config SOC_INTEL_COMETLAKE
 	bool
 	default n
 	select SOC_INTEL_COMMON_CANNONLAKE_BASE
-	# TODO:
-	# Delete FSP_PEIM_TO_PEIM_INTERFACE and
-	# USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI selection
-	# and select PLATFORM_USES_FSP2_1 once FSP support for CML is ready
-	select FSP_PEIM_TO_PEIM_INTERFACE
-	select USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI
 	help
 	  Intel Cometlake support
 
@@ -98,6 +90,7 @@ config CPU_SPECIFIC_OPTIONS
 	select SOC_INTEL_COMMON_BLOCK_CHIP_CONFIG
 	select SOC_INTEL_COMMON_BLOCK_CPU
 	select SOC_INTEL_COMMON_BLOCK_CPU_MPINIT
+	select SOC_INTEL_COMMON_BLOCK_GPIO_DUAL_ROUTE_SUPPORT
 	select SOC_INTEL_COMMON_BLOCK_GSPI_VERSION_2
 	select SOC_INTEL_COMMON_BLOCK_HDA
 	select SOC_INTEL_COMMON_BLOCK_SA
@@ -190,6 +183,11 @@ config MAX_ROOT_PORTS
 	default 24 if SOC_INTEL_CANNONLAKE_PCH_H
 	default 16
 
+config MAX_PCIE_CLOCKS
+	int
+	default 16 if SOC_INTEL_CANNONLAKE_PCH_H
+	default 6
+
 config SMM_TSEG_SIZE
 	hex
 	default 0x800000
@@ -225,6 +223,11 @@ config SOC_INTEL_I2C_DEV_MAX
 	default 4 if SOC_INTEL_CANNONLAKE_PCH_H
 	default 6
 
+config CONSOLE_UART_BASE_ADDRESS
+	hex
+	default 0xfe032000
+	depends on INTEL_LPSS_UART_FOR_CONSOLE
+
 # Clock divider parameters for 115200 baud rate
 config SOC_INTEL_COMMON_LPSS_UART_CLK_M_VAL
 	hex
@@ -239,7 +242,7 @@ config CHROMEOS
 
 config VBOOT
 	select VBOOT_SEPARATE_VERSTAGE
-	select VBOOT_OPROM_MATTERS
+	select VBOOT_MUST_REQUEST_DISPLAY
 	select VBOOT_SAVE_RECOVERY_REASON_ON_REBOOT
 	select VBOOT_STARTS_IN_BOOTBLOCK
 	select VBOOT_VBNV_CMOS
@@ -298,6 +301,17 @@ config FSP_HEADER_PATH
 config FSP_FD_PATH
 	string
 	depends on FSP_USE_REPO
-	default "3rdparty/fsp/CoffeeLakeFspBinPkg/Fsp.fd" if SOC_INTEL_COFFEELAKE || SOC_INTEL_WHISKEYLAKE
+	default "3rdparty/fsp/CoffeeLakeFspBinPkg/FSP.fd" if SOC_INTEL_COFFEELAKE || SOC_INTEL_WHISKEYLAKE
+
+config SOC_INTEL_CANNONLAKE_DEBUG_CONSENT
+	int "Debug Consent for CNL"
+	# USB DBC is more common for developers so make this default to 3 if
+	# SOC_INTEL_DEBUG_CONSENT=y
+	default 3 if SOC_INTEL_DEBUG_CONSENT
+	default 0
+	help
+	  This is to control debug interface on SOC.
+	  Setting non-zero value will allow to use DBC or DCI to debug SOC.
+	  PlatformDebugConsent in FspmUpd.h has the details.
 
 endif

@@ -16,11 +16,10 @@
 #include <device/mmio.h>
 #include <assert.h>
 #include <delay.h>
-#include <stddef.h>
-
 #include <soc/addressmap.h>
 #include <soc/infracfg.h>
 #include <soc/pll.h>
+#include <types.h>
 
 enum mux_id {
 	TOP_AXI_SEL,
@@ -432,7 +431,8 @@ void mt_pll_set_aud_div(u32 rate)
 	}
 }
 
-void mt_pll_raise_ca53_freq(u32 freq) {
+void mt_pll_raise_ca53_freq(u32 freq)
+{
 	pll_set_rate(&plls[APMIXED_ARMCA7PLL], freq); /* freq in Hz */
 }
 

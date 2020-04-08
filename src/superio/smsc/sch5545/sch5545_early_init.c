@@ -111,10 +111,6 @@ void sch5545_early_init(unsigned port)
 	pnp_set_logical_device(dev);
 	pnp_set_enable(dev, 1);
 
-	/* Clear pending and enable PMEs */
-	outb(0x01, SCH5545_RUNTIME_REG_BASE);
-	outb(0x01, SCH5545_RUNTIME_REG_BASE + 1);
-
 	/* set LED color and indicate BIOS has reached code fetch phase */
 	sch5545_set_led(SCH5545_RUNTIME_REG_BASE, SCH5545_LED_COLOR_GREEN,
 			SCH5545_LED_BLINK_ON);

@@ -126,6 +126,10 @@ void mainboard_early_init(int s3resume)
 	printk(BIOS_DEBUG, "EC init complete.\n");
 
 	sch5545_enable_uart(0x2e, 0);
+
+	/* Disable SMIs and clear SMI status */
+	outb(0, SCH5545_RUNTIME_REG_BASE + SCH5545_RR_SMI_EN);
+	outb(SCH5545_SMI_GLOBAL_STS, SCH5545_RUNTIME_REG_BASE + SCH5545_RR_SMI_STS);
 }
 
 

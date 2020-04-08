@@ -15,7 +15,7 @@ chip northbridge/intel/sandybridge
 	register "gpu_panel_power_up_delay" = "0"
 	register "gpu_pch_backlight" = "0x00000000"
 	device cpu_cluster 0x0 on
-		chip cpu/intel/model_206ax # FIXME: check all registers
+		chip cpu/intel/model_206ax
 			register "c1_acpower" = "1"
 			register "c1_battery" = "1"
 			register "c2_acpower" = "3"
@@ -118,7 +118,7 @@ chip northbridge/intel/sandybridge
 						irq 0x70 = 1
 						irq 0x72 = 12
 					end
-					device pnp 2e.7 on # UART1
+					device pnp 2e.7 off # UART1
 						io 0x60 = 0x3f8
 						irq 0x70 = 4
 						irq 0xf0 = 0x02

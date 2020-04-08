@@ -439,12 +439,6 @@ static void southbridge_smi_periodic(void)
 	printk(BIOS_DEBUG, "Periodic SMI.\n");
 }
 
-static void southbridge_smi_serirq(void)
-{
-	printk(BIOS_DEBUG, "SerIRQ SMI.\n");
-	mainboard_smi_serirq();
-}
-
 typedef void (*smi_handler_t)(void);
 
 static smi_handler_t southbridge_smi[32] = {
@@ -463,7 +457,7 @@ static smi_handler_t southbridge_smi[32] = {
 	NULL,			  // [12] DEVMON_STS
 	southbridge_smi_tco,	  // [13] TCO_STS
 	southbridge_smi_periodic, // [14] PERIODIC_STS
-	southbridge_smi_serirq,	  // [15] SERIRQ_SMI_STS
+	NULL,			  // [15] SERIRQ_SMI_STS
 	NULL,			  // [16] SMBUS_SMI_STS
 	NULL,			  // [17] LEGACY_USB2_STS
 	NULL,			  // [18] INTEL_USB2_STS

@@ -56,7 +56,6 @@ void smm_setup_structures(void *gnvs, void *tcg, void *smi1);
 void mainboard_smi_gpi(u32 gpi_sts);
 int  mainboard_smi_apmc(u8 data);
 void mainboard_smi_sleep(u8 slp_typ);
-void mainboard_smi_serirq(void);
 void mainboard_smi_intruder(u32 tco_sts);
 
 /* This is the SMM handler. */

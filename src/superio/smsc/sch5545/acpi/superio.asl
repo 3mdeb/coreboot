@@ -29,7 +29,7 @@
  *
  * Controllable through preprocessor defines:
  * SIO1		Device identifier for this SIO (e.g. SIO0)
- * SUPERIO_PNP_BASE	I/o address of the first PnP configuration register
+ * SUPERIO_PNP_BASE	I/O address of the first PnP configuration register
  * SCH5545_SHOW_UARTA	If defined, UARTA will be exposed.
  * SCH5545_SHOW_UARTB	If defined, UARTB will be exposed.
  * SCH5545_SHOW_KBC	If defined, the KBC will be exposed.
@@ -47,9 +47,9 @@
 #define PNP_DEFAULT_PSC Return (0) /* no power management */
 
 /* 
- * Common helpers will not work on this chip. IO, DMA and IRQ resources.
- * These are accessed via LPC interface LDN 0xC.
- */
+* Common helpers will not work on this chip. IO, DMA and IRQ resources.
+* These are accessed via LPC interface LDN 0xC.
+*/
 #undef PNP_READ_IO
 #undef PNP_READ_IRQ
 #undef PNP_READ_DMA
@@ -62,15 +62,16 @@ Device(SIO1) {
 	Name (_STR, Unicode("SMSC SCH5545 Super I/O"))
 	Name (_UID, SUPERIO_UID(SIO1,))
 
-	/* Mutex for accesses to the configuration ports */
-	Mutex(CONF_MODE_MUTEX, 1)
-
+#ifdef SCH5545_EMI_BASE
 	Name (IO1B, SCH5545_EMI_BASE)
+#endif
+#ifdef SCH5545_RUNTIME_BASE
 	Name (IO2B, SCH5545_RUNTIME_BASE)
+#endif
 	Name (IOST, 0x0001) /* IO decoding status */
 	Name (MSFG, One) /* Mouse wake config */
-	Name (KBFG, One) /* Keyboard wake backup */
-	Name (PMFG, Zero) /* Wake event backup */
+	Name (KBFG, One) /* Keyboard wake config */
+	Name (PMFG, Zero) /* Wake config */
 
 	/* SuperIO configuration ports */
 	OperationRegion (CREG, SystemIO, SUPERIO_PNP_BASE, 0x02)
@@ -79,7 +80,7 @@ Device(SIO1) {
 		PNP_ADDR_REG,	8,
 		PNP_DATA_REG,	8
 	}
-	IndexField (ADDR, DATA, ByteAcc, NoLock, Preserve)
+	IndexField (PNP_ADDR_REG, PNP_DATA_REG, ByteAcc, NoLock, Preserve)
 	{
 		Offset (0x07),
 		PNP_LOGICAL_DEVICE,	8, /* Logical device selector */
@@ -112,6 +113,7 @@ Device(SIO1) {
 		OPT5,	8
 	}
 
+#ifdef SCH5545_RUNTIME_BASE
 	/* Runtime registers */
 	OperationRegion (RNTR, SystemIO, SCH5545_RUNTIME_BASE, 0x40)
 	Field (RNTR, ByteAcc, NoLock, Preserve)
@@ -144,7 +146,7 @@ Device(SIO1) {
 		GPSR,	8,	/* GPIO Select Register  */
 		GPRR,	8	/* GPIO Read Register */
 	}
-
+#endif
 	Name (CRS, ResourceTemplate ()
 	{
 		IO (Decode16,
@@ -153,18 +155,22 @@ Device(SIO1) {
 			0x00,
 			0x00,
 			_Y11)
+#ifdef SCH5545_EMI_BASE
 		IO (Decode16,
 			0x0000,
 			0x0000,
 			0x00,
 			0x00,
 			_Y12)
+#endif
+#ifdef SCH5545_RUNTIME_BASE
 		IO (Decode16,
 			0x0000,
 			0x0000,
 			0x00,
 			0x00,
 			_Y13)
+#endif
 	})
 	Method (_CRS, 0, NotSerialized)
 	{
@@ -177,7 +183,7 @@ Device(SIO1) {
 			GPI1 = SUPERIO_PNP_BASE
 			GPIL = 0x02
 		}
-
+#ifdef SCH5545_EMI_BASE
 		If (IO1B)
 		{
 			CreateWordField (CRS, \_SB.PCI0.LPCB.SIO1._Y12._MIN, GP10)
@@ -187,7 +193,8 @@ Device(SIO1) {
 			GP11 = SCH5545_EMI_BASE
 			GPL1 = 0x10
 		}
-
+#endif
+#ifdef SCH5545_RUNTIME_BASE
 		If (IO2B)
 		{
 			CreateWordField (CRS, \_SB.PCI0.LPCB.SIO1._Y13._MIN, GP20)
@@ -197,7 +204,7 @@ Device(SIO1) {
 			GP21 = SCH5545_RUNTIME_BASE
 			GPL2 = 0x40
 		}
-
+#endif
 		Return (CRS)
 	}
 
@@ -211,7 +218,7 @@ Device(SIO1) {
 	#define PNP_ENTER_MAGIC_1ST	0x55
 	#define PNP_EXIT_MAGIC_1ST	0xaa
 	#include <superio/acpi/pnp_config.asl>
-
+	#define SUPERIO_LPC_LDN 0x0C
 	#include "resource_helpers.asl"
 
 #ifdef SCH5545_SHOW_KBC
@@ -221,14 +228,7 @@ Device(SIO1) {
 		Name (_CID, EisaId ("PNP030B"))
 		Method (_STA, 0, NotSerialized)
 		{
-			If (IOST & 0x0400)
-			{
-				Return (0x0F)
-			}
-			Else
-			{
-				Return (Zero)
-			}
+			Return (DSTA (0xa))
 		}
 
 		Name (_CRS, ResourceTemplate ()
@@ -245,8 +245,7 @@ Device(SIO1) {
 				0x00,
 				0x01,
 				)
-			IRQNoFlags ()
-				{1}
+			IRQ (Edge, ActiveHigh, Exclusive) {1}
 		})
 		Name (_PRS, ResourceTemplate ()
 		{
@@ -260,8 +259,7 @@ Device(SIO1) {
 					0x0064,			 // Address
 					0x01,
 					)
-				IRQNoFlags ()
-					{1}
+				IRQ (Edge, ActiveHigh, Exclusive) {1}
 			}
 			EndDependentFn ()
 		})
@@ -274,61 +272,22 @@ Device(SIO1) {
 
 	Device (PS2M)
 	{
-		Name (_HID, EisaId ("PNP0F03"))
-		Name (_CID, EisaId ("PNP0F13"))
+		Name (_HID, EisaId ("PNP0F13"))
 		Method (_STA, 0, NotSerialized)
 		{
-			If (IOST & 0x4000)
-			{
-				Return (0x0F)
-			}
-			Else
-			{
-				Return (Zero)
-			}
+			Return (DSTA (0xe))
 		}
 
-		Name (CRS1, ResourceTemplate ()
+		Name (_CRS, ResourceTemplate ()
 		{
-			IRQNoFlags ()
-				{12}
+			IRQ (Edge, ActiveHigh, Exclusive) {12}
 		})
-		Name (CRS2, ResourceTemplate ()
-		{
-			IO (Decode16,
-				0x0060,
-				0x0060,
-				0x00,
-				0x01,
-				)
-			IO (Decode16,
-				0x0064,
-				0x0064,
-				0x00,
-				0x01,
-				)
-			IRQNoFlags ()
-				{12}
-		})
-
-		Method (_CRS, 0, NotSerialized)
-		{
-			If (IOST & 0x0400)
-			{
-				Return (CRS1)
-			}
-			Else
-			{
-				Return (CRS2)
-			}
-		}
 
 		Name (_PRS, ResourceTemplate ()
 		{
 			StartDependentFn (0x00, 0x00)
 			{
-				IRQNoFlags ()
-					{12}
+				IRQ (Edge, ActiveHigh, Exclusive) {12}
 			}
 			EndDependentFn ()
 		})
@@ -356,7 +315,7 @@ Device(SIO1) {
 		KRDY,	1, 
 		Offset (0x01)
 	}
-
+#ifdef SCH5545_RUNTIME_BASE
 	/* SIO prepare to sleep */
 	Method (SIOS, 1, NotSerialized)
 	{
@@ -453,8 +412,8 @@ Device(SIO1) {
 			Notify (PS2M, 0x02) // Device Wake
 		}
 	}
-
-#endif
+#endif // SCH5545_RUNTIME_BASE
+#endif // SCH5545_SHOW_KBC
 
 #ifdef SCH5545_SHOW_UARTA
 #define SUPERIO_UARTA_LDN 7
@@ -464,22 +423,28 @@ Device(SIO1) {
 		Name (_UID, SUPERIO_UID(SER, SUPERIO_UARTA_LDN))
 		Method (_STA, 0, NotSerialized)
 		{
-			Return (^SIO1.DSTA (Zero))
+			Return (DSTA (Zero))
 		}
 
 		Method (_DIS, 0, NotSerialized)
 		{
-			^SIO1.DCNT (Zero, Zero)
+			DCNT (Zero, Zero)
 		}
 
 		Method (_CRS, 0, NotSerialized)
 		{
-			Return (^SIO1.DCRS (Zero, Zero))
+			Return (DCRS (Zero, Zero))
 		}
 
 		Method (_SRS, 1, NotSerialized)
 		{
-			^SIO1.DSRS (Arg0, Zero)
+			CreateWordField (Arg0, 0x02, IO11)
+			CreateWordField (Arg0, 0x09, IRQM)
+			ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
+			STIO (0x6A, IO11)
+			SIRQ (Zero, IRQM)
+			EXIT_CONFIG_MODE ()
+			DCNT (Zero, One)
 		}
 
 		Name (_PRS, ResourceTemplate ()
@@ -551,22 +516,28 @@ Device(SIO1) {
 		Name (_UID, SUPERIO_UID(SER, SUPERIO_UARTB_LDN))
 		Method (_STA, 0, NotSerialized)
 		{
-			Return (^SIO1.DSTA (One))
+			Return (DSTA (One))
 		}
 
 		Method (_DIS, 0, NotSerialized)
 		{
-			^SIO1.DCNT (One, Zero)
+			DCNT (One, Zero)
 		}
 
 		Method (_CRS, 0, NotSerialized)
 		{
-			Return (^SIO1.DCRS (One, Zero))
+			Return (DCRS (One, Zero))
 		}
 
 		Method (_SRS, 1, NotSerialized)
 		{
-			^SIO1.DSRS (Arg0, Zero)
+			CreateWordField (Arg0, 0x02, IO11)
+			CreateWordField (Arg0, 0x09, IRQM)
+			ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
+			STIO (0x6E, IO11)
+			SIRQ (One, IRQM)
+			EXIT_CONFIG_MODE ()
+			DCNT (One, One)
 		}
 
 		Name (_PRS, ResourceTemplate ()

@@ -11,8 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#define SUPERIO_LPC_LDN 0x0C 
-
 /* Helper package for determining IO, DMA, IRQ location accordign to LDN */
 Name (DCAT, Package (0x10) {
 	0x07,	/* UARTA */
@@ -86,20 +84,6 @@ Method (DCNT, 2, NotSerialized)
 	EXIT_CONFIG_MODE ()
 }
 
-Name (CRS1, ResourceTemplate ()
-{
-	IO (Decode16,
-		0x0000,			 // Range Minimum
-		0x0000,			 // Range Maximum
-		0x01,			   // Alignment
-		0x00,			   // Length
-		_Y16)
-	IRQNoFlags (_Y14)
-		{}
-	DMA (Compatibility, NotBusMaster, Transfer8, _Y15)
-		{}
-})
-
 /* Resource templates for SIO LDNs */
 Name (CRS1, ResourceTemplate ()
 {
@@ -109,16 +93,16 @@ Name (CRS1, ResourceTemplate ()
 		0x01,
 		0x00,
 		_Y16)
-	IRQNoFlags (_Y14)
-		{}
-	DMA (Compatibility, NotBusMaster, Transfer8, _Y15)
-		{}
+	IRQ (Edge, ActiveHigh, Exclusive, _Y14) {}
+	DMA (Compatibility, NotBusMaster, Transfer8, _Y15) {}
 })
+
 CreateWordField (CRS1, \_SB.PCI0.LPCB.SIO1._Y14._INT, IRQM)
 CreateByteField (CRS1, \_SB.PCI0.LPCB.SIO1._Y15._DMA, DMAM)
 CreateWordField (CRS1, \_SB.PCI0.LPCB.SIO1._Y16._MIN, IO11)
 CreateWordField (CRS1, \_SB.PCI0.LPCB.SIO1._Y16._MAX, IO12)
 CreateByteField (CRS1, \_SB.PCI0.LPCB.SIO1._Y16._LEN, LEN1)
+
 Name (CRS2, ResourceTemplate ()
 {
 	IO (Decode16,
@@ -133,11 +117,10 @@ Name (CRS2, ResourceTemplate ()
 		0x01,
 		0x00,
 		_Y1A)
-	IRQNoFlags (_Y17)
-		{}
-	DMA (Compatibility, NotBusMaster, Transfer8, _Y18)
-		{}
+	IRQ (Edge, ActiveHigh, Exclusive, _Y17) {}
+	DMA (Compatibility, NotBusMaster, Transfer8, _Y18) {}
 })
+
 CreateWordField (CRS2, \_SB.PCI0.LPCB.SIO1._Y17._INT, IRQE)
 CreateByteField (CRS2, \_SB.PCI0.LPCB.SIO1._Y18._DMA, DMAE)
 CreateWordField (CRS2, \_SB.PCI0.LPCB.SIO1._Y19._MIN, IO21)
@@ -194,7 +177,7 @@ Method (GIRQ, 1, NotSerialized)
 	{
 		Local1 = (0x40 + Local0) /* IRQ regs begin at offset 0x40 */
 		PNP_ADDR_REG = Local1
-		Local1 = PNP_PNP_DATA_REG_REG
+		Local1 = PNP_DATA_REG
 		If (CGLD (Arg0) == Local1)
 		{
 			Local1 = One
@@ -207,6 +190,7 @@ Method (GIRQ, 1, NotSerialized)
 
 	Return (0xFF)
 }
+
 /* Read DMA resource */
 Method (GDMA, 1, NotSerialized)
 {
@@ -217,7 +201,7 @@ Method (GDMA, 1, NotSerialized)
 		Local1 = (Local0 << One)
 		Local1 += 0x51	/* DMA regs begin at offset 0x50 */
 		PNP_ADDR_REG = Local1
-		Local1 = PNP_PNP_DATA_REG_REG
+		Local1 = PNP_DATA_REG
 		If ((0x80 | CGLD (Arg0)) == Local1)
 		{
 			Local1 = One
@@ -232,7 +216,7 @@ Method (GDMA, 1, NotSerialized)
 }
 
 /* Set IO resource */
-Method (STIO, 3, NotSerialized)
+Method (STIO, 2, NotSerialized)
 {
 	SWITCH_LDN (SUPERIO_LPC_LDN)
 	Local0 = (Arg1 & 0xFF)
@@ -313,14 +297,15 @@ Method (SDMA, 2, NotSerialized)
 	Local0 += 0x51
 	PNP_ADDR_REG = Local0
 	PNP_DATA_REG = (0x80 | CGLD (Arg0))
+	Return (Zero)
 }
 
-/* Dynamic Current Resource Settings */
+/* Device Current Resource Settings */
 Method (DCRS, 2, NotSerialized)
 {
 	If (CGLD (Arg0) == 0x07)	/* UARTA resources */
 	{
-		ENTER_CONFIG_MODE (0x0C)
+		ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
 		IO11 = GIOB (Arg0)
 		IO12 = IO11
 		LEN1 = 0x08
@@ -340,7 +325,7 @@ Method (DCRS, 2, NotSerialized)
 
 	If (CGLD (Arg0) == 0x08)	/* UARTB resources */
 	{
-		ENTER_CONFIG_MODE (0x0C)
+		ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
 		IO11 = GIOB (Arg0)
 		IO12 = IO11
 		LEN1 = 0x08
@@ -362,7 +347,7 @@ Method (DCRS, 2, NotSerialized)
 	{
 		If (LPTM (Arg0))
 		{
-			ENTER_CONFIG_MODE (0x0C)
+			ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
 			IO21 = GIOB (Arg0)
 			IO22 = IO21
 			IO31 = (IO21 + 0x0400)
@@ -393,7 +378,7 @@ Method (DCRS, 2, NotSerialized)
 		}
 		Else
 		{
-			ENTER_CONFIG_MODE (0x0C)
+			ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
 			IO11 = GIOB (Arg0)
 			IO12 = IO11 /* \_SB_.PCI0.LPCB.SIO1.IO11 */
 			If ((IO11 & 0xFF) == 0xBC)
@@ -413,7 +398,7 @@ Method (DCRS, 2, NotSerialized)
 
 	If (CGLD (Arg0) == 0x0B)	/* Floppy resources */
 	{
-		ENTER_CONFIG_MODE (0x0C)
+		ENTER_CONFIG_MODE (SUPERIO_LPC_LDN)
 		IO21 = GIOB (Arg0)
 		IO22 = IO21 /* \_SB_.PCI0.LPCB.SIO1.IO21 */
 		LEN2 = 0x06
@@ -437,63 +422,3 @@ Method (DCRS, 2, NotSerialized)
 	Return (CRS1) /* \_SB_.PCI0.LPCB.SIO1.CRS1 */
 }
 
-/* Dynamic Set Resource Settings */
-Method (DSRS, 2, NotSerialized)
-{
-	CreateWordField (Arg0, 0x09, IRQM)
-	CreateByteField (Arg0, 0x0C, DMAM)
-	CreateWordField (Arg0, 0x02, IO11)
-	CreateWordField (Arg0, 0x11, IRQE)
-	CreateByteField (Arg0, 0x14, DMAE)
-	CreateWordField (Arg0, 0x02, IO21)
-	CreateWordField (Arg0, 0x0A, IO31)
-	If (CGLD (Arg1) == 0x07)
-	{
-		ENTER_CONFIG_MODE (0x0C)
-		STIO (0x6A, IO11, Arg1)
-		SIRQ (Arg1, IRQM)
-		EXIT_CONFIG_MODE ()
-		DCNT (Arg1, One)
-	}
-
-	If (CGLD (Arg1) == 0x08)
-	{
-		ENTER_CONFIG_MODE (0x0C)
-		STIO (0x6E, IO11, Arg1)
-		SIRQ (Arg1, IRQM)
-		EXIT_CONFIG_MODE ()
-		DCNT (Arg1, One)
-	}
-
-	If (CGLD (Arg1) == 0x11)
-	{
-		If (LPTM (0x02))
-		{
-			ENTER_CONFIG_MODE (0x0C)
-			STIO (0x82, IO21, Arg1)
-			SIRQ (Arg1, IRQE)
-			SDMA (Arg1, DMAE)
-		}
-		Else
-		{
-			ENTER_CONFIG_MODE (0x0C)
-			STIO (0x82, IO11, Arg1)
-			SIRQ (Arg1, IRQM)
-		}
-
-		EXIT_CONFIG_MODE ()
-		DCNT (Arg1, One)
-	}
-
-	If (CGLD (Arg1) == 0x0B)
-	{
-		ENTER_CONFIG_MODE (0x0C)
-		STIO (0x7E, IO21, Arg1)
-		SIRQ (Arg1, IRQE)
-		SDMA (Arg1, DMAE)
-		EXIT_CONFIG_MODE ()
-		DCNT (Arg1, One)
-	}
-}
-
-#endif

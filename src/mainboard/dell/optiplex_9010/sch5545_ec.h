@@ -33,3 +33,4 @@ void sch5545_update_ec_firmware(uint16_t ec_version);
 void sch5545_ec_early_init(void);
 void sch5545_ec_hwm_early_init(void);
 void sch5545_ec_update_temperature_tables(void);
+void sch5545_ec_hwm_init(void *unused);

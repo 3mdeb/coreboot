@@ -60,7 +60,7 @@ entries
 411          1       e       8        sata_mode
 
 # coreboot config options: EC
-#412         1       r       0        unused
+412          1       e       1        fan_full_speed
 #413         1       r       0        unused
 #414         1       r       0        unused
 #415         1       r       0        unused

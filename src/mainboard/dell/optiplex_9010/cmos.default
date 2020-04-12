@@ -4,3 +4,4 @@ power_on_after_fail=Disable
 nmi=Enable
 sata_mode=AHCI
 gfx_uma_size=128M
+fan_full_speed=Disable

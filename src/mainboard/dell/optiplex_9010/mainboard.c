@@ -20,6 +20,7 @@
 #include <device/device.h>
 #include <device/pci_ops.h>
 #include <drivers/intel/gma/int15.h>
+#include <northbridge/intel/sandybridge/sandybridge.h>
 #include <southbridge/intel/bd82x6x/pch.h>
 #include <southbridge/intel/common/gpio.h>
 #include <southbridge/intel/common/pmbase.h>
@@ -71,6 +72,12 @@ static void mainboard_enable(struct device *dev)
 	install_intel_vga_int15_handler(GMA_INT15_ACTIVE_LFP_NONE,
 					GMA_INT15_PANEL_FIT_DEFAULT,
 					GMA_INT15_BOOT_DISPLAY_DEFAULT, 0);
+
+	/*
+	 * FIXME: the board gets stuck in reset loop in
+	 * mainboard_romstage_entry. Avoid that by clearing SSKPD
+	 */
+	MCHBAR16(SSKPD) = 0;
 
 	pin_sts = get_gpio(GPIO_CHASSIS_ID0);
 	pin_sts |= get_gpio(GPIO_CHASSIS_ID1) << 1;

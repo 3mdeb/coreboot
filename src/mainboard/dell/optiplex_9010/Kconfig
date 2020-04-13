@@ -45,7 +45,7 @@ config MAINBOARD_PCI_SUBSYSTEM_VENDOR_ID
 	hex
 	default 0x1028
 
-config DRAM_RESET_GATE_GPIO # FIXME: check this
+config DRAM_RESET_GATE_GPIO
 	int
 	default 60
 
@@ -53,7 +53,7 @@ config MAX_CPUS
 	int
 	default 8
 
-config USBDEBUG_HCD_INDEX # FIXME: check this
+config USBDEBUG_HCD_INDEX
 	int
 	default 2
 

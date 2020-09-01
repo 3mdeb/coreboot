@@ -12,7 +12,7 @@
 #              is used to identify this docker image.
 #  DOCKER_COMMIT is the coreboot Commit-ID to build the toolchain from.
 
-FROM debian:stable
+FROM debian:stretch
 MAINTAINER Martin Roth <martin@coreboot.org>
 
 RUN \

@@ -63,7 +63,7 @@ RUN \
 		openssl \
 		patch \
 		pkg-config \
-		python \
+		python3 \
 		qemu \
 		rsync \
 		shellcheck \

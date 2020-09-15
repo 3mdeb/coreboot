@@ -22,11 +22,11 @@ config CPU_SPECIFIC_OPTIONS
 
 config SMM_TSEG_SIZE
 	hex
-	default 0x800000
+	default 0x1000000
 
 config SMM_RESERVED_SIZE
 	hex
-	default 0x100000
+	default 0x200000
 
 # Intel Enhanced Debug region must be 4MB
 config IED_REGION_SIZE

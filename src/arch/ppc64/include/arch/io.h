@@ -10,7 +10,7 @@
 #define LPCHC_IO_SPACE 0xD0010000
 #define LPC_BASE_ADDR (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_IO_SPACE - LPC_ADDR_START)
 
-static inline void eieio()
+static inline void eieio(void)
 {
     asm volatile("eieio" ::: "memory");
 }

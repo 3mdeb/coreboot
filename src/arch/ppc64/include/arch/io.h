@@ -10,9 +10,10 @@
 #define LPCHC_IO_SPACE 0xD0010000
 #define LPC_BASE_ADDR (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_IO_SPACE - LPC_ADDR_START)
 
-static inline void eieio()
+/* Enforce In-order Execution of I/O */
+static inline void eieio(void)
 {
-    asm volatile("eieio" ::: "memory");
+	asm volatile("eieio" ::: "memory");
 }
 
 static inline void outb(uint8_t value, uint16_t port)

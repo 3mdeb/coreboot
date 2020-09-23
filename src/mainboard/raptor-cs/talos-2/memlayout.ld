@@ -4,11 +4,11 @@
 
 #include <arch/header.ld>
 
-// TODO: fill in these blanks for Power8.
+// TODO: fill in these blanks for Power9.
 SECTIONS
 {
 	DRAM_START(0x0)
-	BOOTBLOCK(0x100, 64K)
+	BOOTBLOCK(0x3000, 64K)
 	ROMSTAGE(0x20000, 128K)
 	STACK(0x40000, 0x3ff00)
 	PRERAM_CBMEM_CONSOLE(0x80000, 8K)

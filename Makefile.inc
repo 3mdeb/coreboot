@@ -1185,8 +1185,10 @@ ifeq ($(CONFIG_ARCH_PPC64),y)
 	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$@ $(top)/$@.signed 2> /dev/null
 	@printf "    SBPRINT  $(subst $(obj)/,,$(@))\n\n"
 	$(SBSINGTOOLS)/print-container -v -d -I $(top)/$@.signed
+	dd  if=$@.signed  of=$@.signed.padded  ibs=929792 conv=sync 2> /dev/null
 	@printf "    ECC  $(subst $(obj)/,,$(@))\n"
-	$(ECCTOOL) --inject $@.signed --output $@.signed.ecc --p8
+	$(ECCTOOL) --inject $@.signed.padded --output $@.signed.ecc --p8
+	rm $@.signed.padded
 endif
 	@printf "    CBFSLAYOUT  $(subst $(obj)/,,$(@))\n\n"
 	$(CBFSTOOL) $@ layout

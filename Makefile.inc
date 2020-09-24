@@ -540,6 +540,7 @@ IFWITOOL:=$(objutil)/cbfstool/ifwitool
 IFITTOOL:=$(objutil)/cbfstool/ifittool
 AMDCOMPRESS:=$(objutil)/cbfstool/amdcompress
 ECCTOOL:=$(objutil)/ffs/ecc/ecc
+SBSINGTOOLS:=$(objutil)/sb-signing-utils
 
 $(obj)/cbfstool: $(CBFSTOOL)
 	cp $< $@
@@ -586,6 +587,12 @@ $(ECCTOOL):
 	cp -r $(top)/3rdparty/ffs $(objutil)
 	cd $(objutil)/ffs && autoreconf -i && ./configure
 	+$(MAKE) -C $(objutil)/ffs
+
+$(SBSINGTOOLS):
+	@printf "    Compile SB SIGNING UTILS\n"
+	cp -r $(top)/3rdparty/sb-signing-utils $(objutil)
+	cd $(objutil)/sb-signing-utils && autoreconf -i -Wno-unsupported && ./configure
+	+$(MAKE) -C $(objutil)/sb-signing-utils
 
 APCB_EDIT_TOOL:=$(top)/util/apcb/apcb_edit.py
 
@@ -683,7 +690,7 @@ install-git-commit-clangfmt:
 include util/crossgcc/Makefile.inc
 
 .PHONY: tools
-tools: $(objutil)/kconfig/conf $(objutil)/kconfig/toada $(CBFSTOOL) $(objutil)/cbfstool/cbfs-compression-tool $(FMAPTOOL) $(RMODTOOL) $(IFWITOOL) $(objutil)/nvramtool/nvramtool $(objutil)/sconfig/sconfig $(IFDTOOL) $(CBOOTIMAGE) $(AMDFWTOOL) $(AMDCOMPRESS) $(FUTILITY) $(BINCFG) $(IFITTOOL) $(objutil)/supermicro/smcbiosinfo $(ECCTOOL)
+tools: $(objutil)/kconfig/conf $(objutil)/kconfig/toada $(CBFSTOOL) $(objutil)/cbfstool/cbfs-compression-tool $(FMAPTOOL) $(RMODTOOL) $(IFWITOOL) $(objutil)/nvramtool/nvramtool $(objutil)/sconfig/sconfig $(IFDTOOL) $(CBOOTIMAGE) $(AMDFWTOOL) $(AMDCOMPRESS) $(FUTILITY) $(BINCFG) $(IFITTOOL) $(objutil)/supermicro/smcbiosinfo $(ECCTOOL) $(SBSINGTOOL)
 
 ###########################################################################
 # Common recipes for all stages
@@ -1110,7 +1117,7 @@ else
 RAMSTAGE=
 endif
 
-$(obj)/coreboot.rom: $(obj)/coreboot.pre $(RAMSTAGE) $(CBFSTOOL) $(ECCTOOL) $$(INTERMEDIATE)
+$(obj)/coreboot.rom: $(obj)/coreboot.pre $(RAMSTAGE) $(CBFSTOOL) $(ECCTOOL) $(SBSINGTOOL) $$(INTERMEDIATE)
 
 	@printf "    CBFS       $(subst $(obj)/,,$(@))\n"
 # The full ROM may be larger than the CBFS part, so create an empty
@@ -1172,13 +1179,19 @@ endif
 endif # !CONFIG_UPDATE_IMAGE
 endif # CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 	mv $@.tmp $@
+ifeq ($(CONFIG_ARCH_PPC64),y)
+	cp -r $(top)/3rdparty/sb-signing-utils/test/keys /tmp
+	@printf "    SBSIGN  $(subst $(obj)/,,$(@))\n"
+	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$@ $(top)/$@.signed 2> /dev/null
+	@printf "    SBPRINT  $(subst $(obj)/,,$(@))\n\n"
+	$(SBSINGTOOLS)/print-container -v -d -I $(top)/$@.signed
+	@printf "    ECC  $(subst $(obj)/,,$(@))\n"
+	$(ECCTOOL) --inject $@.signed --output $@.signed.ecc --p8
+endif
 	@printf "    CBFSLAYOUT  $(subst $(obj)/,,$(@))\n\n"
 	$(CBFSTOOL) $@ layout
 	@printf "    CBFSPRINT  $(subst $(obj)/,,$(@))\n\n"
 	$(CBFSTOOL) $@ print -r $(subst $(spc),$(comma),$(all-regions))
-ifeq ($(CONFIG_ARCH_PPC64),y)
-	$(ECCTOOL) --inject $@ --output $@.ecc --p8
-endif
 
 
 cbfs-files-y += $(CONFIG_CBFS_PREFIX)/romstage

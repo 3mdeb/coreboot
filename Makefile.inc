@@ -1179,6 +1179,10 @@ endif
 endif # !CONFIG_UPDATE_IMAGE
 endif # CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 	mv $@.tmp $@
+	@printf "    CBFSLAYOUT  $(subst $(obj)/,,$(@))\n\n"
+	$(CBFSTOOL) $@ layout
+	@printf "    CBFSPRINT  $(subst $(obj)/,,$(@))\n\n"
+	$(CBFSTOOL) $@ print -r $(subst $(spc),$(comma),$(all-regions))
 ifeq ($(CONFIG_ARCH_PPC64),y)
 	cp -r $(top)/3rdparty/sb-signing-utils/test/keys /tmp
 	@printf "    SBSIGN  $(subst $(obj)/,,$(@))\n"
@@ -1188,12 +1192,9 @@ ifeq ($(CONFIG_ARCH_PPC64),y)
 	dd  if=$@.signed  of=$@.signed.padded  ibs=929792 conv=sync 2> /dev/null
 	@printf "    ECC  $(subst $(obj)/,,$(@))\n"
 	$(ECCTOOL) --inject $@.signed.padded --output $@.signed.ecc --p8
-	rm $@.signed.padded
+	dd  if=$@.signed.ecc  of=$@  ibs=1M conv=sync 2> /dev/null
+	rm $@.signed.padded $@.signed.ecc $@.signed
 endif
-	@printf "    CBFSLAYOUT  $(subst $(obj)/,,$(@))\n\n"
-	$(CBFSTOOL) $@ layout
-	@printf "    CBFSPRINT  $(subst $(obj)/,,$(@))\n\n"
-	$(CBFSTOOL) $@ print -r $(subst $(spc),$(comma),$(all-regions))
 
 
 cbfs-files-y += $(CONFIG_CBFS_PREFIX)/romstage

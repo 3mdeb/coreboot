@@ -53,4 +53,7 @@
 	ignore = dirty
 [submodule "3rdparty/intel-sec-tools"]
 	path = 3rdparty/intel-sec-tools
-	url = ../9esec-security-tooling.git
+	url = https://github.com/coreboot/9esec-security-tooling.git
+[submodule "3rdparty/sb-signing-utils"]
+	path = 3rdparty/sb-signing-utils
+	url = https://github.com/open-power/sb-signing-utils.git

@@ -5,6 +5,7 @@
 #include <superio/aspeed/common/aspeed.h>
 #include <superio/aspeed/ast2400/ast2400.h>
 #include <console/uart.h>
+#include <bootblock_common.h>
 
 void bootblock_main(void);
 
@@ -19,7 +20,7 @@ static void early_config_superio(void)
 /* The qemu part of all this is very, very non-hardware like.
  * So it gets its own bootblock.
  */
-void bootblock_main(void)
+void bootblock_mainboard_early_init(void)
 {
 	early_config_superio();
 	if (CONFIG(BOOTBLOCK_CONSOLE)) {

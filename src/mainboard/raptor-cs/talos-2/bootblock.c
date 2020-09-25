@@ -34,15 +34,8 @@ void bootblock_mainboard_early_init(void)
 			.and = ~0xf0,
 			.or = (4 << 4)
 		},
-		[Step4] = {
-			.type = MEM,
-			.base = ASPEED_VUART_BASE,
-			.reg = 0x24,
-			.and = ~0xf0,
-			.or = (4 << 4)
-		},
 		/* Configure base address low */
-		[Step5] = {
+		[Step4] = {
 			.type = MEM,
 			.base = ASPEED_VUART_BASE,
 			.reg = 0x28,
@@ -50,7 +43,7 @@ void bootblock_mainboard_early_init(void)
 			.or = CONFIG_TTYS0_BASE & 0xff
 		},
 		/* Configure base address high */
-		[Step6] = {
+		[Step5] = {
 			.type = MEM,
 			.base = ASPEED_VUART_BASE,
 			.reg = 0x2c,

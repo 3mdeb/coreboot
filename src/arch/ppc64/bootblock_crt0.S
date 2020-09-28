@@ -30,6 +30,23 @@ _start:
 	/* Set program priority to medium */
 	or		%r2, %r2, %r2
 
+/*
+#define MMIO_GROUP0_CHIP0_LPC_BASE_ADDR 0x8006030000000000
+#define LPC_ADDR_START 0xC0000000
+#define LPCHC_IO_SPACE 0xD0010000
+#define LPC_BASE_ADDR (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_IO_SPACE - LPC_ADDR_START)
+        LPC_BASE_ADDR (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + 0x10010000)
+*/
+	lis		%r10, 0x8006
+	ori		%r10, %r10, 0x0300
+	rotldi	%r10, %r10, 32
+	oris	%r10, %r10, 0x1001
+
+	li		%r3, 0x82	/* port number */
+	li		%r2, 0x88	/* value */
+	stbcix	%r2, %r10, %r3
+	eieio
+
 	/* Stack */
 	lis		%r1, _estack@ha
 	addi	%r1, %r1, _estack@l

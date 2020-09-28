@@ -6,6 +6,12 @@
 #include <superio/aspeed/ast2400/ast2400.h>
 #include <console/uart.h>
 #include <bootblock_common.h>
+#include <arch/io.h>
+
+void mainboard_post(uint8_t value)
+{
+	outb(value, 0x82);
+}
 
 void bootblock_mainboard_early_init(void)
 {

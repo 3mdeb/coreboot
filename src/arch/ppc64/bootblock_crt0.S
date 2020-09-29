@@ -48,7 +48,7 @@ _real_start:
 */
 	lis		%r10, 0x8006
 	ori		%r10, %r10, 0x0300
-	rotldi	%r10, %r10, 32
+	sldi	%r10, %r10, 32
 	oris	%r10, %r10, 0x1001
 
 	li		%r3, 0x82	/* port number */

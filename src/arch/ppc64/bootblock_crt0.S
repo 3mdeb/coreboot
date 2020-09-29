@@ -25,8 +25,17 @@
 .section ".text._start", "ax", %progbits
 .globl _start
 _start:
-	FIXUP_ENDIAN
+	/* FIXUP_ENDIAN */
 
+	/* Fill first 12 KB with jumps to real entry point to accomodate for
+	 * exception vectors.
+	 * TODO: check which vectors are actually used, if any, and add useful
+	 * handlers */
+	.rept 0x3000/4
+	b _real_start
+	.endr
+
+_real_start:
 	/* Set program priority to medium */
 	or		%r2, %r2, %r2
 

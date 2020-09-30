@@ -1,11 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <arch/io.h>
 #include <console/console.h>
 #include <program_loading.h>
 #include <superio/aspeed/common/aspeed.h>
 #include <superio/aspeed/ast2400/ast2400.h>
 #include <console/uart.h>
 #include <bootblock_common.h>
+
+void mainboard_post(uint8_t value)
+{
+	outb(value, 0x80);
+}
 
 void bootblock_mainboard_early_init(void)
 {

@@ -25,6 +25,11 @@
 .section ".text._start", "ax", %progbits
 .globl _start
 _start:
+	/* QEMU with hb-mode=on starts at address 0x10, while hardware at 0x0. */
+	nop
+	nop
+	nop
+	nop
 	FIXUP_ENDIAN
 
 	/* Set program priority to medium */

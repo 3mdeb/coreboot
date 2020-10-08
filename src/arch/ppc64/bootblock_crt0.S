@@ -40,16 +40,21 @@ _start:
 	addi	%r1, %r1, _estack@l
 
 	/* Clear .bss section */
+	/* Curently not needed, .bss is zeroed in the file. If it were to be used,
+	 * make sure that .bss is 128B aligned (size of cache line), otherwise dcbz
+	 * will clear (part of) .opd section! */
+/*
 	lis		%r5, _bss@ha
 	addi	%r5, %r5, _bss@l
 	lis		%r6, _ebss@ha
 	addi	%r6, %r6, _ebss@l
-	addi	%r6, %r6, -1    /* end before _ebss */
+	addi	%r6, %r6, -1
 1:
 	dcbz	0, %r5
 	addi	%r5, %r5, 128
 	cmpld	cr7, %r5, %r6
 	blt		cr7, 1b
+*/
 
 	/* Load official procedure descriptor address for main() */
 	lis		%r12, main@ha

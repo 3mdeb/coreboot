@@ -1243,6 +1243,12 @@ config BOOTBLOCK_CUSTOM
 	# src/lib/bootblock.c#main() C entry point.
 	bool
 
+config BOOTBLOCK_OUTSIDE_CBFS
+	bool
+	help
+	  Select it on the arch, mainboard or SoC to not include the bootblock in
+	  the main CBFS or coreboot.rom file.
+
 config MEMLAYOUT_LD_FILE
 	string
 	default "src/mainboard/\$(CONFIG_MAINBOARD_DIR)/memlayout.ld"

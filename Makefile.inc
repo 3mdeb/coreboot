@@ -1076,11 +1076,11 @@ ifeq ($(CONFIG_ARCH_X86),y)
 		-b -$(call file-size,$(objcbfs)/bootblock.bin) $(cbfs-autogen-attributes) \
 		$(TS_OPTIONS)
 else # ifeq ($(CONFIG_ARCH_X86),y)
-	ifneq ($(CONFIG_BOOTBLOCK_OUTSIDE_CBFS),y)
-		$(CBFSTOOL) $@.tmp write -u \
-			-r BOOTBLOCK \
-			-f $(objcbfs)/bootblock.bin
-	endif
+ifneq ($(CONFIG_BOOTBLOCK_OUTSIDE_CBFS),y)
+	$(CBFSTOOL) $@.tmp write -u \
+		-r BOOTBLOCK \
+		-f $(objcbfs)/bootblock.bin
+else
 	# make space for the CBFS master header pointer. "ptr_" is just
 	# arbitrary 4 bytes that will be overwritten by add-master-header.
 	printf "ptr_" > $@.tmp.2
@@ -1090,6 +1090,7 @@ else # ifeq ($(CONFIG_ARCH_X86),y)
 		-t "cbfs header" \
 		-b -4
 	rm -f $@.tmp.2
+endif # ifneq ($(CONFIG_BOOTBLOCK_OUTSIDE_CBFS),y)
 endif # ifeq ($(CONFIG_ARCH_X86),y)
 	$(CBFSTOOL) $@.tmp add-master-header $(TS_OPTIONS)
 	$(prebuild-files) true
@@ -1188,7 +1189,7 @@ endif # CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 ifeq ($(CONFIG_ARCH_PPC64),y)
 	cp -r $(top)/3rdparty/sb-signing-utils/test/keys /tmp
 	@printf "    SBSIGN  $(subst $(obj)/,,$(@))\n"
-	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(objcbfs)/bootblock.bin $(obj)/bootblock.signed 2> /dev/null
+	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$(objcbfs)/bootblock.bin $(top)/$(obj)/bootblock.signed 2> /dev/null
 	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$@ $(top)/$@.signed 2> /dev/null
 	@printf "    ECC  $(subst $(obj)/,,$(@))\n"
 	dd  if=$(obj)/bootblock.signed  of=$(obj)/bootblock.signed.pad  ibs=25486 conv=sync 2> /dev/null

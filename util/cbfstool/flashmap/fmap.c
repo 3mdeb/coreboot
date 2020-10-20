@@ -35,7 +35,7 @@ int fmap_size(const struct fmap *fmap)
 	if (!fmap)
 		return -1;
 
-	return sizeof(*fmap) + (fmap->nareas * sizeof(struct fmap_area));
+	return sizeof(*fmap) + (le16toh((fmap)->nareas) * sizeof(struct fmap_area));
 }
 
 /* Make a best-effort assessment if the given fmap is real */
@@ -48,7 +48,7 @@ static int is_valid_fmap(const struct fmap *fmap)
 		return 0;
 	/* a basic consistency check: flash should be larger than fmap */
 	if (fmap->size <
-		sizeof(*fmap) + fmap->nareas * sizeof(struct fmap_area))
+		sizeof(*fmap) + le16toh((fmap)->nareas) * sizeof(struct fmap_area))
 		return 0;
 
 	/* fmap-alikes along binary data tend to fail on having a valid,
@@ -184,7 +184,7 @@ int fmap_print(const struct fmap *fmap)
 	kv_pair_print(kv);
 	kv_pair_free(kv);
 
-	for (i = 0; i < fmap->nareas; i++) {
+	for (i = 0; i < le16toh((fmap)->nareas); i++) {
 		struct kv_pair *pair;
 		uint16_t flags;
 		char *str;
@@ -265,8 +265,8 @@ struct fmap *fmap_create(uint64_t base, uint32_t size, uint8_t *name)
 	memcpy(&fmap->signature, FMAP_SIGNATURE, strlen(FMAP_SIGNATURE));
 	fmap->ver_major = FMAP_VER_MAJOR;
 	fmap->ver_minor = FMAP_VER_MINOR;
-	fmap->base = base;
-	fmap->size = size;
+	fmap->base = htole64(base);
+	fmap->size = htole32(size);
 	memccpy(&fmap->name, name, '\0', FMAP_STRLEN);
 
 	return fmap;
@@ -289,7 +289,7 @@ int fmap_append_area(struct fmap **fmap,
 		return -1;
 
 	/* too many areas */
-	if ((*fmap)->nareas >= 0xffff)
+	if (le16toh((*fmap)->nareas) >= 0xffff)
 		return -1;
 
 	orig_size = fmap_size(*fmap);
@@ -301,12 +301,12 @@ int fmap_append_area(struct fmap **fmap,
 
 	area = (struct fmap_area *)((uint8_t *)*fmap + orig_size);
 	memset(area, 0, sizeof(*area));
-	memcpy(&area->offset, &offset, sizeof(area->offset));
-	memcpy(&area->size, &size, sizeof(area->size));
 	memccpy(&area->name, name, '\0', FMAP_STRLEN);
-	memcpy(&area->flags, &flags, sizeof(area->flags));
+	area->offset = htole32(offset);
+	area->size   = htole32(size);
+	area->flags  = htole16(flags);
 
-	(*fmap)->nareas++;
+	(*fmap)->nareas = htole16(le16toh((*fmap)->nareas) + 1);
 	return new_size;
 }
 
@@ -319,7 +319,7 @@ const struct fmap_area *fmap_find_area(const struct fmap *fmap,
 	if (!fmap || !name)
 		return NULL;
 
-	for (i = 0; i < fmap->nareas; i++) {
+	for (i = 0; i < le16toh((fmap)->nareas); i++) {
 		if (!strcmp((const char *)fmap->areas[i].name, name)) {
 			area = &fmap->areas[i];
 			break;
@@ -428,13 +428,13 @@ static int fmap_append_area_test(struct fmap **fmap)
 		goto fmap_append_area_test_exit;
 	}
 
-	nareas_orig = (*fmap)->nareas;
+	nareas_orig = le16toh((*fmap)->nareas);
 	(*fmap)->nareas = ~(0);
 	if (fmap_append_area(fmap, 0, 0, (const uint8_t *)"foo", 0) >= 0) {
 		printf("FAILURE: failed to abort with too many areas\n");
 		goto fmap_append_area_test_exit;
 	}
-	(*fmap)->nareas = nareas_orig;
+	(*fmap)->nareas = htole16(nareas_orig);
 
 	total_size = sizeof(**fmap) + sizeof(test_area);
 	if (fmap_append_area(fmap,
@@ -447,7 +447,7 @@ static int fmap_append_area_test(struct fmap **fmap)
 		goto fmap_append_area_test_exit;
 	}
 
-	if ((*fmap)->nareas != 1) {
+	if (le16toh((*fmap)->nareas) != 1) {
 		printf("FAILURE: failed to increment number of areas\n");
 		goto fmap_append_area_test_exit;
 	}

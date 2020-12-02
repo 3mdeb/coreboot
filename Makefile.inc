@@ -1186,14 +1186,12 @@ endif # CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 ifeq ($(CONFIG_ARCH_PPC64),y)
 	cp -r $(top)/3rdparty/sb-signing-utils/test/keys /tmp
 	@printf "    SBSIGN  $(subst $(obj)/,,$(@))\n"
+	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$(objcbfs)/bootblock.bin $(top)/$(obj)/bootblock.signed 2> /dev/null
 	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$@ $(top)/$@.signed 2> /dev/null
-	@printf "    SBPRINT  $(subst $(obj)/,,$(@))\n\n"
-	$(SBSINGTOOLS)/print-container -v -d -I $(top)/$@.signed
-	dd  if=$@.signed  of=$@.signed.padded  ibs=929792 conv=sync 2> /dev/null
-	@printf "    ECC  $(subst $(obj)/,,$(@))\n"
-	$(ECCTOOL) --inject $@.signed.padded --output $@.signed.ecc --p8
-	dd  if=$@.signed.ecc  of=$@  ibs=1M conv=sync 2> /dev/null
-	rm $@.signed.padded $@.signed.ecc $@.signed
+	@printf "    ECC  bootblock\n"
+	dd  if=$(obj)/bootblock.signed  of=$(obj)/bootblock.signed.pad  ibs=25486 conv=sync 2> /dev/null
+	$(ECCTOOL) --inject $(obj)/bootblock.signed.pad --output $(obj)/bootblock.signed.ecc --p8
+	rm $(obj)/bootblock.signed $(obj)/bootblock.signed.pad
 endif
 
 

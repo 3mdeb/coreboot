@@ -296,12 +296,12 @@ int cbfs_prog_stage_load(struct prog *pstage)
 	foffset = 0;
 	foffset += sizeof(stage);
 
-	assert(fsize == stage.len);
+	assert(fsize == le32toh(stage.len));
 
 	/* Note: cbfs_stage fields are currently in the endianness of the
 	 * running processor. */
-	load = (void *)(uintptr_t)stage.load;
-	entry = (void *)(uintptr_t)stage.entry;
+	load = (void *)(uintptr_t)le64toh(stage.load);
+	entry = (void *)(uintptr_t)le64toh(stage.entry);
 
 	/* Hacky way to not load programs over read only media. The stages
 	 * that would hit this path initialize themselves. */
@@ -314,17 +314,17 @@ int cbfs_prog_stage_load(struct prog *pstage)
 	}
 
 	fsize = cbfs_stage_load_and_decompress(fh, foffset, fsize, load,
-					 stage.memlen, stage.compression);
+					 le32toh(stage.memlen), le32toh(stage.compression));
 	if (!fsize)
 		return -1;
 
 	/* Clear area not covered by file. */
-	memset(&load[fsize], 0, stage.memlen - fsize);
+	memset(&load[fsize], 0, le32toh(stage.memlen) - fsize);
 
-	prog_segment_loaded((uintptr_t)load, stage.memlen, SEG_FINAL);
+	prog_segment_loaded((uintptr_t)load, le32toh(stage.memlen), SEG_FINAL);
 
 out:
-	prog_set_area(pstage, load, stage.memlen);
+	prog_set_area(pstage, load, le32toh(stage.memlen));
 	prog_set_entry(pstage, entry, NULL);
 
 	return 0;

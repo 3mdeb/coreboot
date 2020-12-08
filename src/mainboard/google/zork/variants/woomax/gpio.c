@@ -10,10 +10,6 @@ static const struct soc_amd_gpio woomax_bid0_gpio_set_stage_ram[] = {
 	PAD_NC(GPIO_5),
 	/* GPIO_6 NC */
 	PAD_NC(GPIO_6),
-	/* GPIO_11 NC */
-	PAD_NC(GPIO_11),
-	/* GPIO_32 NC */
-	PAD_NC(GPIO_32),
 	/* GPIO_69 NC */
 	PAD_NC(GPIO_69),
 	/* RAM_ID_4  */
@@ -37,10 +33,6 @@ static const struct soc_amd_gpio woomax_gpio_set_stage_ram[] = {
 	PAD_NC(GPIO_5),
 	/* GPIO_6 NC */
 	PAD_NC(GPIO_6),
-	/* GPIO_11 NC */
-	PAD_NC(GPIO_11),
-	/* GPIO_32 NC */
-	PAD_NC(GPIO_32),
 	/* GPIO_69 NC */
 	PAD_NC(GPIO_69),
 	/* RAM_ID_4  */
@@ -60,7 +52,7 @@ const struct soc_amd_gpio *variant_override_gpio_table(size_t *size)
 	uint32_t board_version;
 
 	/* If board version cannot be read, assume it is board_version 0. */
-	if (google_chromeec_cbi_get_board_version(&board_version))
+	if (google_chromeec_cbi_get_board_version(&board_version) != 0)
 		board_version = 0;
 
 	if (board_version == 0) {

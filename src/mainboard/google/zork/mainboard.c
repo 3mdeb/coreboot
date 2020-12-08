@@ -6,9 +6,11 @@
 #include <device/device.h>
 #include <device/mmio.h>
 #include <acpi/acpi.h>
+#include <acpi/acpigen.h>
 #include <acpi/acpi_gnvs.h>
 #include <amdblocks/amd_pci_util.h>
 #include <amdblocks/gpio_banks.h>
+#include <amdblocks/smi.h>
 #include <baseboard/variants.h>
 #include <boardid.h>
 #include <gpio.h>
@@ -27,6 +29,12 @@
 #include <vendorcode/google/chromeos/chromeos.h>
 #include <commonlib/helpers.h>
 #include <bootstate.h>
+
+#define METHOD_BACKLIGHT_ENABLE    "\\_SB.BKEN"
+#define METHOD_BACKLIGHT_DISABLE   "\\_SB.BKDS"
+#define METHOD_MAINBOARD_INI       "\\_SB.MINI"
+#define METHOD_MAINBOARD_WAK       "\\_SB.MWAK"
+#define METHOD_MAINBOARD_PTS       "\\_SB.MPTS"
 
 /***********************************************************
  * These arrays set up the FCH PCI_INTR registers 0xC00/0xC01.
@@ -175,6 +183,50 @@ void mainboard_get_dxio_ddi_descriptors(const fsp_dxio_descriptor **dxio_descs,
 	variant_get_dxio_ddi_descriptors(dxio_descs, dxio_num, ddi_descs, ddi_num);
 }
 
+static void mainboard_write_blken(void)
+{
+	acpigen_write_method(METHOD_BACKLIGHT_ENABLE, 0);
+	acpigen_soc_clear_tx_gpio(GPIO_85);
+	acpigen_pop_len();
+}
+
+static void mainboard_write_blkdis(void)
+{
+	acpigen_write_method(METHOD_BACKLIGHT_DISABLE, 0);
+	acpigen_soc_set_tx_gpio(GPIO_85);
+	acpigen_pop_len();
+}
+
+static void mainboard_write_mini(void)
+{
+	acpigen_write_method(METHOD_MAINBOARD_INI, 0);
+	acpigen_emit_namestring(METHOD_BACKLIGHT_ENABLE);
+	acpigen_pop_len();
+}
+
+static void mainboard_write_mwak(void)
+{
+	acpigen_write_method(METHOD_MAINBOARD_WAK, 0);
+	acpigen_emit_namestring(METHOD_BACKLIGHT_ENABLE);
+	acpigen_pop_len();
+}
+
+static void mainboard_write_mpts(void)
+{
+	acpigen_write_method(METHOD_MAINBOARD_PTS, 0);
+	acpigen_emit_namestring(METHOD_BACKLIGHT_DISABLE);
+	acpigen_pop_len();
+}
+
+static void mainboard_fill_ssdt(const struct device *dev)
+{
+	mainboard_write_blken();
+	mainboard_write_blkdis();
+	mainboard_write_mini();
+	mainboard_write_mpts();
+	mainboard_write_mwak();
+}
+
 /*************************************************
  * Dedicated mainboard function
  *************************************************/
@@ -186,18 +238,8 @@ static void zork_enable(struct device *dev)
 	pirq_setup();
 
 	dev->ops->acpi_inject_dsdt = chromeos_dsdt_generator;
-}
+	dev->ops->acpi_fill_ssdt = mainboard_fill_ssdt;
 
-static const struct soc_amd_gpio gpio_set_bl[] = {
-	PAD_GPO(GPIO_85, LOW),
-};
-
-static void reset_backlight_gpio(void *unused)
-{
-	printk(BIOS_DEBUG, "Reset backlight GPIO\n");
-	/* Re-Enable backlight - GPIO 85 active low */
-	/* TODO: Remove this after AGESA stops enabling the fan - b/155667589 */
-	program_gpios(gpio_set_bl, ARRAY_SIZE(gpio_set_bl)); /*  APU_EDP_BL_DISABLE */
 }
 
 static void mainboard_final(void *chip_info)
@@ -206,13 +248,13 @@ static void mainboard_final(void *chip_info)
 
 	gnvs = acpi_get_gnvs();
 
-	reset_backlight_gpio(NULL);
-
 	if (gnvs) {
 		gnvs->tmps = CTL_TDP_SENSOR_ID;
 		gnvs->tcrt = CRITICAL_TEMPERATURE;
 		gnvs->tpsv = PASSIVE_TEMPERATURE;
 	}
+
+	finalize_gpios(acpi_get_sleep_type());
 }
 
 struct chip_operations mainboard_ops = {
@@ -231,5 +273,3 @@ __weak const struct soc_amd_gpio *variant_override_gpio_table(size_t *size)
 	*size = 0;
 	return NULL;
 }
-
-BOOT_STATE_INIT_ENTRY(BS_OS_RESUME, BS_ON_ENTRY, reset_backlight_gpio, NULL);

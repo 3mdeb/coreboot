@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <console/console.h>
-#include <arch/io.h>
 #include <device/pci_ops.h>
 #include <device/device.h>
 #include <device/pci_def.h>
@@ -41,9 +40,9 @@ static void pch_enable_bars(void)
 
 	pci_write_config32(PCH_LPC_DEV, PMBASE, DEFAULT_PMBASE | 1);
 	/* Enable ACPI BAR */
-	pci_write_config8(PCH_LPC_DEV, ACPI_CNTL, 0x80);
+	pci_write_config8(PCH_LPC_DEV, ACPI_CNTL, ACPI_EN);
 
-	pci_write_config32(PCH_LPC_DEV, GPIO_BASE, DEFAULT_GPIOBASE|1);
+	pci_write_config32(PCH_LPC_DEV, GPIO_BASE, DEFAULT_GPIOBASE | 1);
 
 	/* Enable GPIO functionality. */
 	pci_write_config8(PCH_LPC_DEV, GPIO_CNTL, 0x10);
@@ -108,7 +107,7 @@ int early_pch_init(void)
 	RCBA16(OIC) = 0x0100;
 
 	/* PCH BWG says to read back the IOAPIC enable register */
-	(void) RCBA16(OIC);
+	(void)RCBA16(OIC);
 
 	/* Mainboard RCBA settings */
 	mainboard_config_rcba();

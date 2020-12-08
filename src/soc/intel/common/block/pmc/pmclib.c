@@ -4,6 +4,7 @@
 #include <bootmode.h>
 #include <device/mmio.h>
 #include <cbmem.h>
+#include <cpu/x86/smm.h>
 #include <console/console.h>
 #include <halt.h>
 #include <intelblocks/pmclib.h>
@@ -699,4 +700,20 @@ uint8_t get_pm_pwr_cyc_dur(uint8_t slp_s4_min_assert, uint8_t slp_s3_min_assert,
 			"spec\n", pm_pwr_cyc_dur);
 
 	return PCH_PM_PWR_CYC_DUR;
+}
+
+#if CONFIG(PMC_LOW_POWER_MODE_PROGRAM)
+void pmc_disable_acpi_timer(void)
+{
+	uint8_t *pmcbase = pmc_mmio_regs();
+
+	setbits8(pmcbase + PCH_PWRM_ACPI_TMR_CTL, ACPI_TIM_DIS);
+}
+#endif /* PMC_LOW_POWER_MODE_PROGRAM */
+
+void pmc_set_acpi_mode(void)
+{
+	if (!CONFIG(NO_SMM) && !acpi_is_wakeup_s3()) {
+		apm_control(APM_CNT_ACPI_DISABLE);
+	}
 }

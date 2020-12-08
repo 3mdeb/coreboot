@@ -2,6 +2,8 @@
 /*
  * Copied from Linux drivers/gpu/drm/ast/ast_mode.c
  */
+
+#include <console/console.h>
 #include <edid.h>
 #include <device/pci_def.h>
 
@@ -30,7 +32,7 @@ int ast_crtc_do_set_base(struct drm_crtc *crtc)
 		return -ENOMEM;
 	}
 
-	fb->mmio_addr = (u32)res2mmio(res, 4095, 4095);
+	fb->mmio_addr = (uintptr_t)res2mmio(res, 4095, 4095);
 
 	ast_set_offset_reg(crtc);
 	ast_set_start_address_crt1(ast, fb->mmio_addr);
@@ -96,7 +98,11 @@ static int ast_select_mode(struct drm_connector *connector,
 		ast_software_i2c_read(ast, raw);
 
 	if (decode_edid(raw, sizeof(raw), edid) != EDID_CONFORMANT) {
-		dev_err(dev->pdev, "Failed to decode EDID\n");
+		/*
+		 * Servers often run headless, so a missing EDID is not an error.
+		 * We still need to initialize a framebuffer for KVM, though.
+		 */
+		dev_info(dev->pdev, "Failed to decode EDID\n");
 		printk(BIOS_DEBUG, "Assuming VGA for KVM\n");
 
 		memset(edid, 0, sizeof(*edid));
@@ -224,7 +230,7 @@ int ast_driver_framebuffer_init(struct drm_device *dev, int flags)
 	set_vbe_mode_info_valid(&edid, fb.mmio_addr);
 
 	/* Clear display */
-	memset((void *)fb.mmio_addr, 0, edid.bytes_per_line * edid.y_resolution);
+	memset((void *)(uintptr_t)fb.mmio_addr, 0, edid.bytes_per_line * edid.y_resolution);
 
 	return 0;
 }

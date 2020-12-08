@@ -72,7 +72,7 @@ static const char *const ich_chipset_names[] = {
 	"Gemini Lake: N5xxx, J5xxx, N4xxx, J4xxx",
 	"100/200 series Sunrise Point",
 	"300 series Cannon Point/ 400 series Ice Point",
-	"500 series Tiger Point",
+	"500 series Tiger Point/ 600 series Alder Point",
 	"C620 series Lewisburg",
 	NULL
 };
@@ -181,7 +181,7 @@ static enum ich_chipset guess_ifd_2_chipset(const fpsba_t *fpsba)
 	/* Offset 0x58 bit [2:0] is reserved 0x4 and 0x5a bit [7:0] is reserved 0x58 */
 	if (((pchstrp_22 & 0x07) == 0x4) &&
 		((pchstrp_22 & 0xFF0000) >> 16 == 0x58))
-		return CHIPSET_500_SERIES_TIGER_POINT;
+		return CHIPSET_500_600_SERIES_TIGER_ALDER_POINT;
 
 	return CHIPSET_PCH_UNKNOWN;
 }
@@ -503,7 +503,7 @@ static void _decode_spi_frequency_500_series(unsigned int freq)
 
 static void decode_spi_frequency(unsigned int freq)
 {
-	if (chipset == CHIPSET_500_SERIES_TIGER_POINT)
+	if (chipset == CHIPSET_500_600_SERIES_TIGER_ALDER_POINT)
 		_decode_spi_frequency_500_series(freq);
 	else
 		_decode_spi_frequency(freq);
@@ -560,7 +560,7 @@ static void _decode_espi_frequency_500_series(unsigned int freq)
 
 static void decode_espi_frequency(unsigned int freq)
 {
-	if (chipset == CHIPSET_500_SERIES_TIGER_POINT)
+	if (chipset == CHIPSET_500_600_SERIES_TIGER_ALDER_POINT)
 		_decode_espi_frequency_500_series(freq);
 	else
 		_decode_espi_frequency(freq);
@@ -613,7 +613,7 @@ static int is_platform_with_pch(void)
 static int is_platform_with_100x_series_pch(void)
 {
 	if (chipset >= CHIPSET_100_200_SERIES_SUNRISE_POINT &&
-			chipset <= CHIPSET_500_SERIES_TIGER_POINT)
+			chipset <= CHIPSET_500_600_SERIES_TIGER_ALDER_POINT)
 		return 1;
 
 	return 0;
@@ -638,7 +638,7 @@ static void dump_fcba(const fcba_t *fcba, const fpsba_t *fpsba)
 	if (is_platform_with_100x_series_pch() &&
 			chipset != CHIPSET_100_200_SERIES_SUNRISE_POINT) {
 		printf("\n  Read eSPI/EC Bus Frequency:          ");
-		if (chipset == CHIPSET_500_SERIES_TIGER_POINT)
+		if (chipset == CHIPSET_500_600_SERIES_TIGER_ALDER_POINT)
 			freq = (fpsba->pchstrp[22] & 0x38) >> 3;
 		else
 			freq = (fcba->flcomp >> 17) & 7;
@@ -911,7 +911,7 @@ static void dump_fd(char *image, int size)
 		printf("  FMSBA:   0x%x\n", ((fdb->flmap2) & 0xff) << 4);
 	}
 
-	if (chipset == CHIPSET_500_SERIES_TIGER_POINT) {
+	if (chipset == CHIPSET_500_600_SERIES_TIGER_ALDER_POINT) {
 		printf("FLMAP3:    0x%08x\n", fdb->flmap3);
 		printf("  Minor Revision ID:     0x%04x\n", (fdb->flmap3 >> 14) & 0x7f);
 		printf("  Major Revision ID:     0x%04x\n", (fdb->flmap3 >> 21) & 0x7ff);
@@ -1262,6 +1262,25 @@ static void lock_descriptor(const char *filename, char *image, int size)
 		}
 		break;
 	}
+
+	write_image(filename, image, size);
+}
+
+static void enable_cpu_read_me(const char *filename, char *image, int size)
+{
+	int rd_shift;
+	fmba_t *fmba = find_fmba(image, size);
+
+	if (!fmba)
+		exit(EXIT_FAILURE);
+
+	if (ifd_version >= IFD_VERSION_2)
+		rd_shift = FLMSTR_RD_SHIFT_V2;
+	else
+		rd_shift = FLMSTR_RD_SHIFT_V1;
+
+	/* CPU/BIOS can read ME. */
+	fmba->flmstr1 |= (1 << REGION_ME) << rd_shift;
 
 	write_image(filename, image, size);
 }
@@ -1626,6 +1645,7 @@ static void print_usage(const char *name)
 	       "   -e | --em100                          set SPI frequency to 20MHz and disable\n"
 	       "                                         Dual Output Fast Read Support\n"
 	       "   -l | --lock                           Lock firmware descriptor and ME region\n"
+	       "   -r | --read				 Enable CPU/BIOS read access for ME region\n"
 	       "   -u | --unlock                         Unlock firmware descriptor and ME region\n"
 	       "   -M | --altmedisable <0|1>             Set the MeDisable and AltMeDisable (or HAP for skylake or newer platform)\n"
 	       "                                         bits to disable ME\n"
@@ -1642,7 +1662,7 @@ static void print_usage(const char *name)
 	       "   -V | --newvalue                       The new value to write into PCH strap specified by -S\n"
 	       "   -v | --version:                       print the version\n"
 	       "   -h | --help:                          print this help\n\n"
-	       "<region> is one of Descriptor, BIOS, ME, GbE, Platform\n"
+	       "<region> is one of Descriptor, BIOS, ME, GbE, Platform, res1, res2, res3\n"
 	       "\n");
 }
 
@@ -1652,7 +1672,7 @@ int main(int argc, char *argv[])
 	int mode_dump = 0, mode_extract = 0, mode_inject = 0, mode_spifreq = 0;
 	int mode_em100 = 0, mode_locked = 0, mode_unlocked = 0, mode_validate = 0;
 	int mode_layout = 0, mode_newlayout = 0, mode_density = 0, mode_setstrap = 0;
-	int mode_altmedisable = 0, altmedisable = 0;
+	int mode_read = 0, mode_altmedisable = 0, altmedisable = 0;
 	char *region_type_string = NULL, *region_fname = NULL;
 	const char *layout_fname = NULL;
 	char *new_filename = NULL;
@@ -1675,6 +1695,7 @@ int main(int argc, char *argv[])
 		{"altmedisable", 1, NULL, 'M'},
 		{"em100", 0, NULL, 'e'},
 		{"lock", 0, NULL, 'l'},
+		{"read", 0, NULL, 'r'},
 		{"unlock", 0, NULL, 'u'},
 		{"version", 0, NULL, 'v'},
 		{"help", 0, NULL, 'h'},
@@ -1685,7 +1706,7 @@ int main(int argc, char *argv[])
 		{0, 0, 0, 0}
 	};
 
-	while ((opt = getopt_long(argc, argv, "S:V:df:D:C:M:xi:n:O:s:p:eluvth?",
+	while ((opt = getopt_long(argc, argv, "S:V:df:D:C:M:xi:n:O:s:p:elruvth?",
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'd':
@@ -1732,6 +1753,12 @@ int main(int argc, char *argv[])
 				region_type = 3;
 			else if (!strcasecmp("Platform", region_type_string))
 				region_type = 4;
+			else if (!strcasecmp("res1", region_type_string))
+				region_type = 5;
+			else if (!strcasecmp("res2", region_type_string))
+				region_type = 6;
+			else if (!strcasecmp("res3", region_type_string))
+				region_type = 7;
 			else if (!strcasecmp("EC", region_type_string))
 				region_type = 8;
 			if (region_type == -1) {
@@ -1852,6 +1879,9 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "Locking/Unlocking FD and ME are mutually exclusive\n");
 				exit(EXIT_FAILURE);
 			}
+			break;
+		case 'r':
+			mode_read = 1;
 			break;
 		case 'u':
 			mode_unlocked = 1;
@@ -1993,6 +2023,9 @@ int main(int argc, char *argv[])
 
 	if (mode_locked)
 		lock_descriptor(new_filename, image, size);
+
+	if (mode_read)
+		enable_cpu_read_me(new_filename, image, size);
 
 	if (mode_unlocked)
 		unlock_descriptor(new_filename, image, size);

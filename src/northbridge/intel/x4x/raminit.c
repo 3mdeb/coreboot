@@ -14,7 +14,7 @@
 #include <timestamp.h>
 #include <types.h>
 
-#include "iomap.h"
+#include "raminit.h"
 #include "x4x.h"
 
 #define MRC_CACHE_VERSION 0
@@ -98,7 +98,6 @@ static void select_cas_dramfreq_ddr2(struct sysinfo *s,
 			break;
 		try_cas--;
 	}
-
 
 	if ((s->selected_timings.CAS < 3) || (s->selected_timings.tclk == 0))
 		die("Could not find common memory frequency and CAS\n");
@@ -410,7 +409,6 @@ static int ddr3_save_dimminfo(u8 dimm_idx, u8 *raw_spd,
 
 	return CB_SUCCESS;
 }
-
 
 static void select_discrete_timings(struct sysinfo *s,
 				const struct abs_timings *timings)

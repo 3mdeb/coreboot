@@ -5,8 +5,8 @@
 #include <delay.h>
 #include <string.h>
 #include <types.h>
+#include "raminit.h"
 #include "x4x.h"
-#include "iomap.h"
 
 static void print_dll_setting(const struct dll_setting *dll_setting,
 			u8 default_verbose)
@@ -128,7 +128,6 @@ static int decrement_dq_dqs(const struct sysinfo *s,
 	set_db(s, dq_dqs_setting);
 	return CB_SUCCESS;
 }
-
 
 #define WT_PATTERN_SIZE 80
 

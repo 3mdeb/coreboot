@@ -110,7 +110,6 @@ int cpu_config_tdp_levels(void)
 	return (platform_info.hi >> 1) & 3;
 }
 
-
 static void configure_thermal_target(void)
 {
 	struct cpu_intel_model_2065x_config *conf;
@@ -148,16 +147,6 @@ static void configure_misc(void)
 	msr.hi = 0;
 	wrmsr(IA32_THERM_INTERRUPT, msr);
 }
-
-static void enable_lapic_tpr(void)
-{
-	msr_t msr;
-
-	msr = rdmsr(MSR_PIC_MSG_CONTROL);
-	msr.lo &= ~(1 << 10);	/* Enable APIC TPR updates */
-	wrmsr(MSR_PIC_MSG_CONTROL, msr);
-}
-
 
 static void set_max_ratio(void)
 {
@@ -217,6 +206,8 @@ static void model_2065x_init(struct device *cpu)
 
 	/* Set virtualization based on Kconfig option */
 	set_vmx_and_lock();
+
+	set_aesni_lock();
 
 	/* Configure Enhanced SpeedStep and Thermal Sensors */
 	configure_misc();
@@ -281,7 +272,6 @@ static void post_mp_init(void)
 	/* Lock down the SMRAM space. */
 	smm_lock();
 }
-
 
 static const struct mp_ops mp_ops = {
 	.pre_mp_init = pre_mp_init,

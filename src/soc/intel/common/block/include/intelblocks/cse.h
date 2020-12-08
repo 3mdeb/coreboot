@@ -4,6 +4,7 @@
 #define SOC_INTEL_COMMON_CSE_H
 
 #include <types.h>
+#include <vb2_api.h>
 
 /* MKHI Command groups */
 #define MKHI_GROUP_ID_CBM	0x0
@@ -60,6 +61,24 @@ struct mkhi_hdr {
 	uint8_t rsvd;
 	uint8_t result;
 } __packed;
+
+/* CSE FW Version */
+struct fw_version {
+	uint16_t major;
+	uint16_t minor;
+	uint16_t hotfix;
+	uint16_t build;
+} __packed;
+
+/*
+ * CSE RW metadata structure
+ * fw_version - CSE RW firmware version
+ * sha256 - Hash of the CSE RW binary.
+ */
+struct cse_rw_metadata {
+	struct fw_version version;
+	uint8_t sha256[VB2_SHA256_DIGEST_SIZE];
+};
 
 /* set up device for use in early boot enviroument with temp bar */
 void heci_init(uintptr_t bar);
@@ -121,12 +140,10 @@ enum rst_req_type {
 };
 
 /*
- * Sends GLOBAL_RESET_REQ cmd to CSE.
- * The reset type can be one of the above defined reset type.
+ * Sends GLOBAL_RESET_REQ cmd to CSE with reset type GLOBAL_RESET.
  * Returns 0 on failure and 1 on success.
  */
-int cse_request_global_reset(enum rst_req_type rst_type);
-
+int cse_request_global_reset(void);
 /*
  * Sends HMRFPO_ENABLE command.
  * HMRFPO - Host ME Region Flash Protection Override.

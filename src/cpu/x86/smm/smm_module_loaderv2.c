@@ -134,6 +134,12 @@ static int smm_create_map(uintptr_t smbase, unsigned int num_cpus,
 		return 0;
 	}
 
+	if (stub_size > ss_size) {
+		printk(BIOS_ERR, "%s: Save state larger than SMM stub size\n", __func__);
+		printk(BIOS_ERR, "    Decrease stub size or increase the size allocated for the save state\n");
+		return 0;
+	}
+
 	for (i = 0; i < num_cpus; i++) {
 		cpus[i].smbase = base;
 		cpus[i].entry = base + smm_entry_offset;
@@ -215,7 +221,7 @@ u32 smm_get_cpu_smbase(unsigned int cpu_num)
  */
 
 static int smm_place_entry_code(uintptr_t smbase, unsigned int num_cpus,
-				unsigned int stack_top, const struct smm_loader_params *params)
+				uintptr_t stack_top, const struct smm_loader_params *params)
 {
 	unsigned int i;
 	unsigned int size;
@@ -229,7 +235,7 @@ static int smm_place_entry_code(uintptr_t smbase, unsigned int num_cpus,
 			if (cpus[num_cpus - 1].smbase +
 				params->smm_main_entry_offset < stack_top) {
 				printk(BIOS_ERR, "%s: stack encroachment\n", __func__);
-				printk(BIOS_ERR, "%s: smbase %zx, stack_top %x\n",
+				printk(BIOS_ERR, "%s: smbase %zx, stack_top %lx\n",
 					__func__, cpus[num_cpus].smbase, stack_top);
 				return 0;
 			}
@@ -239,7 +245,7 @@ static int smm_place_entry_code(uintptr_t smbase, unsigned int num_cpus,
 		return 0;
 	}
 
-	printk(BIOS_INFO, "%s: smbase %zx, stack_top %x\n",
+	printk(BIOS_INFO, "%s: smbase %zx, stack_top %lx\n",
 		__func__, cpus[num_cpus-1].smbase, stack_top);
 
 	/* start at 1, the first CPU stub code is already there */
@@ -305,9 +311,9 @@ static int smm_stub_place_staggered_entry_points(char *base,
 	 * sets up the stack, and then jumps to common SMI handler
 	 */
 	if (params->num_concurrent_save_states > 1 || stub_entry_offset != 0) {
-		rc = smm_place_entry_code((unsigned int)base,
-			params->num_concurrent_save_states,
-			(unsigned int)params->stack_top, params);
+		rc = smm_place_entry_code((uintptr_t)base,
+					  params->num_concurrent_save_states,
+					  (uintptr_t)params->stack_top, params);
 	}
 	return rc;
 }
@@ -378,7 +384,7 @@ static int smm_module_setup_stub(void *smbase, size_t smm_size,
 	/* The save state size encroached over the first SMM entry point. */
 	if (size <= params->smm_main_entry_offset) {
 		printk(BIOS_ERR, "%s: encroachment over SMM entry point\n", __func__);
-		printk(BIOS_ERR, "%s: state save size: %zx : smm_entry_offset -> %x\n",
+		printk(BIOS_ERR, "%s: state save size: %zx : smm_entry_offset -> %lx\n",
 			__func__, size, params->smm_main_entry_offset);
 		return -1;
 	}
@@ -407,12 +413,14 @@ static int smm_module_setup_stub(void *smbase, size_t smm_size,
 	 * for default handler, but for relocated handler it lives at the beginning
 	 * of SMRAM which is TSEG base
 	 */
-	size = params->num_concurrent_stacks * params->per_cpu_stack_size;
-	stacks_top = smm_stub_place_stacks((char *)params->smram_start, size, params);
+	const size_t total_stack_size = params->num_concurrent_stacks *
+		params->per_cpu_stack_size;
+	stacks_top = smm_stub_place_stacks((char *)params->smram_start, total_stack_size,
+					   params);
 	if (stacks_top == NULL) {
 		printk(BIOS_ERR, "%s: not enough space for stacks\n", __func__);
 		printk(BIOS_ERR, "%s: ....need -> %p : available -> %zx\n", __func__,
-			base, size);
+			base, total_stack_size);
 		return -1;
 	}
 	params->stack_top = stacks_top;
@@ -440,8 +448,8 @@ static int smm_module_setup_stub(void *smbase, size_t smm_size,
 	stub_params->runtime.save_state_size = params->per_cpu_save_state_size;
 	stub_params->runtime.num_cpus = params->num_concurrent_stacks;
 
-	printk(BIOS_DEBUG, "%s: stack_end = 0x%x\n",
-		__func__, stub_params->runtime.smbase);
+	printk(BIOS_DEBUG, "%s: stack_end = 0x%lx\n",
+		__func__, stub_params->stack_top - total_stack_size);
 	printk(BIOS_DEBUG,
 		"%s: stack_top = 0x%x\n", __func__, stub_params->stack_top);
 	printk(BIOS_DEBUG, "%s: stack_size = 0x%x\n",
@@ -589,7 +597,6 @@ int smm_load_module(void *smram, size_t size, struct smm_loader_params *params)
 		fxsave_size = 0;
 		fxsave_area = NULL;
 	}
-
 
 	handler_size = rmodule_memory_size(&smm_mod);
 	base -= handler_size;

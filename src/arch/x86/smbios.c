@@ -430,6 +430,8 @@ static int smbios_write_type0(unsigned long *current, int handle)
 	t->system_bios_major_release = coreboot_major_revision;
 	t->system_bios_minor_release = coreboot_minor_revision;
 
+	smbios_ec_revision(&t->ec_major_release, &t->ec_minor_release);
+
 	t->bios_characteristics =
 		BIOS_CHARACTERISTICS_PCI_SUPPORTED |
 		BIOS_CHARACTERISTICS_SELECTABLE_BOOT |
@@ -461,6 +463,12 @@ static int get_socket_type(void)
 	return 0x02; /* Unknown */
 }
 
+unsigned int __weak smbios_memory_error_correction_type(struct memory_info *meminfo)
+{
+	return meminfo->ecc_capable ?
+		MEMORY_ARRAY_ECC_SINGLE_BIT : MEMORY_ARRAY_ECC_NONE;
+}
+
 unsigned int __weak smbios_processor_external_clock(void)
 {
 	return 0; /* Unknown */
@@ -474,6 +482,57 @@ unsigned int __weak smbios_processor_characteristics(void)
 unsigned int __weak smbios_processor_family(struct cpuid_result res)
 {
 	return (res.eax > 0) ? 0x0c : 0x6;
+}
+
+unsigned int __weak smbios_cache_error_correction_type(u8 level)
+{
+	return SMBIOS_CACHE_ERROR_CORRECTION_UNKNOWN;
+}
+
+unsigned int __weak smbios_cache_sram_type(void)
+{
+	return  SMBIOS_CACHE_SRAM_TYPE_UNKNOWN;
+}
+
+unsigned int __weak smbios_cache_conf_operation_mode(u8 level)
+{
+	return SMBIOS_CACHE_OP_MODE_UNKNOWN; /* Unknown */
+}
+
+/* Returns the processor voltage in 100mV units */
+unsigned int __weak smbios_cpu_get_voltage(void)
+{
+	return 0; /* Unknown */
+}
+
+static size_t get_number_of_caches(struct cpuid_result res_deterministic_cache)
+{
+	size_t max_logical_cpus_sharing_cache = 0;
+	size_t number_of_cpus_per_package = 0;
+	size_t max_logical_cpus_per_package = 0;
+	struct cpuid_result res;
+
+	if (!cpu_have_cpuid())
+		return 1;
+
+	res = cpuid(1);
+
+	max_logical_cpus_per_package = (res.ebx >> 16) & 0xff;
+
+	max_logical_cpus_sharing_cache  = ((res_deterministic_cache.eax >> 14) & 0xfff) + 1;
+
+	/* Check if it's last level cache */
+	if (max_logical_cpus_sharing_cache == max_logical_cpus_per_package)
+		return 1;
+
+	if (cpuid_get_max_func() >= 0xb) {
+		res = cpuid_ext(0xb, 1);
+		number_of_cpus_per_package = res.ebx & 0xff;
+	} else {
+		number_of_cpus_per_package = max_logical_cpus_per_package;
+	}
+
+	return number_of_cpus_per_package / max_logical_cpus_sharing_cache;
 }
 
 static int smbios_write_type1(unsigned long *current, int handle)
@@ -548,10 +607,13 @@ static int smbios_write_type3(unsigned long *current, int handle)
 
 static int smbios_write_type4(unsigned long *current, int handle)
 {
+	unsigned int cpu_voltage;
 	struct cpuid_result res;
 	struct smbios_type4 *t = (struct smbios_type4 *)*current;
 	int len = sizeof(struct smbios_type4);
 	uint16_t characteristics = 0;
+	static unsigned int cnt = 0;
+	char buf[8];
 
 	/* Provide sane defaults even for CPU without CPUID */
 	res.eax = res.edx = 0;
@@ -564,6 +626,10 @@ static int smbios_write_type4(unsigned long *current, int handle)
 	t->type = SMBIOS_PROCESSOR_INFORMATION;
 	t->handle = handle;
 	t->length = len - 2;
+
+	snprintf(buf, sizeof(buf), "CPU%d", cnt++);
+	t->socket_designation = smbios_add_string(t->eos, buf);
+
 	t->processor_id[0] = res.eax;
 	t->processor_id[1] = res.edx;
 	t->processor_manufacturer = smbios_cpu_vendor(t->eos);
@@ -588,11 +654,13 @@ static int smbios_write_type4(unsigned long *current, int handle)
 		}
 		t->core_count2 = leaf_b_cores / leaf_b_threads;
 		t->core_count = t->core_count2 > 0xff ? 0xff : t->core_count2;
-		t->thread_count2 = leaf_b_threads;
+		t->thread_count2 = leaf_b_cores;
+		t->thread_count = t->thread_count2 > 0xff ? 0xff : t->thread_count2;
 	} else {
 		t->core_count = (res.ebx >> 16) & 0xff;
 		t->core_count2 = t->core_count;
 		t->thread_count2 = t->core_count2;
+		t->thread_count = t->thread_count2;
 	}
 	/* Assume we enable all the cores always, capped only by MAX_CPUS */
 	t->core_enabled = MIN(t->core_count, CONFIG_MAX_CPUS);
@@ -631,6 +699,9 @@ static int smbios_write_type4(unsigned long *current, int handle)
 		}
 	}
 	t->processor_characteristics = characteristics | smbios_processor_characteristics();
+	cpu_voltage = smbios_cpu_get_voltage();
+	if (cpu_voltage > 0)
+		t->voltage = 0x80 | cpu_voltage;
 
 	*current += len;
 	return len;
@@ -652,7 +723,6 @@ static int smbios_write_type7(unsigned long *current,
 {
 	struct smbios_type7 *t = (struct smbios_type7 *)*current;
 	int len = sizeof(struct smbios_type7);
-	static unsigned int cnt = 0;
 	char buf[8];
 
 	memset(t, 0, sizeof(struct smbios_type7));
@@ -660,13 +730,13 @@ static int smbios_write_type7(unsigned long *current,
 	t->handle = handle;
 	t->length = len - 2;
 
-	snprintf(buf, sizeof(buf), "CACHE%x", cnt++);
+	snprintf(buf, sizeof(buf), "CACHE%x", level);
 	t->socket_designation = smbios_add_string(t->eos, buf);
 
 	t->cache_configuration = SMBIOS_CACHE_CONF_LEVEL(level) |
 		SMBIOS_CACHE_CONF_LOCATION(0) | /* Internal */
 		SMBIOS_CACHE_CONF_ENABLED(1) | /* Enabled */
-		SMBIOS_CACHE_CONF_OPERATION_MODE(3); /* Unknown */
+		SMBIOS_CACHE_CONF_OPERATION_MODE(smbios_cache_conf_operation_mode(level));
 
 	if (max_cache_size < (SMBIOS_CACHE_SIZE_MASK * KiB)) {
 		t->max_cache_size = max_cache_size / KiB;
@@ -706,7 +776,7 @@ static int smbios_write_type7(unsigned long *current,
 	t->supported_sram_type = sram_type;
 	t->current_sram_type = sram_type;
 	t->cache_speed = 0; /* Unknown */
-	t->error_correction_type = SMBIOS_CACHE_ERROR_CORRECTION_UNKNOWN;
+	t->error_correction_type = smbios_cache_error_correction_type(level);
 	t->system_cache_type = type;
 
 	len = t->length + smbios_string_table_len(t->eos);
@@ -801,7 +871,8 @@ static int smbios_write_type7_cache_parameters(unsigned long *current,
 		const size_t partitions = CPUID_CACHE_PHYS_LINE(res) + 1;
 		const size_t cache_line_size = CPUID_CACHE_COHER_LINE(res) + 1;
 		const size_t number_of_sets = CPUID_CACHE_NO_OF_SETS(res) + 1;
-		const size_t cache_size = assoc * partitions * cache_line_size * number_of_sets;
+		const size_t cache_size = assoc * partitions * cache_line_size * number_of_sets
+							* get_number_of_caches(res);
 
 		if (!cache_type)
 			/* No more caches in the system */
@@ -830,7 +901,7 @@ static int smbios_write_type7_cache_parameters(unsigned long *current,
 		const int h = (*handle)++;
 
 		update_max(len, *max_struct_size, smbios_write_type7(current, h,
-			   level, SMBIOS_CACHE_SRAM_TYPE_UNKNOWN, associativity,
+			   level, smbios_cache_sram_type(), associativity,
 			   type, cache_size, cache_size));
 
 		if (type4) {
@@ -970,8 +1041,7 @@ static int smbios_write_type16(unsigned long *current, int *handle)
 
 	t->location = MEMORY_ARRAY_LOCATION_SYSTEM_BOARD;
 	t->use = MEMORY_ARRAY_USE_SYSTEM;
-	t->memory_error_correction = meminfo->ecc_capable ?
-				MEMORY_ARRAY_ECC_SINGLE_BIT : MEMORY_ARRAY_ECC_NONE;
+	t->memory_error_correction = smbios_memory_error_correction_type(meminfo);
 
 	/* no error information handle available */
 	t->memory_error_information_handle = 0xFFFE;
@@ -1013,7 +1083,7 @@ static int smbios_write_type17(unsigned long *current, int *handle, int type16)
 	return totallen;
 }
 
-static int smbios_write_type19(unsigned long *current, int *handle)
+static int smbios_write_type19(unsigned long *current, int *handle, int type16)
 {
 	struct smbios_type19 *t = (struct smbios_type19 *)*current;
 	int len = sizeof(struct smbios_type19);
@@ -1029,6 +1099,7 @@ static int smbios_write_type19(unsigned long *current, int *handle)
 	t->type = SMBIOS_MEMORY_ARRAY_MAPPED_ADDRESS;
 	t->length = len - 2;
 	t->handle = *handle;
+	t->memory_array_handle = type16;
 
 	for (i = 0; i < meminfo->dimm_cnt && i < ARRAY_SIZE(meminfo->dimm); i++) {
 		if (meminfo->dimm[i].dimm_size > 0) {
@@ -1280,7 +1351,7 @@ unsigned long smbios_write_tables(unsigned long current)
 	const int type16 = handle;
 	update_max(len, max_struct_size, smbios_write_type16(&current, &handle));
 	update_max(len, max_struct_size, smbios_write_type17(&current, &handle, type16));
-	update_max(len, max_struct_size, smbios_write_type19(&current, &handle));
+	update_max(len, max_struct_size, smbios_write_type19(&current, &handle, type16));
 	update_max(len, max_struct_size, smbios_write_type32(&current, handle++));
 
 	update_max(len, max_struct_size, smbios_walk_device_tree(all_devices,

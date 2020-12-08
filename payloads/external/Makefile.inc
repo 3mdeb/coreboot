@@ -1,10 +1,3 @@
-################################################################################
-##
-##
-## Copyright (C) 2009-2010 coresystems GmbH
-## Copyright (C) 2015 Google Inc.
-## Copyright (C) 2017 Facebook Inc.
-##
 ## SPDX-License-Identifier: GPL-2.0-only
 
 # set up payload config and version files for later inclusion
@@ -104,6 +97,31 @@ ifneq ($(strip $(CONFIG_SEABIOS_BOOTORDER_FILE)),)
 cbfs-files-y += bootorder
 bootorder-file := $(strip $(CONFIG_SEABIOS_BOOTORDER_FILE))
 bootorder-type := raw
+endif
+
+ifneq ($(CONFIG_SEABIOS_PS2_TIMEOUT),)
+ifneq ($(CONFIG_SEABIOS_PS2_TIMEOUT),0)
+ifneq ($(CONFIG_UPDATE_IMAGE),y)
+INTERMEDIATE+=seabios_ps2_timeout
+seabios_ps2_timeout: $(obj)/coreboot.pre $(CBFSTOOL)
+	@printf "    SeaBIOS    Wait up to $(CONFIG_SEABIOS_PS2_TIMEOUT) ms for PS/2 keyboard controller initialization\n"
+	$(CBFSTOOL) $< add-int -i $(CONFIG_SEABIOS_PS2_TIMEOUT) -n etc/ps2-keyboard-spinup
+endif
+endif
+endif
+
+ifeq ($(CONFIG_SEABIOS_ADD_SERCON_PORT_FILE),y)
+INTERMEDIATE+=seabios_sercon
+seabios_sercon: $(obj)/coreboot.pre $(CBFSTOOL)
+	@printf "    SeaBIOS    Add sercon-port file\n"
+	$(CBFSTOOL) $< add-int -i $(CONFIG_SEABIOS_SERCON_PORT_ADDR) -n etc/sercon-port
+endif
+
+ifeq ($(CONFIG_SEABIOS_THREAD_OPTIONROMS),y)
+INTERMEDIATE+=seabios_thread_optionroms
+seabios_thread_optionroms: $(obj)/coreboot.pre $(CBFSTOOL)
+	@printf "    SeaBIOS    Thread optionroms\n"
+	$(CBFSTOOL) $< add-int -i 2 -n etc/threads
 endif
 
 # Depthcharge
@@ -303,3 +321,8 @@ payloads/external/Yabits/uefi/build/uefi.elf yabits:
 		CONFIG_YABITS_MASTER=$(CONFIG_YABITS_MASTER) \
 		CONFIG_YABITS_STABLE=$(CONFIG_YABITS_STABLE) \
 		MFLAGS= MAKEFLAGS=
+
+# BOOTBOOT
+
+payloads/external/BOOTBOOT/bootboot/dist/bootbootcb.elf:
+	$(MAKE) -C payloads/external/BOOTBOOT all

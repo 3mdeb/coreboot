@@ -26,6 +26,7 @@
 #include <soc/pci_devs.h>
 #include <soc/ramstage.h>
 #include <soc/systemagent.h>
+#include <soc/usb.h>
 #include <string.h>
 
 #include "chip.h"
@@ -151,16 +152,16 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		if (config->usb2_ports[i].enable)
 			params->Usb2OverCurrentPin[i] = config->usb2_ports[i].ocpin;
 		else
-			params->Usb2OverCurrentPin[i] = 0xff;
+			params->Usb2OverCurrentPin[i] = OC_SKIP;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(config->usb3_ports); i++) {
 		params->PortUsb30Enable[i] = config->usb3_ports[i].enable;
-		if (config->usb3_ports[i].enable) {
+		if (config->usb3_ports[i].enable)
 			params->Usb3OverCurrentPin[i] = config->usb3_ports[i].ocpin;
-		} else {
-			params->Usb3OverCurrentPin[i] = 0xff;
-		}
+		else
+			params->Usb3OverCurrentPin[i] = OC_SKIP;
+
 		if (config->usb3_ports[i].tx_de_emp) {
 			params->Usb3HsioTxDeEmphEnable[i] = 1;
 			params->Usb3HsioTxDeEmph[i] =
@@ -210,8 +211,10 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	       sizeof(params->PcieRpHotPlug));
 	for (i = 0; i < CONFIG_MAX_ROOT_PORTS; i++) {
 		params->PcieRpMaxPayload[i] = config->PcieRpMaxPayload[i];
-		if (config->PcieRpAspm[i])
-			params->PcieRpAspm[i] = config->PcieRpAspm[i] - 1;
+		if (config->pcie_rp_aspm[i])
+			params->PcieRpAspm[i] = config->pcie_rp_aspm[i] - 1;
+		if (config->pcie_rp_l1substates[i])
+			params->PcieRpL1Substates[i] = config->pcie_rp_l1substates[i] - 1;
 	}
 
 	/*
@@ -232,6 +235,8 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 
 	/* Legacy 8254 timer support */
 	params->Early8254ClockGatingEnable = !CONFIG(USE_LEGACY_8254_TIMER);
+
+	params->EnableTcoTimer = CONFIG(USE_PM_ACPI_TIMER);
 
 	memcpy(params->SerialIoDevMode, config->SerialIoDevMode,
 	       sizeof(params->SerialIoDevMode));
@@ -293,8 +298,8 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 
 	dev = pcidev_path_on_root(SA_DEVFN_TS);
 	params->Device4Enable = dev && dev->enabled;
-	params->EnableTcoTimer = !config->PmTimerDisabled;
-
+	dev = pcidev_path_on_root(PCH_DEVFN_THERMAL);
+	params->PchThermalDeviceEnable = dev && dev->enabled;
 
 	tconfig->PchLockDownGlobalSmi = config->LockDownConfigGlobalSmi;
 	tconfig->PchLockDownRtcLock = config->LockDownConfigRtcLock;
@@ -319,16 +324,11 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		 */
 		params->SpiFlashCfgLockDown = 0;
 	}
-	/* only replacing preexisting subsys ID defaults when non-zero */
-	if (CONFIG_SUBSYSTEM_VENDOR_ID != 0) {
-		params->DefaultSvid = CONFIG_SUBSYSTEM_VENDOR_ID;
-		params->PchSubSystemVendorId = CONFIG_SUBSYSTEM_VENDOR_ID;
-	}
-
-	if (CONFIG_SUBSYSTEM_DEVICE_ID != 0) {
-		params->DefaultSid = CONFIG_SUBSYSTEM_DEVICE_ID;
-		params->PchSubSystemId = CONFIG_SUBSYSTEM_DEVICE_ID;
-	}
+	/* FSP should let coreboot set subsystem IDs, which are read/write-once */
+	params->DefaultSvid = 0;
+	params->PchSubSystemVendorId = 0;
+	params->DefaultSid = 0;
+	params->PchSubSystemId = 0;
 
 	params->PchPmWolEnableOverride = config->WakeConfigWolEnableOverride;
 	params->PchPmPcieWakeFromDeepSx = config->WakeConfigPcieWakeFromDeepSx;
@@ -429,10 +429,12 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	else
 		params->PeiGraphicsPeimInit = 0;
 
+	params->PavpEnable = CONFIG(PAVP);
+
 	soc_irq_settings(params);
 }
 
-/* Mainboard GPIO Configuration */
+/* Mainboard FSP Configuration */
 __weak void mainboard_silicon_init_params(FSP_S_CONFIG *params)
 {
 	printk(BIOS_DEBUG, "WEAK: %s/%s called\n", __FILE__, __func__);

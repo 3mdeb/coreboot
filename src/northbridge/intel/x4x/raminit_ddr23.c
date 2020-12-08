@@ -13,7 +13,7 @@
 #include <southbridge/intel/i82801jx/i82801jx.h>
 #endif
 #include <string.h>
-#include "iomap.h"
+#include "raminit.h"
 #include "x4x.h"
 
 #define ME_UMA_SIZEMB 0
@@ -32,7 +32,6 @@ u32 ddr_to_mhz(u32 speed)
 
 	return mhz[speed];
 }
-
 
 static void program_crossclock(struct sysinfo *s)
 {
@@ -1282,7 +1281,6 @@ u32 test_address(int channel, int rank)
 	ASSERT(channel <= 1 && rank < 4);
 	return channel * 512 * MiB + rank * 128 * MiB;
 }
-
 
 /* DDR3 Rank1 Address mirror
  * swap the following pins:

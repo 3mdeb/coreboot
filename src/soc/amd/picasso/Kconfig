@@ -24,27 +24,27 @@ config CPU_SPECIFIC_OPTIONS
 	select IOAPIC
 	select HAVE_EM100_SUPPORT
 	select HAVE_USBDEBUG_OPTIONS
-	select TSC_MONOTONIC_TIMER
 	select SOC_AMD_COMMON_BLOCK_SPI
-	select TSC_SYNC_LFENCE
-	select UDELAY_TSC
 	select SOC_AMD_COMMON
-	select SOC_AMD_COMMON_BLOCK
+	select SOC_AMD_COMMON_BLOCK_NONCAR
 	select SOC_AMD_COMMON_BLOCK_HAS_ESPI
 	select SOC_AMD_COMMON_BLOCK_IOMMU
 	select SOC_AMD_COMMON_BLOCK_ACPIMMIO
 	select SOC_AMD_COMMON_BLOCK_BANKED_GPIOS
 	select SOC_AMD_COMMON_BLOCK_ACPI
+	select SOC_AMD_COMMON_BLOCK_AOAC
 	select SOC_AMD_COMMON_BLOCK_GRAPHICS
 	select SOC_AMD_COMMON_BLOCK_LPC
 	select SOC_AMD_COMMON_BLOCK_PCI
 	select SOC_AMD_COMMON_BLOCK_HDA
 	select SOC_AMD_COMMON_BLOCK_SATA
 	select SOC_AMD_COMMON_BLOCK_SMBUS
+	select SOC_AMD_COMMON_BLOCK_SMI
+	select SOC_AMD_COMMON_BLOCK_SMU
+	select SOC_AMD_COMMON_BLOCK_TSC_FAM17H_19H
 	select SOC_AMD_COMMON_BLOCK_PSP_GEN2
 	select PROVIDES_ROM_SHARING
 	select BOOT_DEVICE_SUPPORTS_WRITES if BOOT_DEVICE_SPI_FLASH
-	select BOOT_DEVICE_SPI_FLASH_RW_NOMMAP_EARLY if BOOT_DEVICE_SPI_FLASH
 	select PARALLEL_MP
 	select PARALLEL_MP_AP_WORK
 	select HAVE_SMI_HANDLER
@@ -58,9 +58,19 @@ config CPU_SPECIFIC_OPTIONS
 	select SUPPORT_CPU_UCODE_IN_CBFS
 	select ACPI_NO_SMI_GNVS
 
-config MEMLAYOUT_LD_FILE
-	string
-	default "src/soc/amd/picasso/memlayout.ld"
+config FSP_M_FILE
+	string "FSP-M (memory init) binary path and filename"
+	depends on ADD_FSP_BINARIES
+	default "3rdparty/amd_blobs/picasso/PICASSO_M.fd"
+	help
+	  The path and filename of the FSP-M binary for this platform.
+
+config FSP_S_FILE
+	string "FSP-S (silicon init) binary path and filename"
+	depends on ADD_FSP_BINARIES
+	default "3rdparty/amd_blobs/picasso/PICASSO_S.fd"
+	help
+	  The path and filename of the FSP-S binary for this platform.
 
 config EARLY_RESERVED_DRAM_BASE
 	hex
@@ -194,6 +204,10 @@ config VERSTAGE_ADDR
 	hex
 	default 0x4000000
 
+config MAX_CPUS
+	int
+	default 8
+
 config VGA_BIOS_ID
 	string
 	default "1002,15d8,c1"
@@ -308,12 +322,10 @@ endchoice
 
 config PICASSO_UART_LEGACY
 	bool "Decode legacy I/O range"
-	depends on PICASSO_CONSOLE_UART # TODO: shouldn't depend on this
 	help
-	  Assign I/O 3F8, 2F8, etc. to a Picasso UART.  Only a single UART may
-	  decode legacy addresses and this option enables the one used for the
-	  console.  A UART accessed with I/O does not allow all the features
-	  of MMIO.  The MMIO decode is still present when this option is used.
+	  Assign I/O 3F8, 2F8, etc. to a Picasso UART. A UART accessed with I/O
+	  does not allow all the features of MMIO. The MMIO decode is still
+	  present when this option is used.
 
 config CONSOLE_UART_BASE_ADDRESS
 	depends on CONSOLE_SERIAL && PICASSO_CONSOLE_UART
@@ -356,6 +368,14 @@ config ACPI_BERT_SIZE
 	  Specify the amount of DRAM reserved for gathering the data used to
 	  generate the ACPI table.
 
+config ACPI_SSDT_PSD_INDEPENDENT
+	bool "Allow core p-state independent transitions"
+	default y
+	help
+	  AMD recommends the ACPI _PSD object to be configured to cause
+	  cores to transition between p-states independently. A vendor may
+	  choose to generate _PSD object to allow cores to transition together.
+
 config CHROMEOS
 	select CHROMEOS_RAMOOPS_DYNAMIC
 	select ALWAYS_LOAD_OPROM
@@ -369,12 +389,6 @@ config RO_REGION_ONLY
 config DRIVERS_I2C_DESIGNWARE_CLOCK_MHZ
 	int
 	default 150
-
-config PICASSO_LPC_IOMUX
-	bool
-	help
-	  Picasso's LPC bus signals are MUXed with some of the EMMC signals.
-	  Select this option if LPC signals are required.
 
 config DISABLE_SPI_FLASH_ROM_SHARING
 	def_bool n
@@ -399,14 +413,6 @@ config FSP_TEMP_RAM_SIZE
 	  The amount of coreboot-allocated heap and stack usage by the FSP.
 
 menu "PSP Configuration Options"
-
-config AMDFW_OUTSIDE_CBFS
-	bool
-	default n
-	help
-	  The AMDFW (PSP) is typically locatable in cbfs.  Select this
-	  option to manually attach the generated amdfw.rom outside of
-	  cbfs.  The location is selected by the FWM position.
 
 config AMD_FWM_POSITION_INDEX
 	int "Firmware Directory Table location (0 to 5)"
@@ -441,11 +447,11 @@ comment "AMD Firmware Directory Table set to location for 8MB ROM"
 comment "AMD Firmware Directory Table set to location for 16MB ROM"
 	depends on AMD_FWM_POSITION_INDEX = 5
 
-config AMD_PUBKEY_FILE
+config AMDFW_CONFIG_FILE
 	string
-	default "3rdparty/amd_blobs/picasso/PSP/AmdPubKeyRV.bin"
+	default "src/soc/amd/picasso/fw.cfg"
 
-config USE_PSPSCUREOS
+config USE_PSPSECUREOS
 	bool
 	default y
 	help
@@ -482,16 +488,6 @@ config PSP_WHITELIST_FILE
 	depends on HAVE_PSP_WHITELIST_FILE
 	default "3rdparty/amd_blobs/picasso/PSP/wtl-rvn.sbin"
 
-config PSP_BOOTLOADER_FILE
-	string "Specify the PSP Bootloader file path"
-	default "3rdparty/amd_blobs/picasso/PSP/PspBootLoader_WL_RV.sbin" if HAVE_PSP_WHITELIST_FILE
-	default "3rdparty/amd_blobs/picasso/PSP/PspBootLoader_prod_RV.sbin"
-	help
-	  Supply the name of the PSP bootloader file.
-
-	  Note that this option may conflict with the whitelist file if a
-	  different PSP bootloader binary is specified.
-
 config PSP_SHAREDMEM_SIZE
 	hex "Maximum size of shared memory area"
 	default 0x3000 if VBOOT
@@ -524,7 +520,6 @@ config PSP_VERSTAGE_SIGNING_TOKEN
 
 endmenu
 
-
 config VBOOT
 	select VBOOT_VBNV_CMOS
 	select VBOOT_VBNV_CMOS_BACKUP_TO_FLASH
@@ -536,6 +531,22 @@ config VBOOT_STARTS_BEFORE_BOOTBLOCK
 	help
 	  Runs verstage on the PSP.  Only available on
 	  certain Chrome OS branded parts from AMD.
+
+config VBOOT_HASH_BLOCK_SIZE
+	hex
+	default 0x9000
+	depends on VBOOT_STARTS_BEFORE_BOOTBLOCK
+	help
+	  Because the bulk of the time in psp_verstage to hash the RO cbfs is
+	  spent in the overhead of doing svc calls, increasing the hash block
+	  size significantly cuts the verstage hashing time as seen below.
+
+	  4k takes 180ms
+	  16k takes 44ms
+	  32k takes 33.7ms
+	  36k takes 32.5ms
+	  There's actually still room for an even bigger stack, but we've
+	  reached a point of diminishing returns.
 
 config CMOS_RECOVERY_BYTE
 	hex

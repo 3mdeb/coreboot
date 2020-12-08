@@ -17,7 +17,9 @@
 #include <amdblocks/espi.h>
 #include <amdblocks/lpc.h>
 #include <amdblocks/acpi.h>
+#include <amdblocks/smbus.h>
 #include <amdblocks/spi.h>
+#include <amdblocks/smi.h>
 #include <soc/acpi.h>
 #include <soc/cpu.h>
 #include <soc/i2c.h>
@@ -110,20 +112,6 @@ void sb_clk_output_48Mhz(void)
 	ctrl = misc_read32(MISC_CLK_CNTL1);
 	ctrl |= BP_X48M0_OUTPUT_EN;
 	misc_write32(MISC_CLK_CNTL1, ctrl);
-}
-
-static void fch_smbus_init(void)
-{
-	/* 400 kHz smbus speed. */
-	const uint8_t smbus_speed = (66000000 / (400000 * 4));
-
-	pm_write8(SMB_ASF_IO_BASE, SMB_BASE_ADDR >> 8);
-	smbus_write8(SMBTIMING, smbus_speed);
-	/* Clear all SMBUS status bits */
-	smbus_write8(SMBHSTSTAT, SMBHST_STAT_CLEAR);
-	smbus_write8(SMBSLVSTAT, SMBSLV_STAT_CLEAR);
-	asf_write8(SMBHSTSTAT, SMBHST_STAT_CLEAR);
-	asf_write8(SMBSLVSTAT, SMBSLV_STAT_CLEAR);
 }
 
 static void lpc_configure_decodes(void)

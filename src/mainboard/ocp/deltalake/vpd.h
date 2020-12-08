@@ -32,4 +32,12 @@
 #define FSP_DCI "fsp_dci_enable" /* 1 or 0: enable or disable DCI */
 #define FSP_DCI_DEFAULT 0 /* Default value when the VPD variable is not found */
 
+/* coreboot log level */
+#define COREBOOT_LOG_LEVEL "coreboot_log_level"
+#define COREBOOT_LOG_LEVEL_DEFAULT 4
+
+/* FSPM MemRefreshWatermark: 0:Auto, 1: high(default), 2: low */
+#define FSPM_MEMREFRESHWATERMARK "fspm_mem_refresh_watermark"
+#define FSPM_MEMREFRESHWATERMARK_DEFAULT 1
+
 #endif

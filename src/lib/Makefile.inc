@@ -47,6 +47,7 @@ bootblock-y += prog_ops.c
 bootblock-y += cbfs.c
 bootblock-$(CONFIG_GENERIC_GPIO_LIB) += gpio.c
 bootblock-y += libgcc.c
+bootblock-$(CONFIG_CBFS_VERIFICATION) += metadata_hash.c
 bootblock-$(CONFIG_GENERIC_UDELAY) += timer.c
 
 bootblock-$(CONFIG_COLLECT_TIMESTAMPS) += timestamp.c
@@ -68,10 +69,7 @@ verstage-y += libgcc.c
 verstage-y += memcmp.c
 verstage-y += string.c
 
-# TODO: Remove this when PSP bootblock timestamps are implemented.
-ifeq ($(CONFIG_VBOOT_STARTS_BEFORE_BOOTBLOCK),)
 verstage-$(CONFIG_COLLECT_TIMESTAMPS) += timestamp.c
-endif
 verstage-y += boot_device.c
 verstage-$(CONFIG_CONSOLE_CBMEM) += cbmem_console.c
 
@@ -103,6 +101,7 @@ ramstage-y += romstage_handoff.c
 romstage-y += romstage_handoff.c
 romstage-y += selfboot.c
 romstage-y += stack.c
+romstage-y += rtc.c
 ramstage-y += rtc.c
 
 romstage-$(CONFIG_COLLECT_TIMESTAMPS) += timestamp.c
@@ -142,8 +141,6 @@ ramstage-y += wrdd.c
 ramstage-$(CONFIG_CONSOLE_CBMEM) += cbmem_console.c
 ramstage-$(CONFIG_BOOTSPLASH) += bootsplash.c
 ramstage-$(CONFIG_BOOTSPLASH) += jpeg.c
-ramstage-$(CONFIG_TRACE) += trace.c
-postcar-$(CONFIG_TRACE) += trace.c
 ramstage-$(CONFIG_COLLECT_TIMESTAMPS) += timestamp.c
 ramstage-$(CONFIG_COVERAGE) += libgcov.c
 ramstage-y += edid.c
@@ -353,20 +350,24 @@ endif # CONFIG_RAMSTAGE_LIBHWBASE
 
 romstage-y += spd_bin.c
 
-ifeq ($(CONFIG_GENERIC_SPD_BIN),y)
+ifeq ($(CONFIG_HAVE_SPD_IN_CBFS),y)
 LIB_SPD_BIN = $(obj)/spd.bin
 
 LIB_SPD_DEPS = $(foreach f, $(SPD_SOURCES), src/mainboard/$(MAINBOARDDIR)/spd/$(f).spd.hex)
 
 # Include spd ROM data
 $(LIB_SPD_BIN): $(LIB_SPD_DEPS)
+	test -n "$(SPD_SOURCES)" || \
+	    (echo "HAVE_SPD_IN_CBFS is set but SPD_SOURCES is empty" && exit 1)
+	test -n "$(LIB_SPD_DEPS)" || \
+	    (echo "SPD_SOURCES is set but no SPD file was found" && exit 1)
 	for f in $(LIB_SPD_DEPS); \
 	 do for c in $$(cat $$f | grep --binary-files=text -v ^#); \
 	  do printf $$(printf '\\%o' 0x$$c); \
 	 done; \
 	done > $@
 
-cbfs-files-$(CONFIG_GENERIC_SPD_BIN) += spd.bin
+cbfs-files-y += spd.bin
 spd.bin-file := $(LIB_SPD_BIN)
 spd.bin-type := spd
 endif

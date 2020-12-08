@@ -8,6 +8,7 @@
 #include <acpi/acpi_gnvs.h>
 #include <amdblocks/agesawrapper.h>
 #include <amdblocks/amd_pci_util.h>
+#include <amdblocks/smi.h>
 #include <baseboard/variants.h>
 #include <boardid.h>
 #include <smbios.h>
@@ -159,7 +160,6 @@ static void kahlee_enable(struct device *dev)
 
 	dev->ops->acpi_inject_dsdt = chromeos_dsdt_generator;
 }
-
 
 static void mainboard_final(void *chip_info)
 {

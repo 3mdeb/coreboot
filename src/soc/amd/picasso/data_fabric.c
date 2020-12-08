@@ -10,9 +10,9 @@
 #include <soc/data_fabric.h>
 #include <soc/iomap.h>
 #include <soc/pci_devs.h>
-#include <stdbool.h>
+#include <types.h>
 
-static void disable_mmio_reg(int reg)
+static void disable_mmio_reg(unsigned int reg)
 {
 	pci_write_config32(SOC_DF_F0_DEV, NB_MMIO_CONTROL(reg),
 			   IOMS0_FABRIC_ID << MMIO_DST_FABRIC_ID_SHIFT);
@@ -20,7 +20,7 @@ static void disable_mmio_reg(int reg)
 	pci_write_config32(SOC_DF_F0_DEV, NB_MMIO_LIMIT(reg), 0);
 }
 
-static bool is_mmio_reg_disabled(int reg)
+static bool is_mmio_reg_disabled(unsigned int reg)
 {
 	uint32_t val = pci_read_config32(SOC_DF_F0_DEV, NB_MMIO_CONTROL(reg));
 	return !(val & ((MMIO_WE | MMIO_RE)));
@@ -123,19 +123,19 @@ void data_fabric_set_mmio_np(void)
 static const char *data_fabric_acpi_name(const struct device *dev)
 {
 	switch (dev->device) {
-	case PCI_DEVICE_ID_AMD_FAM17H_DF0:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF0:
 		return "DFD0";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF1:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF1:
 		return "DFD1";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF2:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF2:
 		return "DFD2";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF3:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF3:
 		return "DFD3";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF4:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF4:
 		return "DFD4";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF5:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF5:
 		return "DFD5";
-	case PCI_DEVICE_ID_AMD_FAM17H_DF6:
+	case PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF6:
 		return "DFD6";
 	default:
 		printk(BIOS_ERR, "%s: Unhandled device id 0x%x\n", __func__, dev->device);
@@ -152,13 +152,13 @@ static struct device_operations data_fabric_ops = {
 };
 
 static const unsigned short pci_device_ids[] = {
-	PCI_DEVICE_ID_AMD_FAM17H_DF0,
-	PCI_DEVICE_ID_AMD_FAM17H_DF1,
-	PCI_DEVICE_ID_AMD_FAM17H_DF2,
-	PCI_DEVICE_ID_AMD_FAM17H_DF3,
-	PCI_DEVICE_ID_AMD_FAM17H_DF4,
-	PCI_DEVICE_ID_AMD_FAM17H_DF5,
-	PCI_DEVICE_ID_AMD_FAM17H_DF6,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF0,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF1,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF2,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF3,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF4,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF5,
+	PCI_DEVICE_ID_AMD_FAM17H_MODEL18H_DF6,
 	0
 };
 

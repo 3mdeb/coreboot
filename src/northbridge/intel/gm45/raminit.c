@@ -216,7 +216,6 @@ void enter_raminit_or_reset(void)
 	pci_write_config8(PCI_DEV(0, 0x1f, 0), 0xa2, reg8 | (1 << 7));
 }
 
-
 /* For a detected DIMM, test the value of an SPD byte to
    match the expected value after masking some bits. */
 static int test_dimm(sysinfo_t *const sysinfo,
@@ -280,7 +279,6 @@ static void verify_ddr3(sysinfo_t *const sysinfo, int mask)
 		cur++;
 	}
 }
-
 
 typedef struct {
 	int dimm_mask;
@@ -1130,7 +1128,7 @@ static void clock_crossing_setup(const fsb_clock_t fsb,
 	}
 }
 
-/* Program egress VC1 timings. */
+/* Program egress VC1 isoch timings. */
 static void vc1_program_timings(const fsb_clock_t fsb)
 {
 	const u32 timings_by_fsb[][2] = {
@@ -1138,9 +1136,9 @@ static void vc1_program_timings(const fsb_clock_t fsb)
 	/* FSB  800MHz */ { 0x14, 0x00f000f0 },
 	/* FSB  667MHz */ { 0x10, 0x00c000c0 },
 	};
-	EPBAR8(0x2c)  = timings_by_fsb[fsb][0];
-	EPBAR32(0x38) = timings_by_fsb[fsb][1];
-	EPBAR32(0x3c) = timings_by_fsb[fsb][1];
+	EPBAR8(EPVC1ITC)      = timings_by_fsb[fsb][0];
+	EPBAR32(EPVC1IST + 0) = timings_by_fsb[fsb][1];
+	EPBAR32(EPVC1IST + 4) = timings_by_fsb[fsb][1];
 }
 
 #define DEFAULT_PCI_MMIO_SIZE 2048
@@ -1710,7 +1708,6 @@ void raminit(sysinfo_t *const sysinfo, const int s3resume)
 	/* Check for bad warm boot. */
 	reset_on_bad_warmboot();
 
-
 	/***** From now on, program according to collected infos: *****/
 
 	/* Program DRAM type. */
@@ -1772,9 +1769,7 @@ void raminit(sysinfo_t *const sysinfo, const int s3resume)
 
 	pci_and_config8(PCI_DEV(0, 0, 0), 0xf0, ~(1 << 2));
 
-
 	/* Take a breath (the reader). */
-
 
 	/* Perform ZQ calibration for DDR3. */
 	if (sysinfo->spd_type == DDR3)

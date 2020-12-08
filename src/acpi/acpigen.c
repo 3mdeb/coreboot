@@ -10,6 +10,8 @@
 
 #define ACPIGEN_MAXLEN 0xfffff
 
+#define CPPC_PACKAGE_NAME "GCPC"
+
 #include <lib.h>
 #include <string.h>
 #include <acpi/acpigen.h>
@@ -289,6 +291,10 @@ void acpigen_emit_namestring(const char *namepath)
 	int dotcount = 0, i;
 	int dotpos = 0;
 
+	/* Check for NULL pointer */
+	if (!namepath)
+		return;
+
 	/* We can start with a '\'. */
 	if (namepath[0] == '\\') {
 		acpigen_emit_byte('\\');
@@ -340,7 +346,7 @@ void acpigen_write_scope(const char *name)
 
 void acpigen_get_package_op_element(uint8_t package_op, unsigned int element, uint8_t dest_op)
 {
-	/* <dest_op> = DeRefOf (<package_op>[<element]) */
+	/* <dest_op> = DeRefOf (<package_op>[<element>]) */
 	acpigen_write_store();
 	acpigen_emit_byte(DEREF_OP);
 	acpigen_emit_byte(INDEX_OP);
@@ -348,6 +354,52 @@ void acpigen_get_package_op_element(uint8_t package_op, unsigned int element, ui
 	acpigen_write_integer(element);
 	acpigen_emit_byte(ZERO_OP); /* Ignore Index() Destination */
 	acpigen_emit_byte(dest_op);
+}
+
+void acpigen_set_package_op_element_int(uint8_t package_op, unsigned int element, uint64_t src)
+{
+	/* DeRefOf (<package>[<element>]) = <src> */
+	acpigen_write_store();
+	acpigen_write_integer(src);
+	acpigen_emit_byte(DEREF_OP);
+	acpigen_emit_byte(INDEX_OP);
+	acpigen_emit_byte(package_op);
+	acpigen_write_integer(element);
+	acpigen_emit_byte(ZERO_OP); /* Ignore Index() Destination */
+}
+
+void acpigen_get_package_element(const char *package, unsigned int element, uint8_t dest_op)
+{
+	/* <dest_op> = <package>[<element>] */
+	acpigen_write_store();
+	acpigen_emit_byte(INDEX_OP);
+	acpigen_emit_namestring(package);
+	acpigen_write_integer(element);
+	acpigen_emit_byte(ZERO_OP); /* Ignore Index() Destination */
+	acpigen_emit_byte(dest_op);
+}
+
+void acpigen_set_package_element_int(const char *package, unsigned int element, uint64_t src)
+{
+	/* <package>[<element>] = <src> */
+	acpigen_write_store();
+	acpigen_write_integer(src);
+	acpigen_emit_byte(INDEX_OP);
+	acpigen_emit_namestring(package);
+	acpigen_write_integer(element);
+	acpigen_emit_byte(ZERO_OP); /* Ignore Index() Destination */
+}
+
+void acpigen_set_package_element_namestr(const char *package, unsigned int element,
+					 const char *src)
+{
+	/* <package>[<element>] = <src> */
+	acpigen_write_store();
+	acpigen_emit_namestring(src);
+	acpigen_emit_byte(INDEX_OP);
+	acpigen_emit_namestring(package);
+	acpigen_write_integer(element);
+	acpigen_emit_byte(ZERO_OP); /* Ignore Index() Destination */
 }
 
 void acpigen_write_processor(u8 cpuindex, u32 pblock_addr, u8 pblock_len)
@@ -408,7 +460,7 @@ void acpigen_write_processor_cnot(const unsigned int number_of_cores)
  * len is region length.
  * OperationRegion(regionname, regionspace, regionoffset, regionlength)
  */
-void acpigen_write_opregion(struct opregion *opreg)
+void acpigen_write_opregion(const struct opregion *opreg)
 {
 	/* OpregionOp */
 	acpigen_emit_ext_op(OPREGION_OP);
@@ -505,6 +557,12 @@ static void acpigen_write_field_name(const char *name, uint32_t size)
 	acpigen_write_field_length(size);
 }
 
+static void acpigen_write_field_reserved(uint32_t size)
+{
+	acpigen_emit_byte(0);
+	acpigen_write_field_length(size);
+}
+
 /*
  * Generate ACPI AML code for Field
  * Arg0: region name
@@ -515,6 +573,7 @@ static void acpigen_write_field_name(const char *name, uint32_t size)
  * struct fieldlist l[] = {
  *	FIELDLIST_OFFSET(0x84),
  *	FIELDLIST_NAMESTR("PMCS", 2),
+ *	FIELDLIST_RESERVED(6),
  *	};
  * acpigen_write_field("UART", l, ARRAY_SIZE(l), FIELD_ANYACC | FIELD_NOLOCK |
  *								FIELD_PRESERVE);
@@ -522,7 +581,8 @@ static void acpigen_write_field_name(const char *name, uint32_t size)
  * Field (UART, AnyAcc, NoLock, Preserve)
  *	{
  *		Offset (0x84),
- *		PMCS,   2
+ *		PMCS,   2,
+ *              , 6,
  *	}
  */
 void acpigen_write_field(const char *name, const struct fieldlist *l, size_t count,
@@ -544,6 +604,10 @@ void acpigen_write_field(const char *name, const struct fieldlist *l, size_t cou
 		switch (l[i].type) {
 		case NAME_STRING:
 			acpigen_write_field_name(l[i].name, l[i].bits);
+			current_bit_pos += l[i].bits;
+			break;
+		case RESERVED:
+			acpigen_write_field_reserved(l[i].bits);
 			current_bit_pos += l[i].bits;
 			break;
 		case OFFSET:
@@ -832,6 +896,23 @@ void acpigen_write_PSS_package(u32 coreFreq, u32 power, u32 transLat,
 	       coreFreq, power, control, status);
 }
 
+void acpigen_write_pss_object(const struct acpi_sw_pstate *pstate_values, size_t nentries)
+{
+	size_t pstate;
+
+	acpigen_write_name("_PSS");
+	acpigen_write_package(nentries);
+	for (pstate = 0; pstate < nentries; pstate++) {
+		acpigen_write_PSS_package(
+			pstate_values->core_freq, pstate_values->power,
+			pstate_values->transition_latency, pstate_values->bus_master_latency,
+			pstate_values->control_value, pstate_values->status_value);
+		pstate_values++;
+	}
+
+	acpigen_pop_len();
+}
+
 void acpigen_write_PSD_package(u32 domain, u32 numprocs, PSD_coord coordtype)
 {
 	acpigen_write_name("_PSD");
@@ -850,8 +931,8 @@ void acpigen_write_CST_package_entry(acpi_cstate_t *cstate)
 {
 	acpigen_write_package(4);
 	acpigen_write_register_resource(&cstate->resource);
-	acpigen_write_dword(cstate->ctype);
-	acpigen_write_dword(cstate->latency);
+	acpigen_write_byte(cstate->ctype);
+	acpigen_write_word(cstate->latency);
 	acpigen_write_dword(cstate->power);
 	acpigen_pop_len();
 }
@@ -861,7 +942,7 @@ void acpigen_write_CST_package(acpi_cstate_t *cstate, int nentries)
 	int i;
 	acpigen_write_name("_CST");
 	acpigen_write_package(nentries+1);
-	acpigen_write_dword(nentries);
+	acpigen_write_integer(nentries);
 
 	for (i = 0; i < nentries; i++)
 		acpigen_write_CST_package_entry(cstate + i);
@@ -875,7 +956,7 @@ void acpigen_write_CSD_package(u32 domain, u32 numprocs, CSD_coord coordtype,
 	acpigen_write_name("_CSD");
 	acpigen_write_package(1);
 	acpigen_write_package(6);
-	acpigen_write_byte(6);	// 6 values
+	acpigen_write_integer(6);	// 6 values
 	acpigen_write_byte(0);	// revision 0
 	acpigen_write_dword(domain);
 	acpigen_write_dword(coordtype);
@@ -1214,6 +1295,22 @@ void acpigen_write_store_op_to_namestr(uint8_t src, const char *dst)
 	acpigen_emit_namestring(dst);
 }
 
+/* Store (src, "namestr") */
+void acpigen_write_store_int_to_namestr(uint64_t src, const char *dst)
+{
+	acpigen_write_store();
+	acpigen_write_integer(src);
+	acpigen_emit_namestring(dst);
+}
+
+/* Store (src, dst) */
+void acpigen_write_store_int_to_op(uint64_t src, uint8_t dst)
+{
+	acpigen_write_store();
+	acpigen_write_integer(src);
+	acpigen_emit_byte(dst);
+}
+
 /* Or (arg1, arg2, res) */
 void acpigen_write_or(uint8_t arg1, uint8_t arg2, uint8_t res)
 {
@@ -1270,6 +1367,14 @@ void acpigen_write_debug_op(uint8_t op)
 {
 	acpigen_write_store();
 	acpigen_emit_byte(op);
+	acpigen_emit_ext_op(DEBUG_OP);
+}
+
+/* Store (str, DEBUG) */
+void acpigen_write_debug_namestr(const char *str)
+{
+	acpigen_write_store();
+	acpigen_emit_namestring(str);
 	acpigen_emit_ext_op(DEBUG_OP);
 }
 
@@ -1336,6 +1441,14 @@ void acpigen_write_else(void)
 	acpigen_write_len_f();
 }
 
+void acpigen_write_shiftleft_op_int(uint8_t src_result, uint64_t count)
+{
+	acpigen_emit_byte(SHIFT_LEFT_OP);
+	acpigen_emit_byte(src_result);
+	acpigen_write_integer(count);
+	acpigen_emit_byte(ZERO_OP);
+}
+
 void acpigen_write_to_buffer(uint8_t src, uint8_t dst)
 {
 	acpigen_emit_byte(TO_BUFFER_OP);
@@ -1398,6 +1511,12 @@ void acpigen_write_return_integer(uint64_t arg)
 {
 	acpigen_emit_byte(RETURN_OP);
 	acpigen_write_integer(arg);
+}
+
+void acpigen_write_return_namestr(const char *arg)
+{
+	acpigen_emit_byte(RETURN_OP);
+	acpigen_emit_namestring(arg);
 }
 
 void acpigen_write_return_string(const char *arg)
@@ -1525,8 +1644,6 @@ void acpigen_write_dsm_uuid_arr(struct dsm_uuid *ids, size_t count)
 	acpigen_pop_len();	/* Method _DSM */
 }
 
-#define CPPC_PACKAGE_NAME "\\GCPC"
-
 void acpigen_write_CPPC_package(const struct cppc_config *config)
 {
 	u32 i;
@@ -1568,9 +1685,12 @@ void acpigen_write_CPPC_package(const struct cppc_config *config)
 
 void acpigen_write_CPPC_method(void)
 {
+	char pscope[16];
+	snprintf(pscope, sizeof(pscope), CONFIG_ACPI_CPU_STRING "." CPPC_PACKAGE_NAME, 0);
+
 	acpigen_write_method("_CPC", 0);
 	acpigen_emit_byte(RETURN_OP);
-	acpigen_emit_namestring(CPPC_PACKAGE_NAME);
+	acpigen_emit_namestring(pscope);
 	acpigen_pop_len();
 }
 
@@ -1812,7 +1932,7 @@ int __weak acpigen_soc_clear_tx_gpio(unsigned int gpio_num)
  *
  * Returns 0 on success and -1 on error.
  */
-int acpigen_enable_tx_gpio(struct acpi_gpio *gpio)
+int acpigen_enable_tx_gpio(const struct acpi_gpio *gpio)
 {
 	if (gpio->active_low)
 		return acpigen_soc_clear_tx_gpio(gpio->pins[0]);
@@ -1820,7 +1940,7 @@ int acpigen_enable_tx_gpio(struct acpi_gpio *gpio)
 		return acpigen_soc_set_tx_gpio(gpio->pins[0]);
 }
 
-int acpigen_disable_tx_gpio(struct acpi_gpio *gpio)
+int acpigen_disable_tx_gpio(const struct acpi_gpio *gpio)
 {
 	if (gpio->active_low)
 		return acpigen_soc_set_tx_gpio(gpio->pins[0]);
@@ -1828,7 +1948,7 @@ int acpigen_disable_tx_gpio(struct acpi_gpio *gpio)
 		return acpigen_soc_clear_tx_gpio(gpio->pins[0]);
 }
 
-void acpigen_get_rx_gpio(struct acpi_gpio *gpio)
+void acpigen_get_rx_gpio(const struct acpi_gpio *gpio)
 {
 	acpigen_soc_read_rx_gpio(gpio->pins[0]);
 
@@ -1836,7 +1956,7 @@ void acpigen_get_rx_gpio(struct acpi_gpio *gpio)
 		acpigen_write_xor(LOCAL0_OP, 1, LOCAL0_OP);
 }
 
-void acpigen_get_tx_gpio(struct acpi_gpio *gpio)
+void acpigen_get_tx_gpio(const struct acpi_gpio *gpio)
 {
 	acpigen_soc_get_tx_gpio(gpio->pins[0]);
 
@@ -2001,4 +2121,76 @@ void acpigen_write_create_dword_field(uint8_t op, size_t byte_offset, const char
 void acpigen_write_create_qword_field(uint8_t op, size_t byte_offset, const char *name)
 {
 	_create_field(CREATE_QWORD_OP, op, byte_offset, name);
+}
+
+void acpigen_write_pct_package(const acpi_addr_t *perf_ctrl, const acpi_addr_t *perf_sts)
+{
+	acpigen_write_name("_PCT");
+	acpigen_write_package(0x02);
+	acpigen_write_register_resource(perf_ctrl);
+	acpigen_write_register_resource(perf_sts);
+
+	acpigen_pop_len();
+}
+
+void acpigen_write_xpss_package(const struct acpi_xpss_sw_pstate *pstate_value)
+{
+	acpigen_write_package(0x08);
+	acpigen_write_dword(pstate_value->core_freq);
+	acpigen_write_dword(pstate_value->power);
+	acpigen_write_dword(pstate_value->transition_latency);
+	acpigen_write_dword(pstate_value->bus_master_latency);
+
+	acpigen_write_byte_buffer((uint8_t *)&pstate_value->control_value, sizeof(uint64_t));
+	acpigen_write_byte_buffer((uint8_t *)&pstate_value->status_value, sizeof(uint64_t));
+	acpigen_write_byte_buffer((uint8_t *)&pstate_value->control_mask, sizeof(uint64_t));
+	acpigen_write_byte_buffer((uint8_t *)&pstate_value->status_mask, sizeof(uint64_t));
+
+	acpigen_pop_len();
+}
+
+void acpigen_write_xpss_object(const struct acpi_xpss_sw_pstate *pstate_values, size_t nentries)
+{
+	size_t pstate;
+
+	acpigen_write_name("XPSS");
+	acpigen_write_package(nentries);
+	for (pstate = 0; pstate < nentries; pstate++) {
+		acpigen_write_xpss_package(pstate_values);
+		pstate_values++;
+	}
+
+	acpigen_pop_len();
+}
+
+/* Delay up to wait_ms until provided namestr matches expected value. */
+void acpigen_write_delay_until_namestr_int(uint32_t wait_ms, const char *name, uint64_t value)
+{
+	uint32_t wait_ms_segment = 1;
+	uint32_t segments = wait_ms;
+
+	/* Sleep in 16ms segments if delay is more than 32ms. */
+	if (wait_ms > 32) {
+		wait_ms_segment = 16;
+		segments = wait_ms / 16;
+	}
+
+	acpigen_write_store_int_to_op(segments, LOCAL7_OP);
+	acpigen_emit_byte(WHILE_OP);
+	acpigen_write_len_f();
+	acpigen_emit_byte(LGREATER_OP);
+	acpigen_emit_byte(LOCAL7_OP);
+	acpigen_emit_byte(ZERO_OP);
+
+	/* If name is not provided then just delay in a loop. */
+	if (name) {
+		acpigen_write_if_lequal_namestr_int(name, value);
+		acpigen_emit_byte(BREAK_OP);
+		acpigen_pop_len(); /* If */
+	}
+
+	acpigen_write_sleep(wait_ms_segment);
+	acpigen_emit_byte(DECREMENT_OP);
+	acpigen_emit_byte(LOCAL7_OP);
+	acpigen_pop_len(); /* While */
 }

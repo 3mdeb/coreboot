@@ -386,17 +386,17 @@ int cbfs_prog_stage_load(struct prog *pstage)
 	}
 
 	fsize = cbfs_stage_load_and_decompress(fh, foffset, fsize, load,
-					 le32toh(stage.memlen), le32toh(stage.compression));
+					 stage.memlen, stage.compression);
 	if (!fsize)
 		return -1;
 
 	/* Clear area not covered by file. */
-	memset(&load[fsize], 0, le32toh(stage.memlen) - fsize);
+	memset(&load[fsize], 0, stage.memlen - fsize);
 
-	prog_segment_loaded((uintptr_t)load, le32toh(stage.memlen), SEG_FINAL);
+	prog_segment_loaded((uintptr_t)load, stage.memlen, SEG_FINAL);
 
 out:
-	prog_set_area(pstage, load, le32toh(stage.memlen));
+	prog_set_area(pstage, load, stage.memlen);
 	prog_set_entry(pstage, entry, NULL);
 
 	return 0;

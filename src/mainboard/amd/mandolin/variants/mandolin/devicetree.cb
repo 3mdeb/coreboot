@@ -21,7 +21,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x03,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x6,
+		.tx_vref_tune = 0x6,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -34,7 +34,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x03,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x6,
+		.tx_vref_tune = 0x6,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -47,7 +47,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x03,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x6,
+		.tx_vref_tune = 0x6,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -60,7 +60,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x03,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x6,
+		.tx_vref_tune = 0x6,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -73,7 +73,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x02,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x5,
+		.tx_vref_tune = 0x5,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -86,7 +86,7 @@ chip soc/amd/picasso
 		.tx_pre_emp_amp_tune = 0x02,
 		.tx_pre_emp_pulse_tune = 0x0,
 		.tx_rise_tune = 0x1,
-		.rx_vref_tune = 0x5,
+		.tx_vref_tune = 0x5,
 		.tx_hsxv_tune = 0x3,
 		.tx_res_tune = 0x01,
 	}"
@@ -98,6 +98,15 @@ chip soc/amd/picasso
 	register "usb_port_overcurrent_pin[3]" = "USB_OC_PIN_0"
 	register "usb_port_overcurrent_pin[4]" = "USB_OC_PIN_0"
 	register "usb_port_overcurrent_pin[5]" = "USB_OC_PIN_0"
+
+	# SPI Configuration
+	register "common_config.spi_config" = "{
+		.normal_speed = SPI_SPEED_33M, /* MHz */
+		.fast_speed = SPI_SPEED_66M, /* MHz */
+		.altio_speed = SPI_SPEED_33M, /* MHz */
+		.tpm_speed = SPI_SPEED_33M, /* MHz */
+		.read_mode = SPI_READ_MODE_QUAD114,
+	}"
 
 	# eSPI Configuration
 	register "common_config.espi_config" = "{
@@ -139,7 +148,7 @@ chip soc/amd/picasso
 		device pci 8.1 on      # Bridge to Bus A
 			device pci 0.0 on  end # Internal GPU
 			device pci 0.1 on  end # Display HDA
-			device pci 0.2 on  end # Crypto Coprocesor
+			device pci 0.2 on  end # Crypto Coprocessor
 			device pci 0.3 on  end # USB 3.1
 			device pci 0.4 on  end # USB 3.1
 			device pci 0.5 on  end # Audio
@@ -151,8 +160,8 @@ chip soc/amd/picasso
 			device pci 0.1 off end # integrated Ethernet MAC
 			device pci 0.2 off end # integrated Ethernet MAC
 		end
-		device pci 14.0 on  end # SM
-		device pci 14.3 on  # - D14F3 bridge
+		device pci 14.0 on  end # SMBus
+		device pci 14.3 on      # D14F3 bridge
 			chip superio/smsc/sio1036 # optional debug card
 			end
 		end

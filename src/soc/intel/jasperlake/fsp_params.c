@@ -7,6 +7,7 @@
 #include <fsp/util.h>
 #include <intelblocks/lpss.h>
 #include <intelblocks/mp_init.h>
+#include <intelblocks/pmclib.h>
 #include <intelblocks/xdci.h>
 #include <intelpch/lockdown.h>
 #include <soc/intel/common/vbt.h>
@@ -41,38 +42,6 @@ static const pci_devfn_t serial_io_dev[] = {
 	PCH_DEVFN_UART1,
 	PCH_DEVFN_UART2
 };
-
-/* List of Minimum Assertion durations in microseconds */
-enum min_assrt_dur {
-	MinAssrtDur0s		= 0,
-	MinAssrtDur60us		= 60,
-	MinAssrtDur1ms		= 1000,
-	MinAssrtDur50ms		= 50000,
-	MinAssrtDur98ms		= 98000,
-	MinAssrtDur500ms	= 500000,
-	MinAssrtDur1s		= 1000000,
-	MinAssrtDur2s		= 2000000,
-	MinAssrtDur3s		= 3000000,
-	MinAssrtDur4s		= 4000000,
-};
-
-/* Signal Assertion duration values */
-struct cfg_assrt_dur {
-	/* Minimum assertion duration of SLP_A signal */
-	enum min_assrt_dur slp_a;
-
-	/* Minimum assertion duration of SLP_4 signal */
-	enum min_assrt_dur slp_s4;
-
-	/* Minimum assertion duration of SLP_3 signal */
-	enum min_assrt_dur slp_s3;
-
-	/* PCH PM Power Cycle duration */
-	enum min_assrt_dur pm_pwr_cyc_dur;
-};
-
-/* Default value of PchPmPwrCycDur */
-#define PCH_PM_PWR_CYC_DUR	0
 
 static void parse_devicetree(FSP_S_CONFIG *params)
 {
@@ -109,99 +78,6 @@ static void parse_devicetree(FSP_S_CONFIG *params)
 		sizeof(config->SerialIoUartMode));
 }
 
-/* This function returns the highest assertion duration of the SLP_Sx assertion widths */
-static enum min_assrt_dur get_high_assrt_width(const struct cfg_assrt_dur *cfg_assrt_dur)
-{
-	enum min_assrt_dur max_assert_dur = cfg_assrt_dur->slp_s4;
-
-	if (max_assert_dur < cfg_assrt_dur->slp_s3)
-		max_assert_dur = cfg_assrt_dur->slp_s3;
-
-	if (max_assert_dur < cfg_assrt_dur->slp_a)
-		max_assert_dur = cfg_assrt_dur->slp_a;
-
-	return max_assert_dur;
-}
-
-/* This function converts assertion durations from register-encoded to microseconds */
-static void get_min_assrt_dur(uint8_t slp_s4_min_assrt, uint8_t slp_s3_min_assrt,
-		uint8_t slp_a_min_assrt, uint8_t pm_pwr_cyc_dur,
-		struct cfg_assrt_dur *cfg_assrt_dur)
-{
-	/*
-	 * Ensure slp_x_dur_list[] elements in the devicetree config are in sync with
-	 * FSP encoded values.
-	 */
-
-	/* slp_s4_assrt_dur_list : 1s, 1s(default), 2s, 3s, 4s */
-	const enum min_assrt_dur slp_s4_assrt_dur_list[] = {
-		MinAssrtDur1s, MinAssrtDur1s, MinAssrtDur2s, MinAssrtDur3s, MinAssrtDur4s
-	};
-
-	/* slp_s3_assrt_dur_list: 50ms, 60us, 1ms, 50ms (Default), 2s */
-	const enum min_assrt_dur slp_s3_assrt_dur_list[] = {
-		MinAssrtDur50ms, MinAssrtDur60us, MinAssrtDur1ms, MinAssrtDur50ms, MinAssrtDur2s
-	};
-
-	/* slp_a_assrt_dur_list: 2s, 0s, 4s, 98ms, 2s(Default) */
-	const enum min_assrt_dur slp_a_assrt_dur_list[] = {
-		MinAssrtDur2s, MinAssrtDur0s, MinAssrtDur4s, MinAssrtDur98ms, MinAssrtDur2s
-	};
-
-	/* pm_pwr_cyc_dur_list: 4s(Default), 1s, 2s, 3s, 4s */
-	const enum min_assrt_dur pm_pwr_cyc_dur_list[] = {
-		MinAssrtDur4s, MinAssrtDur1s, MinAssrtDur2s, MinAssrtDur3s, MinAssrtDur4s
-	};
-
-	/* Get signal assertion width */
-	if (slp_s4_min_assrt < ARRAY_SIZE(slp_s4_assrt_dur_list))
-		cfg_assrt_dur->slp_s4 = slp_s4_assrt_dur_list[slp_s4_min_assrt];
-
-	if (slp_s3_min_assrt < ARRAY_SIZE(slp_s3_assrt_dur_list))
-		cfg_assrt_dur->slp_s3 = slp_s3_assrt_dur_list[slp_s3_min_assrt];
-
-	if (slp_a_min_assrt < ARRAY_SIZE(slp_a_assrt_dur_list))
-		cfg_assrt_dur->slp_a = slp_a_assrt_dur_list[slp_a_min_assrt];
-
-	if (pm_pwr_cyc_dur < ARRAY_SIZE(pm_pwr_cyc_dur_list))
-		cfg_assrt_dur->pm_pwr_cyc_dur = pm_pwr_cyc_dur_list[pm_pwr_cyc_dur];
-}
-
-/* This function ensures that the duration programmed in the PchPmPwrCycDur will never be
- * smaller than the SLP_Sx assertion widths.
- * If the pm_pwr_cyc_dur is less than any of the SLP_Sx assertion widths then it returns the
- * default value PCH_PM_PWR_CYC_DUR.
- */
-static uint8_t get_pm_pwr_cyc_dur(uint8_t slp_s4_min_assrt, uint8_t slp_s3_min_assrt,
-		uint8_t slp_a_min_assrt, uint8_t pm_pwr_cyc_dur)
-{
-	/* Set default values for the minimum assertion duration */
-	struct cfg_assrt_dur cfg_assrt_dur = {
-		.slp_a          = MinAssrtDur2s,
-		.slp_s4         = MinAssrtDur1s,
-		.slp_s3         = MinAssrtDur50ms,
-		.pm_pwr_cyc_dur = MinAssrtDur4s
-	};
-
-	enum min_assrt_dur high_assrt_width;
-
-	/* Convert assertion durations from register-encoded to microseconds */
-	get_min_assrt_dur(slp_s4_min_assrt, slp_s3_min_assrt, slp_a_min_assrt, pm_pwr_cyc_dur,
-			&cfg_assrt_dur);
-
-	/* Get the highest assertion duration among PCH EDS specified signals for pwr_cyc_dur */
-	high_assrt_width = get_high_assrt_width(&cfg_assrt_dur);
-
-	if (cfg_assrt_dur.pm_pwr_cyc_dur >= high_assrt_width)
-		return pm_pwr_cyc_dur;
-
-	printk(BIOS_DEBUG,
-			"Set PmPwrCycDur to 4s as configured PmPwrCycDur (%d) violates PCH EDS "
-			"spec\n", pm_pwr_cyc_dur);
-
-	return PCH_PM_PWR_CYC_DUR;
-}
-
 /* UPD parameters to be initialized before SiliconInit */
 void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 {
@@ -219,6 +95,8 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	/* Check if IGD is present and fill Graphics init param accordingly */
 	dev = pcidev_path_on_root(SA_DEVFN_IGD);
 	params->PeiGraphicsPeimInit = CONFIG(RUN_FSP_GOP) && is_dev_enabled(dev);
+
+	params->PavpEnable = CONFIG(PAVP);
 
 	/* Use coreboot MP PPI services if Kconfig is enabled */
 	if (CONFIG(USE_INTEL_FSP_TO_CALL_COREBOOT_PUBLISH_MP_PPI))
@@ -301,13 +179,19 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 				sizeof(params->SataPortsDevSlp));
 	}
 
+	/* VR Configuration */
+	params->ImonSlope[0] = config->ImonSlope;
+	params->ImonOffset[0] = config->ImonOffset;
+
 	/* SDCard related configuration */
 	dev = pcidev_path_on_root(PCH_DEVFN_SDCARD);
 	params->ScsSdCardEnabled = is_dev_enabled(dev);
 	if (params->ScsSdCardEnabled)
 		params->SdCardPowerEnableActiveHigh = config->SdCardPowerEnableActiveHigh;
 
-	params->Device4Enable = config->Device4Enable;
+	/* Enable Processor Thermal Control */
+	dev = pcidev_path_on_root(SA_DEVFN_DPTF);
+	params->Device4Enable = is_dev_enabled(dev);
 
 	/* Set TccActivationOffset */
 	params->TccActivationOffset = config->tcc_offset;
@@ -329,11 +213,12 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		params->XdciEnable = 0;
 	}
 
-	/* Disable Pavp */
-	params->PavpEnable = 0;
-
 	/* Provide correct UART number for FSP debug logs */
 	params->SerialIoDebugUartNumber = CONFIG_UART_FOR_CONSOLE;
+
+	/* Configure FIVR RFI related settings */
+	params->FivrRfiFrequency = config->FivrRfiFrequency;
+	params->FivrSpreadSpectrum = config->FivrSpreadSpectrum;
 
 	/* Apply minimum assertion width settings if non-zero */
 	if (config->PchPmSlpS3MinAssert)
@@ -350,6 +235,14 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		params->PchPmPwrCycDur = get_pm_pwr_cyc_dur(config->PchPmSlpS4MinAssert,
 				config->PchPmSlpS3MinAssert, config->PchPmSlpAMinAssert,
 				config->PchPmPwrCycDur);
+
+	/* Fill Acoustic noise mitigation related configuration */
+	params->FastPkgCRampDisable[0] = config->FastPkgCRampDisable;
+	params->SlowSlewRate[0] = config->SlowSlewRate;
+	params->AcousticNoiseMitigation = config->AcousticNoiseMitigation;
+	params->PreWake = config->PreWake;
+	params->RampUp = config->RampUp;
+	params->RampDown = config->RampDown;
 
 	/* Override/Fill FSP Silicon Param for mainboard */
 	mainboard_silicon_init_params(params);

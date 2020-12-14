@@ -3,16 +3,7 @@
 #ifndef NORTHBRIDGE_INTEL_I945_H
 #define NORTHBRIDGE_INTEL_I945_H
 
-/* Northbridge BARs */
-#define DEFAULT_X60BAR		0xfed13000
-#ifndef __ACPI__
-#define DEFAULT_MCHBAR		((u8 *)0xfed14000)	/* 16 KB */
-#define DEFAULT_DMIBAR		((u8 *)0xfed18000)	/* 4 KB */
-#else
-#define DEFAULT_MCHBAR		0xfed14000	/* 16 KB */
-#define DEFAULT_DMIBAR		0xfed18000	/* 4 KB */
-#endif
-#define DEFAULT_EPBAR		0xfed19000	/* 4 KB */
+#include "memmap.h"
 
 #include <southbridge/intel/i82801gx/i82801gx.h>
 
@@ -87,7 +78,6 @@
 #define PEGCC		0x208	/* 32bit */
 #define PEGSTS		0x214	/* 32bit */
 
-
 /* Device 0:2.0 PCI configuration space (Graphics Device) */
 #define IGD_DEV		PCI_DEV(0, 2, 0)
 
@@ -95,7 +85,6 @@
 #define GTTADR		0x1c
 #define BSM		0x5c
 #define GCFC		0xf0	/* Graphics Clock Frequency & Gating Control */
-
 
 /*
  * MCHBAR

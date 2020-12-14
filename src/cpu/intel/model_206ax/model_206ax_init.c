@@ -18,6 +18,7 @@
 #include "chip.h"
 #include <cpu/intel/smm_reloc.h>
 #include <cpu/intel/common/common.h>
+#include <smbios.h>
 
 /*
  * List of supported C-states in this processor
@@ -338,29 +339,6 @@ static void configure_misc(void)
 	wrmsr(IA32_PACKAGE_THERM_INTERRUPT, msr);
 }
 
-static void enable_lapic_tpr(void)
-{
-	msr_t msr;
-
-	msr = rdmsr(MSR_PIC_MSG_CONTROL);
-	msr.lo &= ~(1 << 10);	/* Enable APIC TPR updates */
-	wrmsr(MSR_PIC_MSG_CONTROL, msr);
-}
-
-static void configure_dca_cap(void)
-{
-	uint32_t feature_flag;
-	msr_t msr;
-
-	/* Check feature flag in CPUID.(EAX=1):ECX[18]==1 */
-	feature_flag = cpu_get_feature_flags_ecx();
-	if (feature_flag & CPUID_DCA) {
-		msr = rdmsr(IA32_PLATFORM_DCA_CAP);
-		msr.lo |= 1;
-		wrmsr(IA32_PLATFORM_DCA_CAP, msr);
-	}
-}
-
 static void set_max_ratio(void)
 {
 	msr_t msr, perf_ctl;
@@ -383,18 +361,23 @@ static void set_max_ratio(void)
 	       ((perf_ctl.lo >> 8) & 0xff) * SANDYBRIDGE_BCLK);
 }
 
-static void set_energy_perf_bias(u8 policy)
+unsigned int smbios_cpu_get_max_speed_mhz(void)
 {
 	msr_t msr;
+	msr = rdmsr(MSR_TURBO_RATIO_LIMIT);
+	return (msr.lo & 0xff) * SANDYBRIDGE_BCLK;
+}
 
-	/* Energy Policy is bits 3:0 */
-	msr = rdmsr(IA32_ENERGY_PERF_BIAS);
-	msr.lo &= ~0xf;
-	msr.lo |= policy & 0xf;
-	wrmsr(IA32_ENERGY_PERF_BIAS, msr);
+unsigned int smbios_cpu_get_current_speed_mhz(void)
+{
+	msr_t msr;
+	msr = rdmsr(MSR_PLATFORM_INFO);
+	return ((msr.lo >> 8) & 0xff) * SANDYBRIDGE_BCLK;
+}
 
-	printk(BIOS_DEBUG, "model_x06ax: energy policy set to %u\n",
-	       policy);
+unsigned int smbios_processor_external_clock(void)
+{
+	return SANDYBRIDGE_BCLK;
 }
 
 static void configure_mca(void)
@@ -470,6 +453,8 @@ static void model_206ax_init(struct device *cpu)
 	/* Thermal throttle activation offset */
 	configure_thermal_target();
 
+	set_aesni_lock();
+
 	/* Enable Direct Cache Access */
 	configure_dca_cap();
 
@@ -533,7 +518,6 @@ static void post_mp_init(void)
 	/* Lock down the SMRAM space. */
 	smm_lock();
 }
-
 
 static const struct mp_ops mp_ops = {
 	.pre_mp_init = pre_mp_init,

@@ -12,25 +12,12 @@ chip soc/intel/cannonlake
 	# Send an extra VR mailbox command for the PS4 exit issue
 	register "SendVrMbxCmd" = "2"
 
-# ACPI (soc/intel/cannonlake/acpi.c)
-	# Disable s0ix
-	register "s0ix_enable" = "0"
-
-	# PM Timer Enabled
-	register "PmTimerDisabled" = "0"
-
-	# Disable DPTF
-	register "dptf_enable" = "0"
-
 # CPU (soc/intel/cannonlake/cpu.c)
 	# Power limit
 	register "power_limits_config" = "{
-		.tdp_pl1_override = 15,
-		.tdp_pl2_override = 25,
+		.tdp_pl1_override = 20,
+		.tdp_pl2_override = 30,
 	}"
-
-	# Enable "Intel Speed Shift Technology"
-	register "speed_shift_enable" = "1"
 
 	# Enable Enhanced Intel SpeedStep
 	register "eist_enable" = "1"
@@ -43,20 +30,8 @@ chip soc/intel/cannonlake
 	# Serial I/O
 	register "SerialIoDevMode" = "{
 		[PchSerialIoIndexI2C0] = PchSerialIoPci, // Touchpad
+		[PchSerialIoIndexUART2] = PchSerialIoSkipInit, // LPSS UART
 	}"
-
-	# Audio
-	register "PchHdaDspEnable" = "0"
-	register "PchHdaAudioLinkHda" = "1"
-	register "PchHdaAudioLinkDmic0" = "1"
-	register "PchHdaAudioLinkDmic1" = "1"
-	register "PchHdaAudioLinkSsp0" = "0"
-	register "PchHdaAudioLinkSsp1" = "0"
-	register "PchHdaAudioLinkSsp2" = "0"
-	register "PchHdaAudioLinkSndw1" = "0"
-	register "PchHdaAudioLinkSndw2" = "0"
-	register "PchHdaAudioLinkSndw3" = "0"
-	register "PchHdaAudioLinkSndw4" = "0"
 
 	# Misc
 	register "AcousticNoiseMitigation" = "1"
@@ -71,17 +46,6 @@ chip soc/intel/cannonlake
 
 	# Thermal
 	register "tcc_offset" = "12"
-
-# LPC (soc/intel/cannonlake/lpc.c)
-	# LPC configuration from lspci -s 1f.0 -xxx
-	# Address 0x84: Decode 0x80 - 0x8F (Port 80)
-	register "gen1_dec" = "0x000c0081"
-	# Address 0x88: Decode 0x68 - 0x6F (PMC)
-	register "gen2_dec" = "0x00040069"
-	# Address 0x8C: Decode 0xE00 - 0xEFF (AP/EC command)
-	register "gen3_dec" = "0x00fc0E01"
-	# Address 0x90: Decode 0xF00 - 0xFFF (AP/EC debug)
-	register "gen4_dec" = "0x00fc0F01"
 
 # PM Util (soc/intel/cannonlake/pmutil.c)
 	# GPE configuration
@@ -99,6 +63,7 @@ chip soc/intel/cannonlake
 	end
 
 	device domain 0 on
+		subsystemid 0x1558 0x1401 inherit
 		device pci 00.0 on  end # Host Bridge
 		device pci 02.0 on  end # Integrated Graphics Device
 		device pci 04.0 on      # SA Thermal device
@@ -109,7 +74,6 @@ chip soc/intel/cannonlake
 		device pci 12.6 off end # GSPI #2
 		device pci 13.0 off end # Integrated Sensor Hub
 		device pci 14.0 on	# USB xHCI
-			register "SsicPortEnable" = "0"
 			# USB2
 			register "usb2_ports[0]" = "USB2_PORT_MID(OC_SKIP)"		# Type-A port 1
 			register "usb2_ports[1]" = "USB2_PORT_TYPE_C(OC_SKIP)"		# Type-C port 2
@@ -122,10 +86,12 @@ chip soc/intel/cannonlake
 			register "usb3_ports[2]" = "USB3_PORT_DEFAULT(OC_SKIP)"		# Type-A port 3
 		end
 		device pci 14.1 off end # USB xDCI (OTG)
-		chip drivers/intel/wifi # CNVi wifi
-			register "wake" = "GPE0_PME_B0"
-			device pci 14.3 on end
-		end
+		device pci 14.3 on
+			chip drivers/wifi/generic
+				register "wake" = "GPE0_PME_B0"
+				device generic 0 on end
+			end
+		end # CNVi wifi
 		device pci 14.5 off end # SDCard
 		device pci 15.0 on
 			chip drivers/i2c/hid
@@ -148,7 +114,7 @@ chip soc/intel/cannonlake
 		device pci 16.5 off end # Management Engine Interface 4
 		device pci 17.0 on	# SATA
 			register "SataMode" = "Sata_AHCI"
-			register "SataSalpSupport" = "0"
+			register "SataSalpSupport" = "1"
 			# Port 2 (J_SSD2)
 			register "SataPortsEnable[1]" = "1"
 			register "SataPortsDevSlp[1]" = "1"
@@ -181,7 +147,7 @@ chip soc/intel/cannonlake
 			register "PcieClkSrcUsage[2]" = "7"
 			register "PcieClkSrcClkReq[2]" = "2"
 			register "PcieRpSlotImplemented[7]" = "1"
-			chip drivers/intel/wifi
+			chip drivers/wifi/generic
 				device pci 00.0 on end
 			end
 			smbios_slot_desc "SlotTypeM2Socket1_SD" "SlotLengthOther" "M.2/E 2230 (J_WLAN1)" "SlotDataBusWidth1X"
@@ -215,13 +181,24 @@ chip soc/intel/cannonlake
 		device pci 1e.2 off end # GSPI #0
 		device pci 1e.3 off end # GSPI #1
 		device pci 1f.0 on	# LPC Interface
+			# LPC configuration from lspci -s 1f.0 -xxx
+			# Address 0x84: Decode 0x80 - 0x8F (Port 80)
+			register "gen1_dec" = "0x000c0081"
+			# Address 0x88: Decode 0x68 - 0x6F (PMC)
+			register "gen2_dec" = "0x00040069"
+			# Address 0x8C: Decode 0xE00 - 0xEFF (AP/EC command)
+			register "gen3_dec" = "0x00fc0E01"
+			# Address 0x90: Decode 0xF00 - 0xFFF (AP/EC debug)
+			register "gen4_dec" = "0x00fc0F01"
 			chip drivers/pc80/tpm	# TPM
 				device pnp 0c31.0 on  end
 			end
 		end
 		device pci 1f.1 off end # P2SB
 		device pci 1f.2 off end # Power Management Controller
-		device pci 1f.3 on  end # Intel HDA
+		device pci 1f.3 on	# Intel HDA
+			register "PchHdaAudioLinkHda" = "1"
+		end
 		device pci 1f.4 on  end # SMBus
 		device pci 1f.5 on  end	# PCH SPI
 		device pci 1f.6 off end # GbE

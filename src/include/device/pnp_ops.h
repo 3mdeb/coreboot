@@ -4,10 +4,7 @@
 #define __DEVICE_PNP_OPS_H__
 
 #include <stdint.h>
-#include <arch/io.h>
 #include <device/pnp.h>
-#include <device/pnp_def.h>
-#include <device/pnp_type.h>
 
 #if ENV_PNP_SIMPLE_DEVICE
 
@@ -21,6 +18,12 @@ static __always_inline uint8_t pnp_read_config(
 	pnp_devfn_t dev, uint8_t reg)
 {
 	return pnp_read_index(dev >> 8, reg);
+}
+
+static __always_inline void pnp_unset_and_set_config(
+	pnp_devfn_t dev, uint8_t reg, uint8_t unset, uint8_t set)
+{
+	pnp_unset_and_set_index(dev >> 8, reg, unset, set);
 }
 
 static __always_inline

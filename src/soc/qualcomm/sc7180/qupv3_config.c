@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include <cbfs.h>
+#include <console/console.h>
 #include <string.h>
 #include <soc/qupv3_config.h>
 
@@ -26,10 +27,9 @@ void qupv3_se_fw_load_and_init(unsigned int bus, unsigned int protocol,
 		die("*ERROR*  * INVALID PROTOCOL ***\n");
 
 	if (!fw_list[protocol]) {
-		fw_list[protocol] = cbfs_boot_map_with_leak(filename[protocol],
-					CBFS_TYPE_RAW, NULL);
+		fw_list[protocol] = cbfs_map(filename[protocol], NULL);
 		if (!fw_list[protocol])
-			die("*ERROR*  * cbfs_boot_map_with_leak failed ***\n");
+			die("*ERROR*  * cbfs_map() failed ***\n");
 	}
 
 	hdr = fw_list[protocol];
@@ -51,7 +51,6 @@ void qupv3_se_fw_load_and_init(unsigned int bus, unsigned int protocol,
 	write32(&regs->se_geni_clk_ctrl, 0x0);
 	clrbits_le32(&regs->geni_cgc_ctrl, GENI_CGC_CTRL_PROG_RAM_SCLK_OFF_BMSK
 			| GENI_CGC_CTRL_PROG_RAM_HCLK_OFF_BMSK);
-
 
 	/* HPG section 3.1.7.1 */
 	if (protocol != SE_PROTOCOL_UART) {

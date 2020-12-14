@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef __STONEYRIDGE_H__
-#define __STONEYRIDGE_H__
+#ifndef AMD_STONEYRIDGE_SOUTHBRIDGE_H
+#define AMD_STONEYRIDGE_SOUTHBRIDGE_H
 
 #include <types.h>
 #include <device/device.h>
@@ -89,50 +89,6 @@
 #define PM_USB_ENABLE			0xef
 #define   PM_USB_ALL_CONTROLLERS	0x7f
 
-/* SMBUS MMIO offsets 0xfed80a00 */
-#define SMBHSTSTAT			0x0
-#define   SMBHST_STAT_FAILED		0x10
-#define   SMBHST_STAT_COLLISION		0x08
-#define   SMBHST_STAT_ERROR		0x04
-#define   SMBHST_STAT_INTERRUPT		0x02
-#define   SMBHST_STAT_BUSY		0x01
-#define   SMBHST_STAT_CLEAR		0xff
-#define   SMBHST_STAT_NOERROR		0x02
-#define   SMBHST_STAT_VAL_BITS		0x1f
-#define   SMBHST_STAT_ERROR_BITS	0x1c
-
-#define SMBSLVSTAT			0x1
-#define   SMBSLV_STAT_ALERT		0x20
-#define   SMBSLV_STAT_SHADOW2		0x10
-#define   SMBSLV_STAT_SHADOW1		0x08
-#define   SMBSLV_STAT_SLV_STS		0x04
-#define   SMBSLV_STAT_SLV_INIT		0x02
-#define   SMBSLV_STAT_SLV_BUSY		0x01
-#define   SMBSLV_STAT_CLEAR		0x1f
-
-#define SMBHSTCTRL			0x2
-#define   SMBHST_CTRL_RST		0x80
-#define   SMBHST_CTRL_STRT		0x40
-#define   SMBHST_CTRL_QCK_RW		0x00
-#define   SMBHST_CTRL_BTE_RW		0x04
-#define   SMBHST_CTRL_BDT_RW		0x08
-#define   SMBHST_CTRL_WDT_RW		0x0c
-#define   SMBHST_CTRL_BLK_RW		0x14
-#define   SMBHST_CTRL_MODE_BITS		0x1c
-#define   SMBHST_CTRL_KILL		0x02
-#define   SMBHST_CTRL_IEN		0x01
-
-#define SMBHSTCMD			0x3
-#define SMBHSTADDR			0x4
-#define SMBHSTDAT0			0x5
-#define SMBHSTDAT1			0x6
-#define SMBHSTBLKDAT			0x7
-#define SMBSLVCTRL			0x8
-#define SMBSLVCMD_SHADOW		0x9
-#define SMBSLVEVT			0xa
-#define SMBSLVDAT			0xc
-#define SMBTIMING			0xe
-
 /* FCH MISC Registers 0xfed80e00 */
 #define GPP_CLK_CNTRL			0x00
 #define   GPP_CLK2_REQ_MAP_SHIFT	8
@@ -189,45 +145,17 @@
 #define   DEBUG_PORT_ENABLE		  BIT(18)
 #define   DEBUG_PORT_MASK		(BIT(16) | BIT(17) | BIT(18))
 
-/* FCH AOAC Registers 0xfed81e00 */
-#define FCH_AOAC_D3_CONTROL_CLK_GEN	0x40
-#define FCH_AOAC_D3_CONTROL_I2C0	0x4a
-#define FCH_AOAC_D3_CONTROL_I2C1	0x4c
-#define FCH_AOAC_D3_CONTROL_I2C2	0x4e
-#define FCH_AOAC_D3_CONTROL_I2C3	0x50
-#define FCH_AOAC_D3_CONTROL_UART0	0x56
-#define FCH_AOAC_D3_CONTROL_UART1	0x58
-#define FCH_AOAC_D3_CONTROL_AMBA	0x62
-#define FCH_AOAC_D3_CONTROL_USB2	0x64
-#define FCH_AOAC_D3_CONTROL_USB3	0x6e
-/* Bit definitions for all FCH_AOAC_D3_CONTROL_* Registers */
-#define   FCH_AOAC_TARGET_DEVICE_STATE (BIT(0) + BIT(1))
-#define   FCH_AOAC_DEVICE_STATE		BIT(2)
-#define   FCH_AOAC_PWR_ON_DEV		BIT(3)
-#define   FCH_AOAC_SW_PWR_ON_RSTB	BIT(4)
-#define   FCH_AOAC_SW_REF_CLK_OK	BIT(5)
-#define   FCH_AOAC_SW_RST_B		BIT(6)
-#define   FCH_AOAC_IS_SW_CONTROL	BIT(7)
-
-#define FCH_AOAC_D3_STATE_CLK_GEN	0x41
-#define FCH_AOAC_D3_STATE_I2C0		0x4b
-#define FCH_AOAC_D3_STATE_I2C1		0x4d
-#define FCH_AOAC_D3_STATE_I2C2		0x4f
-#define FCH_AOAC_D3_STATE_I2C3		0x51
-#define FCH_AOAC_D3_STATE_UART0		0x57
-#define FCH_AOAC_D3_STATE_UART1		0x59
-#define FCH_AOAC_D3_STATE_AMBA		0x63
-#define FCH_AOAC_D3_STATE_USB2		0x65
-#define FCH_AOAC_D3_STATE_USB3		0x6f
-/* Bit definitions for all FCH_AOAC_D3_STATE_* Registers */
-#define   FCH_AOAC_PWR_RST_STATE	BIT(0)
-#define   FCH_AOAC_RST_CLK_OK_STATE	BIT(1)
-#define   FCH_AOAC_RST_B_STATE		BIT(2)
-#define   FCH_AOAC_DEV_OFF_GATING_STATE	BIT(3)
-#define   FCH_AOAC_D3COLD		BIT(4)
-#define   FCH_AOAC_CLK_OK_STATE		BIT(5)
-#define   FCH_AOAC_STAT0		BIT(6)
-#define   FCH_AOAC_STAT1		BIT(7)
+/* FCH AOAC device offsets for AOAC_DEV_D3_CTL/AOAC_DEV_D3_STATE */
+#define FCH_AOAC_DEV_CLK_GEN		0
+#define FCH_AOAC_DEV_I2C0		5
+#define FCH_AOAC_DEV_I2C1		6
+#define FCH_AOAC_DEV_I2C2		7
+#define FCH_AOAC_DEV_I2C3		8
+#define FCH_AOAC_DEV_UART0		11
+#define FCH_AOAC_DEV_UART1		12
+#define FCH_AOAC_DEV_AMBA		17
+#define FCH_AOAC_DEV_USB2		18
+#define FCH_AOAC_DEV_USB3		23
 
 #define PM1_LIMIT			16
 #define GPE0_LIMIT			28
@@ -292,11 +220,6 @@ void soc_enable_psp_early(void);
 #define   RST_CMD			BIT(2)
 #define   SYS_RST			BIT(1)
 
-struct stoneyridge_aoac {
-	int enable;
-	int status;
-};
-
 typedef struct aoac_devs {
 	unsigned int :5;
 	unsigned int ic0e:1; /* 5: I2C0 */
@@ -349,4 +272,4 @@ void i2c_soc_early_init(void);
 /* Initialize all the i2c buses that are not marked with early init. */
 void i2c_soc_init(void);
 
-#endif /* __STONEYRIDGE_H__ */
+#endif /* AMD_STONEYRIDGE_SOUTHBRIDGE_H */

@@ -119,7 +119,7 @@ void usb_ehci_sleep_prepare(pci_devfn_t dev, u8 slp_typ)
 static void usb_ehci_clock_gating(struct device *dev)
 {
 	/* IOBP 0xE5004001[7:6] = 11b */
-	pch_iobp_update(0xe5004001, ~0, (1 << 7)|(1 << 6));
+	pch_iobp_update(0xe5004001, ~0, (1 << 7) | (1 << 6));
 
 	/* Dx:F0:DCh[5,2,1] = 111b
 	 * Dx:F0:DCh[0] = 1b when EHCI controller is disabled */
@@ -169,7 +169,12 @@ static struct device_operations usb_ehci_ops = {
 	.ops_pci		= &lops_pci,
 };
 
-static const unsigned short pci_device_ids[] = { 0x9c26, 0x8c26, 0x8c2d, 0 };
+static const unsigned short pci_device_ids[] = {
+	PCI_DEVICE_ID_INTEL_LPT_LP_EHCI,
+	PCI_DEVICE_ID_INTEL_LPT_H_EHCI_1,
+	PCI_DEVICE_ID_INTEL_LPT_H_EHCI_2,
+	0
+};
 
 static const struct pci_driver pch_usb_ehci __pci_driver = {
 	.ops	 = &usb_ehci_ops,

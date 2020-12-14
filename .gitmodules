@@ -57,3 +57,7 @@
 [submodule "3rdparty/sb-signing-utils"]
 	path = 3rdparty/sb-signing-utils
 	url = https://github.com/open-power/sb-signing-utils.git
+[submodule "3rdparty/stm"]
+	path = 3rdparty/stm
+	url = https://github.com/coreboot/STM
+	branch = stmpe

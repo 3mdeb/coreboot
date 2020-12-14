@@ -81,7 +81,6 @@ struct reset_mapping {
 	uint32_t chipset;
 };
 
-
 /* Structure describes the groups within each community */
 struct pad_group {
 	int		first_pad; /* offset of first pad of the group relative
@@ -112,6 +111,8 @@ struct pad_community {
 	uint16_t	gpi_int_en_reg_0; /* offset to GPI Int Enable Reg 0 */
 	uint16_t	gpi_smi_sts_reg_0; /* offset to GPI SMI STS Reg 0 */
 	uint16_t	gpi_smi_en_reg_0; /* offset to GPI SMI EN Reg 0 */
+	uint16_t	gpi_nmi_sts_reg_0; /* offset to GPI NMI STS Reg 0 */
+	uint16_t	gpi_nmi_en_reg_0; /* offset to GPI NMI EN Reg 0 */
 	uint16_t	pad_cfg_base; /* offset to first PAD_GFG_DW0 Reg */
 	uint8_t		gpi_status_offset;  /* specifies offset in struct
 						gpi_status */

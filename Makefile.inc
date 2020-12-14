@@ -13,6 +13,7 @@ CONFIG_CBFS_PREFIX:=$(call strip_quotes,$(CONFIG_CBFS_PREFIX))
 CONFIG_FMDFILE:=$(call strip_quotes,$(CONFIG_FMDFILE))
 CONFIG_DEVICETREE:=$(call strip_quotes, $(CONFIG_DEVICETREE))
 CONFIG_OVERRIDE_DEVICETREE:=$(call strip_quotes, $(CONFIG_OVERRIDE_DEVICETREE))
+CONFIG_CHIPSET_DEVICETREE:=$(call strip_quotes, $(CONFIG_CHIPSET_DEVICETREE))
 CONFIG_MEMLAYOUT_LD_FILE:=$(call strip_quotes, $(CONFIG_MEMLAYOUT_LD_FILE))
 
 #######################################################################
@@ -34,7 +35,8 @@ COREBOOT_EXPORTS += KERNELVERSION
 # Basic component discovery
 MAINBOARDDIR=$(call strip_quotes,$(CONFIG_MAINBOARD_DIR))
 VARIANT_DIR:=$(call strip_quotes,$(CONFIG_VARIANT_DIR))
-COREBOOT_EXPORTS += MAINBOARDDIR VARIANT_DIR
+CARRIER_DIR:=$(call strip_quotes,$(CONFIG_CARRIER_DIR))
+COREBOOT_EXPORTS += MAINBOARDDIR VARIANT_DIR CARRIER_DIR
 
 ## Final build results, which CBFSTOOL uses to create the final
 ## rom image file, are placed under $(objcbfs).
@@ -79,10 +81,10 @@ subdirs-y := src/lib src/commonlib/ src/console src/device src/acpi
 subdirs-y += src/ec/acpi $(wildcard src/ec/*/*) $(wildcard src/southbridge/*/*)
 subdirs-y += $(wildcard src/soc/*/*) $(wildcard src/northbridge/*/*)
 subdirs-y += src/superio
-subdirs-y += $(wildcard src/drivers/*) $(wildcard src/drivers/*/*)
+subdirs-y += $(wildcard src/drivers/*) $(wildcard src/drivers/*/*) $(wildcard src/drivers/*/*/*)
 subdirs-y += src/cpu src/vendorcode
-subdirs-y += util/cbfstool util/sconfig util/nvramtool util/pgtblgen
-subdirs-y += util/futility util/marvell util/bincfg util/supermicro
+subdirs-y += util/cbfstool util/sconfig util/nvramtool util/pgtblgen util/amdfwtool
+subdirs-y += util/futility util/marvell util/bincfg util/supermicro util/qemu
 subdirs-y += $(wildcard src/arch/*)
 subdirs-y += src/mainboard/$(MAINBOARDDIR)
 subdirs-y += src/security
@@ -181,9 +183,6 @@ decompressor-generic-ccopts += -D__DECOMPRESSOR__
 bootblock-generic-ccopts += -D__BOOTBLOCK__
 romstage-generic-ccopts += -D__ROMSTAGE__
 ramstage-generic-ccopts += -D__RAMSTAGE__
-ifeq ($(CONFIG_TRACE),y)
-ramstage-c-ccopts += -finstrument-functions
-endif
 ifeq ($(CONFIG_COVERAGE),y)
 ramstage-c-ccopts += -fprofile-arcs -ftest-coverage
 endif
@@ -336,7 +335,7 @@ cbfs-files-processor-struct= \
 	$(eval $(2): $(1) $(obj)/build.h $(KCONFIG_AUTOHEADER); \
 		printf "    CC+STRIP   $(@)\n"; \
 		$(CC_ramstage) -MMD $(CPPFLAGS_ramstage) $(CFLAGS_ramstage) $$(ramstage-c-ccopts) -include $(KCONFIG_AUTOHEADER) -MT $(2) -o $(2).tmp -c $(1) && \
-		$(OBJCOPY_ramstage) -O binary $(2).tmp $(2); \
+		$(OBJCOPY_ramstage) -O binary --set-section-flags .bss*=alloc,contents,load $(2).tmp $(2); \
 		rm -f $(2).tmp) \
 	$(eval DEPENDENCIES += $(2).d)
 
@@ -578,9 +577,6 @@ $(IFDTOOL):
 	cp -a $(top)/util/ifdtool/ifdtool $@
 
 AMDFWTOOL:=$(objutil)/amdfwtool/amdfwtool
-$(AMDFWTOOL): $(top)/util/amdfwtool/amdfwtool.c
-	@printf "    HOSTCC     $(subst $(obj)/,,$(@))\n"
-	$(HOSTCC) $(HOSTCFLAGS) -DCONFIG_ROM_SIZE=$(CONFIG_ROM_SIZE) -o $@ $<
 
 $(ECCTOOL):
 	@printf "    Compile ECCTOOL\n"
@@ -609,19 +605,34 @@ $(obj)/config.h: $(objutil)/kconfig/conf
 # Creation of these is architecture and mainboard independent
 DEVICETREE_FILE := $(src)/mainboard/$(MAINBOARDDIR)/$(CONFIG_DEVICETREE)
 
+SCONFIG_OPTIONS := --mainboard_devtree=$(DEVICETREE_FILE)
+
 ifneq ($(CONFIG_OVERRIDE_DEVICETREE),)
-
 OVERRIDE_DEVICETREE_FILE := $(src)/mainboard/$(MAINBOARDDIR)/$(CONFIG_OVERRIDE_DEVICETREE)
+SCONFIG_OPTIONS += --override_devtree=$(OVERRIDE_DEVICETREE_FILE)
+endif
 
+ifneq ($(CONFIG_CHIPSET_DEVICETREE),)
+CHIPSET_DEVICETREE_FILE := $(src)/$(CONFIG_CHIPSET_DEVICETREE)
+SCONFIG_OPTIONS += --chipset_devtree=$(CHIPSET_DEVICETREE_FILE)
 endif
 
 DEVICETREE_STATIC_C := $(obj)/mainboard/$(MAINBOARDDIR)/static.c
-DEVICETREE_STATIC_H := $(obj)/static.h
+SCONFIG_OPTIONS += --output_c=$(DEVICETREE_STATIC_C)
 
-$(DEVICETREE_STATIC_C): $(DEVICETREE_FILE) $(OVERRIDE_DEVICETREE_FILE) $(objutil)/sconfig/sconfig
+DEVICETREE_STATIC_H := $(obj)/static.h
+SCONFIG_OPTIONS += --output_h=$(DEVICETREE_STATIC_H)
+
+DEVICETREE_DEVICENAMES_H := $(obj)/static_devices.h
+SCONFIG_OPTIONS += --output_d=$(DEVICETREE_DEVICENAMES_H)
+
+DEVICETREE_FWCONFIG_H := $(obj)/static_fw_config.h
+SCONFIG_OPTIONS += --output_f=$(DEVICETREE_FWCONFIG_H)
+
+$(DEVICETREE_STATIC_C): $(DEVICETREE_FILE) $(OVERRIDE_DEVICETREE_FILE) $(CHIPSET_DEVICETREE_FILE) $(objutil)/sconfig/sconfig
 	@printf "    SCONFIG    $(subst $(src)/,,$(<))\n"
 	mkdir -p $(dir $(DEVICETREE_STATIC_C))
-	$(objutil)/sconfig/sconfig $(DEVICETREE_FILE) $(DEVICETREE_STATIC_C) $(DEVICETREE_STATIC_H) $(OVERRIDE_DEVICETREE_FILE)
+	$(objutil)/sconfig/sconfig $(SCONFIG_OPTIONS)
 
 ramstage-y+=$(DEVICETREE_STATIC_C)
 romstage-y+=$(DEVICETREE_STATIC_C)
@@ -732,6 +743,16 @@ else
 TXTIBB :=
 
 endif
+
+ifeq ($(CONFIG_INTEL_CBNT_SUPPORT),y)
+
+CBNTIBB := --cbnt
+
+else
+
+CBNTIBB :=
+
+endif # CONFIG_INTEL_CBNT_SUPPORT
 
 ifeq ($(CONFIG_COMPRESS_BOOTBLOCK),y)
 
@@ -1064,6 +1085,7 @@ $(obj)/fmap.fmap: $(obj)/fmap.fmd $(FMAPTOOL)
 ifeq ($(CONFIG_INTEL_ADD_TOP_SWAP_BOOTBLOCK),y)
 TS_OPTIONS := -j $(CONFIG_INTEL_TOP_SWAP_BOOTBLOCK_SIZE)
 endif
+
 ifneq ($(CONFIG_UPDATE_IMAGE),y)
 $(obj)/coreboot.pre: $(objcbfs)/bootblock.bin $$(prebuilt-files) $(CBFSTOOL) $(IFITTOOL) $$(cpu_ucode_cbfs_file) $(obj)/fmap.fmap $(obj)/fmap.desc
 	$(CBFSTOOL) $@.tmp create -M $(obj)/fmap.fmap -r $(shell cat $(obj)/fmap.desc)
@@ -1073,6 +1095,7 @@ ifeq ($(CONFIG_ARCH_X86),y)
 		-n bootblock \
 		-t bootblock \
 		$(TXTIBB) \
+		$(CBNTIBB) \
 		-b -$(call file-size,$(objcbfs)/bootblock.bin) $(cbfs-autogen-attributes) \
 		$(TS_OPTIONS)
 else # ifeq ($(CONFIG_ARCH_X86),y)
@@ -1109,8 +1132,6 @@ $(REFCODE_BLOB): $(RMODTOOL)
 	$(RMODTOOL) -i $(CONFIG_REFCODE_BLOB_FILE) -o $@
 endif
 
-FIT_ENTRY=$(call strip_quotes, $(CONFIG_INTEL_TOP_SWAP_FIT_ENTRY_FMAP_REG))
-
 ifeq ($(CONFIG_HAVE_RAMSTAGE),y)
 RAMSTAGE=$(objcbfs)/ramstage.elf
 else
@@ -1118,65 +1139,19 @@ RAMSTAGE=
 endif
 
 $(obj)/coreboot.rom: $(obj)/coreboot.pre $(RAMSTAGE) $(CBFSTOOL) $(ECCTOOL) $(SBSINGTOOLS) $$(INTERMEDIATE)
-
 	@printf "    CBFS       $(subst $(obj)/,,$(@))\n"
 # The full ROM may be larger than the CBFS part, so create an empty
 # file (filled with \377 = 0xff) and copy the CBFS image over it.
 	dd if=/dev/zero bs=$(call _toint,$(CONFIG_ROM_SIZE)) count=1 2> /dev/null | tr '\000' '\377' > $@.tmp
 	dd if=$(obj)/coreboot.pre of=$@.tmp bs=8192 conv=notrunc 2> /dev/null
-ifneq ($(CONFIG_SEABIOS_PS2_TIMEOUT),)
-ifneq ($(CONFIG_SEABIOS_PS2_TIMEOUT),0)
-ifneq ($(CONFIG_UPDATE_IMAGE),y)
-	@printf "    SeaBIOS    Wait up to $(CONFIG_SEABIOS_PS2_TIMEOUT) ms for PS/2 keyboard controller initialization\n"
-	$(CBFSTOOL) $@.tmp add-int -i $(CONFIG_SEABIOS_PS2_TIMEOUT) -n etc/ps2-keyboard-spinup
-endif
-endif
-endif
-ifeq ($(CONFIG_SEABIOS_ADD_SERCON_PORT_FILE),y)
-	@printf "    SeaBIOS    Add sercon-port file\n"
-	$(CBFSTOOL) $@.tmp add-int -i $(CONFIG_SEABIOS_SERCON_PORT_ADDR) -n etc/sercon-port
-endif
-ifeq ($(CONFIG_SEABIOS_THREAD_OPTIONROMS),y)
-	@printf "    SeaBIOS    Thread optionroms\n"
-	$(CBFSTOOL) $@.tmp add-int -i 2 -n etc/threads
-endif
 ifeq ($(CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE),y)
-ifneq ($(CONFIG_UPDATE_IMAGE),y) # never update the bootblock
-ifeq ($(CONFIG_CPU_MICROCODE_CBFS_EXTERNAL_HEADER),y)
-	@printf "    UPDATE-FIT\n"
-	$(IFITTOOL) -f $@.tmp -a -n cpu_microcode_blob.bin -t 1 -s $(CONFIG_CPU_INTEL_NUM_FIT_ENTRIES) \
-	-r COREBOOT
-endif
-ifeq ($(CONFIG_USE_CPU_MICROCODE_CBFS_BINS),y)
-	@printf "    UPDATE-FIT\n"
-	$(IFITTOOL) -f $@.tmp -a -n cpu_microcode_blob.bin -t 1 -s $(CONFIG_CPU_INTEL_NUM_FIT_ENTRIES) \
-	-r COREBOOT
-endif
+# Print final FIT table
 	$(IFITTOOL) -f $@.tmp -D -r COREBOOT
-
-# Second FIT in TOP_SWAP bootblock
+# Print final TS BOOTBLOCK FIT table
 ifeq ($(CONFIG_INTEL_ADD_TOP_SWAP_BOOTBLOCK),y)
-# INTEL_TOP_SWAP_FIT_ENTRY_FMAP_REG adds a region as first ucode into the seconds bootblock
-ifneq ($(FIT_ENTRY),)
-	@printf "    UPDATE-FIT2\n"
-	$(IFITTOOL) -f $@.tmp -A -n $(FIT_ENTRY) -t 1 -s $(CONFIG_CPU_INTEL_NUM_FIT_ENTRIES) \
-	$(TS_OPTIONS) -r COREBOOT
-endif
-ifeq ($(CONFIG_CPU_MICROCODE_CBFS_EXTERNAL_HEADER),y)
-	@printf "    UPDATE-FIT2\n"
-	$(IFITTOOL) -f $@.tmp -a -n cpu_microcode_blob.bin -t 1 -s $(CONFIG_CPU_INTEL_NUM_FIT_ENTRIES) \
-	$(TS_OPTIONS) -r COREBOOT
-endif
-ifeq ($(CONFIG_USE_CPU_MICROCODE_CBFS_BINS),y)
-	@printf "    UPDATE-FIT2\n"
-	$(IFITTOOL) -f $@.tmp -a -n cpu_microcode_blob.bin -t 1 -s $(CONFIG_CPU_INTEL_NUM_FIT_ENTRIES) \
-	$(TS_OPTIONS) -r COREBOOT
-endif
+	@printf "    TOP SWAP FIT table\n"
 	$(IFITTOOL) -f $@.tmp -D $(TS_OPTIONS) -r COREBOOT
-
-endif
-
-endif # !CONFIG_UPDATE_IMAGE
+endif # CONFIG_INTEL_ADD_TOP_SWAP_BOOTBLOCK
 endif # CONFIG_CPU_INTEL_FIRMWARE_INTERFACE_TABLE
 	mv $@.tmp $@
 	@printf "    CBFSLAYOUT  $(subst $(obj)/,,$(@))\n\n"

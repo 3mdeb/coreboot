@@ -18,10 +18,6 @@ static const struct pad_config override_gpio_table[] = {
 	PAD_NC(GPP_A15, NONE),
 	/* A16 : USB_OC3# ==> USB_C0_OC_ODL */
 	PAD_CFG_NF(GPP_A16, NONE, DEEP, NF1),
-	/* A19 : DDSP_HPD1 ==> USB_C0_DP_HPD */
-	PAD_CFG_NF(GPP_A19, NONE, DEEP, NF1),
-	/* A20 : DDSP_HPD2 ==> USB_C1_DP_HPD */
-	PAD_CFG_NF(GPP_A20, NONE, DEEP, NF1),
 	/* A21 : DDPC_CTRCLK ==> EN_FP_PWR */
 	PAD_CFG_GPO(GPP_A21, 1, DEEP),
 	/* A23 : I2S1_SCLK ==> I2S1_SPKR_SCLK */
@@ -67,7 +63,7 @@ static const struct pad_config override_gpio_table[] = {
 	PAD_CFG_GPO(GPP_C23, 1, DEEP),
 
 	/* D4  : IMGCLKOUT0# ==> CAMMERA_SWITCH */
-	PAD_CFG_GPI(GPP_D4, NONE, DEEP),
+	PAD_CFG_GPI_INT(GPP_D4, NONE, PLTRST, EDGE_BOTH),
 	/* D6  : SRCCLKREQ1# ==> WLAN_CLKREQ_ODL */
 	PAD_CFG_NF(GPP_D6, NONE, DEEP, NF1),
 	/* D8  : SRCCLKREQ3# ==> SD_CLKREQ_ODL */
@@ -84,7 +80,7 @@ static const struct pad_config override_gpio_table[] = {
 	/* E2  : SPI1_IO3 ==> WLAN_PCIE_WAKE_ODL */
 	PAD_CFG_GPI(GPP_E2, NONE, DEEP),
 	/* E3  : CPU_GP0 ==> USI_REPORT_EN */
-	PAD_CFG_GPO(GPP_E3, 1, DEEP),
+	PAD_CFG_GPO(GPP_E3, 0, DEEP),
 	/* E4  : SATA_DEVSLP0 ==> M2_SSD_PE_WAKE_ODL */
 	PAD_CFG_GPI(GPP_E4, NONE, DEEP),
 	/* E6  : THC0_SPI1_RST# ==> GPP_E6_STRAP */
@@ -158,9 +154,9 @@ static const struct pad_config override_gpio_table[] = {
 	/* S1 : SNDW0_DATA ==> SNDW0_HP_DATA_R */
 	PAD_CFG_NF(GPP_S1, NONE, DEEP, NF1),
 	/* S4 : SNDW2_CLK ==> PCH_DMIC_CAM_SCL_R */
-	PAD_CFG_NF(GPP_S4, NONE, DEEP, NF1),
+	PAD_CFG_NF(GPP_S4, NONE, DEEP, NF2),
 	/* S5 : SNDW2_DATA ==> PCH_DMIC_CAM_SDA_R */
-	PAD_CFG_NF(GPP_S5, NONE, DEEP, NF1),
+	PAD_CFG_NF(GPP_S5, NONE, DEEP, NF2),
 
 	/* GPD9: SLP_WLAN# ==> SLP_WLAN_L */
 	PAD_CFG_NF(GPD9, NONE, DEEP, NF1),

@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <acpi/acpi.h>
 #include <baseboard/variants.h>
 #include <delay.h>
+#include <ec/google/chromeec/ec.h>
 #include <gpio.h>
 #include <soc/gpio.h>
 #include <soc/smi.h>
@@ -14,8 +16,8 @@ static const struct soc_amd_gpio gpio_set_stage_ram[] = {
 	PAD_NF(GPIO_0, PWR_BTN_L, PULL_NONE),
 	/* SYS_RESET_L */
 	PAD_NF(GPIO_1, SYS_RESET_L, PULL_NONE),
-	/* PCIE_WAKE_L */
-	PAD_NF(GPIO_2, WAKE_L, PULL_NONE),
+	/* WIFI_PCIE_WAKE_ODL */
+	PAD_SCI(GPIO_2, PULL_NONE, EDGE_LOW),
 	/* H1_FCH_INT_ODL */
 	PAD_INT(GPIO_3, PULL_NONE, EDGE_LOW, STATUS_DELIVERY),
 	/* PEN_DETECT_ODL */
@@ -30,10 +32,8 @@ static const struct soc_amd_gpio gpio_set_stage_ram[] = {
 	PAD_NF(GPIO_8, ACP_I2S_LRCLK, PULL_NONE),
 	/* TOUCHPAD_INT_ODL */
 	PAD_SCI(GPIO_9, PULL_NONE, EDGE_LOW),
-	/* S0iX SLP - (unused - goes to EC & FPMCU */
-	PAD_NC(GPIO_10),
-	/* FPMCU_RST_L */
-	PAD_GPO(GPIO_11, HIGH),
+	/* S0iX SLP - goes to EC & FPMCU */
+	PAD_GPO(GPIO_10, HIGH),
 	/* USI_INT_ODL */
 	PAD_GPI(GPIO_12, PULL_NONE),
 	/* EN_PWR_TOUCHPAD_PS2 */
@@ -71,8 +71,6 @@ static const struct soc_amd_gpio gpio_set_stage_ram[] = {
 	PAD_NF(GPIO_30, ESPI_CS_L, PULL_NONE),
 	/*  EC_AP_INT_ODL (Sensor Framesync) */
 	PAD_GPI(GPIO_31, PULL_NONE),
-	/* EN_PWR_FP */
-	PAD_GPO(GPIO_32, HIGH),
 	/* GPIO_33 - GPIO_39: Not available */
 	/* NVME_AUX_RESET_L */
 	PAD_GPO(GPIO_40, HIGH),
@@ -85,9 +83,9 @@ static const struct soc_amd_gpio gpio_set_stage_ram[] = {
 	 * access will be very slow.
 	 */
 	PAD_GPO(GPIO_67, LOW), // Select Camera 1 Dmic
-	/* EMMC_RESET */
-	PAD_GPO(GPIO_68, LOW),
-	/* FPMCU_BOOT0 - TODO: Check this */
+	/* EMMC_RESET_L */
+	PAD_GPO(GPIO_68, HIGH),
+	/* FPMCU_BOOT0 */
 	PAD_GPO(GPIO_69, LOW),
 	/* EMMC_CLK */
 	PAD_NF(GPIO_70, EMMC_CLK, PULL_NONE),
@@ -101,8 +99,8 @@ static const struct soc_amd_gpio gpio_set_stage_ram[] = {
 	/* GPIO_77 - GPIO_83: Not available */
 	/* RAM_ID_4 */
 	PAD_GPI(GPIO_84, PULL_NONE),
-	/* APU_EDP_BL_DISABLE TODP: Set low in depthcharge */
-	PAD_GPO(GPIO_85, HIGH),
+	/* APU_EDP_BL_DISABLE */
+	PAD_GPO(GPIO_85, LOW),
 	/* WIFI_AUX_RESET_L */
 	PAD_GPO(GPIO_86, HIGH),
 	/* EMMC_DATA7 */
@@ -201,8 +199,8 @@ static void wifi_power_reset_configure_active_low_power(void)
 	 * Configure WiFi GPIOs such that:
 	 * - WIFI_AUX_RESET_L is configured first to assert PERST# to WiFi device.
 	 * - Enable power to WiFi using EN_PWR_WIFI_L.
-	 * - Wait for 50ms after power to WiFi is enabled.
-	 * - Deassert WIFI_AUX_RESET_L.
+	 * - Wait for >50ms after power to WiFi is enabled. (Time between bootblock & ramstage)
+	 * - WIFI_AUX_RESET_L gets deasserted later in mainboard_configure_gpios in ramstage
 	 */
 	static const struct soc_amd_gpio v3_wifi_table[] = {
 		/* WIFI_AUX_RESET_L */
@@ -212,8 +210,6 @@ static void wifi_power_reset_configure_active_low_power(void)
 	};
 	program_gpios(v3_wifi_table, ARRAY_SIZE(v3_wifi_table));
 
-	mdelay(50);
-	gpio_set(GPIO_86, 1);
 }
 
 static void wifi_power_reset_configure_active_high_power(void)
@@ -300,15 +296,79 @@ __weak void variant_pcie_gpio_configure(void)
 		wifi_power_reset_configure_pre_v3();
 }
 
+__weak void finalize_gpios(int slp_typ)
+{
+	if (variant_has_fingerprint() && slp_typ != ACPI_S3) {
+
+		if (fpmcu_needs_delay())
+			mdelay(550);
+
+		/*
+		 * Enable the FPMCU by enabling EN_PWR_FP, then bringing it out
+		 * of reset by setting FPMCU_RST_L high 3ms later.
+		 */
+		gpio_set(GPIO_32, 1);
+		mdelay(3);
+		gpio_set(GPIO_11, 1);
+	}
+}
+
+static const struct soc_amd_gpio gpio_fingerprint_bootblock_table[] = {
+	/* FPMCU_RST_L */
+	PAD_GPO(GPIO_11, LOW),
+	/* EN_PWR_FP */
+	PAD_GPO(GPIO_32, LOW),
+};
+
+static const struct soc_amd_gpio gpio_no_fingerprint_bootblock_table[] = {
+	/* FPMCU_RST_L */
+	PAD_NC(GPIO_11),
+	/* EN_PWR_FP */
+	PAD_NC(GPIO_32),
+};
+
+const __weak struct soc_amd_gpio *variant_bootblock_gpio_table(size_t *size, int slp_typ)
+{
+	if (variant_has_fingerprint()) {
+		if (slp_typ == ACPI_S3)
+			return NULL;
+
+		*size = ARRAY_SIZE(gpio_fingerprint_bootblock_table);
+		return gpio_fingerprint_bootblock_table;
+	}
+
+	*size = ARRAY_SIZE(gpio_no_fingerprint_bootblock_table);
+	return gpio_no_fingerprint_bootblock_table;
+}
+
 static const struct soc_amd_gpio gpio_sleep_table[] = {
+	/* S0iX SLP */
+	PAD_GPO(GPIO_10, LOW),
 	/* NVME_AUX_RESET_L */
 	PAD_GPO(GPIO_40, LOW),
 	/* EN_PWR_CAMERA */
 	PAD_GPO(GPIO_76, LOW),
 };
 
+static const struct soc_amd_gpio gpio_fp_shutdown_table[] = {
+	/* NVME_AUX_RESET_L */
+	PAD_GPO(GPIO_40, LOW),
+	/* EN_PWR_CAMERA */
+	PAD_GPO(GPIO_76, LOW),
+
+	/* FPMCU_RST_L */
+	PAD_GPO(GPIO_11, LOW),
+	/* EN_PWR_FP */
+	PAD_GPO(GPIO_32, LOW),
+};
+
 const __weak struct soc_amd_gpio *variant_sleep_gpio_table(size_t *size, int slp_typ)
 {
+	if (slp_typ == SLP_TYP_S5) {
+		*size = ARRAY_SIZE(gpio_fp_shutdown_table);
+		return gpio_fp_shutdown_table;
+	}
+
 	*size = ARRAY_SIZE(gpio_sleep_table);
 	return gpio_sleep_table;
 }

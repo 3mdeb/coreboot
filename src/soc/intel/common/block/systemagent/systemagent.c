@@ -146,7 +146,6 @@ void sa_fill_gnvs(struct global_nvs *gnvs)
 	       gnvs->a4gb, gnvs->a4gs);
 }
 
-
 static void sa_get_mem_map(struct device *dev, uint64_t *values)
 {
 	int i;
@@ -387,6 +386,7 @@ static const unsigned short systemagent_ids[] = {
 	PCI_DEVICE_ID_INTEL_JSL_ID_2,
 	PCI_DEVICE_ID_INTEL_JSL_ID_3,
 	PCI_DEVICE_ID_INTEL_JSL_ID_4,
+	PCI_DEVICE_ID_INTEL_JSL_ID_5,
 	PCI_DEVICE_ID_INTEL_ADL_S_ID_1,
 	PCI_DEVICE_ID_INTEL_ADL_S_ID_2,
 	PCI_DEVICE_ID_INTEL_ADL_S_ID_3,

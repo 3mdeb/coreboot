@@ -140,7 +140,6 @@ struct soc_intel_elkhartlake_config {
 
 	/* Gfx related */
 	uint8_t IgdDvmt50PreAlloc;
-	uint8_t InternalGfx;
 	uint8_t SkipExtGfxScan;
 
 	uint32_t GraphicsConfigPtr;
@@ -149,8 +148,6 @@ struct soc_intel_elkhartlake_config {
 	/* HeciEnabled decides the state of Heci1 at end of boot
 	 * Setting to 0 (default) disables Heci1 and hides the device from OS */
 	uint8_t HeciEnabled;
-	/* Intel Speed Shift Technology */
-	uint8_t speed_shift_enable;
 
 	/* Enable/Disable EIST. 1b:Enabled, 0b:Disabled */
 	uint8_t eist_enable;

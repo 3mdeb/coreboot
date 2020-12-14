@@ -10,9 +10,11 @@
 #include <intelblocks/cse.h>
 #include <intelblocks/lpss.h>
 #include <intelblocks/mp_init.h>
+#include <intelblocks/pmclib.h>
 #include <intelblocks/xdci.h>
 #include <intelpch/lockdown.h>
 #include <security/vboot/vboot_common.h>
+#include <soc/early_tcss.h>
 #include <soc/gpio_soc_defs.h>
 #include <soc/intel/common/vbt.h>
 #include <soc/pci_devs.h>
@@ -185,6 +187,7 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		params->PcieRpAdvancedErrorReporting[i] =
 			config->PcieRpAdvancedErrorReporting[i];
 		params->PcieRpHotPlug[i] = config->PcieRpHotPlug[i];
+		params->PciePtm[i] = config->PciePtm[i];
 	}
 
 	/* Enable ClkReqDetect for enabled port */
@@ -255,6 +258,14 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 		}
 	}
 
+	params->AcousticNoiseMitigation = config->AcousticNoiseMitigation;
+	memcpy(&params->SlowSlewRate, &config->SlowSlewRate,
+		ARRAY_SIZE(config->SlowSlewRate) * sizeof(config->SlowSlewRate[0]));
+
+	memcpy(&params->FastPkgCRampDisable, &config->FastPkgCRampDisable,
+		ARRAY_SIZE(config->FastPkgCRampDisable) *
+			sizeof(config->FastPkgCRampDisable[0]));
+
 	/* Enable TCPU for processor thermal control */
 	params->Device4Enable = config->Device4Enable;
 
@@ -268,6 +279,13 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 	/* CNVi */
 	dev = pcidev_path_on_root(PCH_DEVFN_CNVI_WIFI);
 	params->CnviMode = is_dev_enabled(dev);
+
+	/* CNVi BT Core */
+	dev = pcidev_path_on_root(PCH_DEVFN_CNVI_BT);
+	params->CnviBtCore = is_dev_enabled(dev);
+
+	/* CNVi BT Audio Offload */
+	params->CnviBtAudioOffload = config->CnviBtAudioOffload;
 
 	/* VMD */
 	dev = pcidev_path_on_root(SA_DEVFN_VMD);
@@ -331,8 +349,28 @@ void platform_fsp_silicon_init_params_cb(FSPS_UPD *supd)
 
 	}
 
+	/* Apply minimum assertion width settings if non-zero */
+	if (config->PchPmSlpS3MinAssert)
+		params->PchPmSlpS3MinAssert = config->PchPmSlpS3MinAssert;
+	if (config->PchPmSlpS4MinAssert)
+		params->PchPmSlpS4MinAssert = config->PchPmSlpS4MinAssert;
+	if (config->PchPmSlpSusMinAssert)
+		params->PchPmSlpSusMinAssert = config->PchPmSlpSusMinAssert;
+	if (config->PchPmSlpAMinAssert)
+		params->PchPmSlpAMinAssert = config->PchPmSlpAMinAssert;
+
+	/* Set Power Cycle Duration */
+	if (config->PchPmPwrCycDur)
+		params->PchPmPwrCycDur = get_pm_pwr_cyc_dur(config->PchPmSlpS4MinAssert,
+				config->PchPmSlpS3MinAssert, config->PchPmSlpAMinAssert,
+				config->PchPmPwrCycDur);
+
 	/* EnableMultiPhaseSiliconInit for running MultiPhaseSiInit */
 	params->EnableMultiPhaseSiliconInit = 1;
+
+	/* Disable C1 C-state Demotion */
+	params->C1StateAutoDemotion = 0;
+
 	mainboard_silicon_init_params(params);
 }
 
@@ -348,6 +386,11 @@ void platform_fsp_multi_phase_init_cb(uint32_t phase_index)
 	switch (phase_index) {
 	case 1:
 		/* TCSS specific initialization here */
+		printk(BIOS_DEBUG, "FSP MultiPhaseSiInit %s/%s called\n",
+			__FILE__, __func__);
+		if (CONFIG(EARLY_TCSS_DISPLAY) && (vboot_recovery_mode_enabled() ||
+			vboot_developer_mode_enabled()))
+			mainboard_early_tcss_enable();
 		break;
 	default:
 		break;

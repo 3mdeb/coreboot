@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef __AMDBLOCK_GPIO_BANKS_H__
-#define __AMDBLOCK_GPIO_BANKS_H__
+#ifndef AMD_BLOCK_GPIO_BANKS_H
+#define AMD_BLOCK_GPIO_BANKS_H
 
 #include <types.h>
 
@@ -135,7 +135,6 @@ enum {
 #define GPIO_PULL_PULL_NONE 0
 
 #define AMD_GPIO_MUX_MASK			0x03
-
 
 /*
  * Flags used for GPIO configuration. These provide additional information that does not go
@@ -362,4 +361,4 @@ void soc_get_gpio_event_table(const struct soc_amd_event **table, size_t *items)
 /* May be implemented by soc to handle special cases */
 void soc_gpio_hook(uint8_t gpio, uint8_t mux);
 
-#endif /* __AMDBLOCK_GPIO_BANKS_H__ */
+#endif /* AMD_BLOCK_GPIO_BANKS_H */

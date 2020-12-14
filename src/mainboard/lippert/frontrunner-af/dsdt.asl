@@ -3,9 +3,9 @@
 /* DefinitionBlock Statement */
 #include <acpi/acpi.h>
 DefinitionBlock (
-	"DSDT.AML",           /* Output filename */
-	"DSDT",                 /* Signature */
-	0x02,		/* DSDT Revision, needs to be 2 for 64bit */
+	"dsdt.aml",
+	"DSDT",
+	ACPI_DSDT_REV_2,
 	OEM_ID,
 	ACPI_TABLE_CREATOR,
 	0x00010001	/* OEM Revision */
@@ -134,8 +134,7 @@ DefinitionBlock (
 		PIOD, 0x00000008,
 	}
 	IndexField (PIOI, PIOD, ByteAcc, NoLock, Preserve) {
-		Offset(0x00),	/* MiscControl */
-		, 1,
+		    , 1,	/* MiscControl */
 		T1EE, 1,
 		T2EE, 1,
 		Offset(0x01),	/* MiscStatus */

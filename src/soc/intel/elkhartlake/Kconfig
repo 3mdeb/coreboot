@@ -8,17 +8,15 @@ if SOC_INTEL_ELKHARTLAKE
 config CPU_SPECIFIC_OPTIONS
 	def_bool y
 	select ACPI_INTEL_HARDWARE_SLEEP_VALUES
-	select ARCH_BOOTBLOCK_X86_32
-	select ARCH_RAMSTAGE_X86_32
-	select ARCH_ROMSTAGE_X86_32
-	select ARCH_VERSTAGE_X86_32
-	select BOOT_DEVICE_SPI_FLASH_RW_NOMMAP_EARLY if BOOT_DEVICE_SPI_FLASH
+	select ARCH_ALL_STAGES_X86_32
 	select BOOT_DEVICE_SUPPORTS_WRITES
 	select CACHE_MRC_SETTINGS
 	select CPU_INTEL_COMMON
 	select CPU_INTEL_FIRMWARE_INTERFACE_TABLE
+	select CPU_SUPPORTS_PM_TIMER_EMULATION
 	select FSP_COMPRESS_FSP_S_LZ4
 	select FSP_M_XIP
+	select FSP_STATUS_GLOBAL_RESET_REQUIRED_3
 	select GENERIC_GPIO_LIB
 	select HAVE_FSP_GOP
 	select INTEL_DESCRIPTOR_MODE_CAPABLE
@@ -32,15 +30,17 @@ config CPU_SPECIFIC_OPTIONS
 	select PARALLEL_MP
 	select PARALLEL_MP_AP_WORK
 	select MICROCODE_BLOB_UNDISCLOSED
-	select PLATFORM_USES_FSP2_2
+	select PLATFORM_USES_FSP2_1
 	select FSP_PEIM_TO_PEIM_INTERFACE
 	select REG_SCRIPT
 	select PMC_GLOBAL_RESET_ENABLE_LOCK
+	select PMC_LOW_POWER_MODE_PROGRAM
 	select CPU_INTEL_COMMON_SMM
 	select SOC_INTEL_COMMON
 	select SOC_INTEL_COMMON_ACPI_WAKE_SOURCE
 	select SOC_INTEL_COMMON_BLOCK
 	select SOC_INTEL_COMMON_BLOCK_ACPI
+	select SOC_INTEL_COMMON_BLOCK_CAR
 	select SOC_INTEL_COMMON_BLOCK_CHIP_CONFIG
 	select SOC_INTEL_COMMON_BLOCK_CPU
 	select SOC_INTEL_COMMON_BLOCK_CPU_MPINIT
@@ -52,38 +52,40 @@ config CPU_SPECIFIC_OPTIONS
 	select SOC_INTEL_COMMON_BLOCK_SMM
 	select SOC_INTEL_COMMON_BLOCK_POWER_LIMIT
 	select SOC_INTEL_COMMON_BLOCK_SMM_IO_TRAP
+	select SOC_INTEL_COMMON_FSP_RESET
 	select SOC_INTEL_COMMON_PCH_BASE
 	select SOC_INTEL_COMMON_RESET
-	select SOC_INTEL_COMMON_BLOCK_CAR
 	select SSE2
 	select SUPPORT_CPU_UCODE_IN_CBFS
 	select TSC_MONOTONIC_TIMER
 	select UDELAY_TSC
 	select UDK_202005_BINDING
 	select DISPLAY_FSP_VERSION_INFO
-	select HECI_DISABLE_USING_SMM
+
+config MAX_CPUS
+	int
+	default 4
 
 config DCACHE_RAM_BASE
 	default 0xfef00000
 
 config DCACHE_RAM_SIZE
-	default 0x80000
+	default 0xc0000
 	help
 	  The size of the cache-as-ram region required during bootblock
 	  and/or romstage.
 
 config DCACHE_BSP_STACK_SIZE
 	hex
-	default 0x30400
+	default 0x30000
 	help
 	  The amount of anticipated stack usage in CAR by bootblock and
-	  other stages. In the case of FSP_USES_CB_STACK default value
-	  will be sum of FSP-M stack requirement(192 KiB) and CB romstage
-	  stack requirement(~1KiB).
+	  other stages. In the case of FSP_USES_CB_STACK default value will be
+	  sum of FSP-M stack requirement (192KiB) and CB romstage stack requirement (~1KiB).
 
 config FSP_TEMP_RAM_SIZE
 	hex
-	default 0x20000
+	default 0x40000
 	help
 	  The amount of anticipated heap usage in CAR by FSP.
 	  Refer to Platform FSP integration guide document to know
@@ -95,7 +97,7 @@ config IFD_CHIPSET
 
 config IED_REGION_SIZE
 	hex
-	default 0x400000
+	default 0x0
 
 config HEAP_SIZE
 	hex
@@ -103,7 +105,7 @@ config HEAP_SIZE
 
 config MAX_ROOT_PORTS
 	int
-	default 8
+	default 7
 
 config MAX_PCIE_CLOCKS
 	int
@@ -111,7 +113,7 @@ config MAX_PCIE_CLOCKS
 
 config SMM_TSEG_SIZE
 	hex
-	default 0x800000
+	default 0x1000000
 
 config SMM_RESERVED_SIZE
 	hex
@@ -135,6 +137,9 @@ config SOC_INTEL_COMMON_BLOCK_GSPI_CLOCK_MHZ
 	int
 	default 120
 
+config CPU_XTAL_HZ
+	default 38400000
+
 config DRIVERS_I2C_DESIGNWARE_CLOCK_MHZ
 	int
 	default 133
@@ -145,7 +150,7 @@ config SOC_INTEL_COMMON_BLOCK_GSPI_MAX
 
 config SOC_INTEL_I2C_DEV_MAX
 	int
-	default 6
+	default 8
 
 config SOC_INTEL_UART_DEV_MAX
 	int
@@ -153,7 +158,7 @@ config SOC_INTEL_UART_DEV_MAX
 
 config CONSOLE_UART_BASE_ADDRESS
 	hex
-	default 0xfe032000
+	default 0xfe042000
 	depends on INTEL_LPSS_UART_FOR_CONSOLE
 
 # Clock divider parameters for 115200 baud rate

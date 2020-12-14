@@ -468,7 +468,7 @@ void acpi_create_ssdt_generator(acpi_header_t *ssdt, const char *oem_table_id)
 	{
 		struct device *dev;
 		for (dev = all_devices; dev; dev = dev->next)
-			if (dev->ops && dev->ops->acpi_fill_ssdt)
+			if (dev->enabled && dev->ops && dev->ops->acpi_fill_ssdt)
 				dev->ops->acpi_fill_ssdt(dev);
 		current = (unsigned long) acpigen_get_current();
 	}
@@ -1251,14 +1251,7 @@ void acpi_create_fadt(acpi_fadt_t *fadt, acpi_facs_t *facs, void *dsdt)
 	/* should be 0 ACPI 3.0 */
 	fadt->reserved = 0;
 
-	if (CONFIG(SYSTEM_TYPE_CONVERTIBLE) ||
-	    CONFIG(SYSTEM_TYPE_LAPTOP))
-		fadt->preferred_pm_profile = PM_MOBILE;
-	else if (CONFIG(SYSTEM_TYPE_DETACHABLE) ||
-		 CONFIG(SYSTEM_TYPE_TABLET))
-		fadt->preferred_pm_profile = PM_TABLET;
-	else
-		fadt->preferred_pm_profile = PM_DESKTOP;
+	fadt->preferred_pm_profile = acpi_get_preferred_pm_profile();
 
 	arch_fill_fadt(fadt);
 
@@ -1347,9 +1340,7 @@ unsigned long write_acpi_tables(unsigned long start)
 		return fw;
 	}
 
-	dsdt_file = cbfs_boot_map_with_leak(
-				     CONFIG_CBFS_PREFIX "/dsdt.aml",
-				     CBFS_TYPE_RAW, &dsdt_size);
+	dsdt_file = cbfs_map(CONFIG_CBFS_PREFIX "/dsdt.aml", &dsdt_size);
 	if (!dsdt_file) {
 		printk(BIOS_ERR, "No DSDT file, skipping ACPI tables\n");
 		return current;
@@ -1362,12 +1353,12 @@ unsigned long write_acpi_tables(unsigned long start)
 		return current;
 	}
 
-	slic_file = cbfs_boot_map_with_leak(CONFIG_CBFS_PREFIX "/slic",
-				     CBFS_TYPE_RAW, &slic_size);
+	slic_file = cbfs_map(CONFIG_CBFS_PREFIX "/slic", &slic_size);
 	if (slic_file
 	    && (slic_file->length > slic_size
 		|| slic_file->length < sizeof(acpi_header_t)
-		|| memcmp(slic_file->signature, "SLIC", 4) != 0)) {
+		|| (memcmp(slic_file->signature, "SLIC", 4) != 0
+		    && memcmp(slic_file->signature, "MSDM", 4) != 0))) {
 		slic_file = 0;
 	}
 
@@ -1540,7 +1531,7 @@ void *acpi_find_wakeup_vector(void)
 	void *wake_vec;
 	int i;
 
-	if (!acpi_is_wakeup())
+	if (!acpi_is_wakeup_s3())
 		return NULL;
 
 	printk(BIOS_DEBUG, "Trying to find the wakeup vector...\n");

@@ -133,12 +133,10 @@ void sdram_initialize(struct pei_data *pei_data)
 	printk(BIOS_DEBUG, "Starting UEFI PEI System Agent\n");
 
 	/*
-	 * Do not pass MRC data in for recovery mode boot,
-	 * Always pass it in for S3 resume.
+	 * Always pass in mrc_cache data.  The driver will determine
+	 * whether to use the data or not.
 	 */
-	if (!(CONFIG(SANDYBRIDGE_VBOOT_IN_BOOTBLOCK) && vboot_recovery_mode_enabled()) ||
-	    pei_data->boot_mode == 2)
-		prepare_mrc_cache(pei_data);
+	prepare_mrc_cache(pei_data);
 
 	/* If MRC data is not found we cannot continue S3 resume. */
 	if (pei_data->boot_mode == 2 && !pei_data->mrc_input) {
@@ -150,7 +148,7 @@ void sdram_initialize(struct pei_data *pei_data)
 	pei_data->tx_byte = do_putchar;
 
 	/* Locate and call UEFI System Agent binary. */
-	entry = cbfs_boot_map_with_leak("mrc.bin", CBFS_TYPE_MRC, NULL);
+	entry = cbfs_map("mrc.bin", NULL);
 	if (entry) {
 		int rv;
 		rv = entry (pei_data);
@@ -176,9 +174,9 @@ void sdram_initialize(struct pei_data *pei_data)
 	if (CONFIG(USBDEBUG_IN_PRE_RAM))
 		usbdebug_hw_init(true);
 
-	/* For reference, print the System Agent version after executing the UEFI PEI stage */
+	/* Print the MRC version after executing the UEFI PEI stage */
 	u32 version = MCHBAR32(MRC_REVISION);
-	printk(BIOS_DEBUG, "System Agent Version %d.%d.%d Build %d\n",
+	printk(BIOS_DEBUG, "MRC Version %d.%d.%d Build %d\n",
 		(version >> 24) & 0xff, (version >> 16) & 0xff,
 		(version >>  8) & 0xff, (version >>  0) & 0xff);
 
@@ -253,7 +251,7 @@ static void southbridge_fill_pei_data(struct pei_data *pei_data)
 	pei_data->smbusbar   = CONFIG_FIXED_SMBUS_IO_BASE;
 	pei_data->wdbbar     = 0x04000000;
 	pei_data->wdbsize    = 0x1000;
-	pei_data->rcba       = (uintptr_t)DEFAULT_RCBABASE;
+	pei_data->rcba       = (uintptr_t)DEFAULT_RCBA;
 	pei_data->pmbase     = DEFAULT_PMBASE;
 	pei_data->gpiobase   = DEFAULT_GPIOBASE;
 	pei_data->gbe_enable = dev && dev->enabled;

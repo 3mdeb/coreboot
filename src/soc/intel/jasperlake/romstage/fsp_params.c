@@ -4,6 +4,7 @@
 #include <console/console.h>
 #include <device/device.h>
 #include <fsp/util.h>
+#include <soc/iomap.h>
 #include <soc/pci_devs.h>
 #include <soc/romstage.h>
 #include <soc/soc_chip.h>
@@ -81,6 +82,18 @@ static void soc_memory_init_params(FSP_M_CONFIG *m_cfg,
 
 	/* VT-d config */
 	m_cfg->VtdDisable = 0;
+	m_cfg->VtdIopEnable = 0x1;
+
+	if (m_cfg->InternalGfx) {
+		m_cfg->VtdIgdEnable = 0x1;
+		m_cfg->VtdBaseAddress[0] = GFXVT_BASE_ADDRESS;
+	}
+
+	if (m_cfg->SaIpuEnable) {
+		m_cfg->VtdIpuEnable = 0x1;
+		m_cfg->VtdBaseAddress[1] = IPUVT_BASE_ADDRESS;
+	}
+	m_cfg->VtdBaseAddress[2] = VTVC0_BASE_ADDRESS;
 
 	m_cfg->SerialIoUartDebugControllerNumber = CONFIG_UART_FOR_CONSOLE;
 	m_cfg->SerialIoUartDebugMode = config->SerialIoUartMode[CONFIG_UART_FOR_CONSOLE];
@@ -116,6 +129,13 @@ static void soc_memory_init_params(FSP_M_CONFIG *m_cfg,
 
 	/* Skip the CPU replacement check */
 	m_cfg->SkipCpuReplacementCheck = config->SkipCpuReplacementCheck;
+
+	/*
+	 * Set GpioOverride
+	 * When GpioOverride is set FSP will not configure any GPIOs
+	 * and rely on GPIO settings programmed before moved to FSP.
+	 */
+	m_cfg->GpioOverride = 1;
 }
 
 void platform_fsp_memory_init_params_cb(FSPM_UPD *mupd, uint32_t version)

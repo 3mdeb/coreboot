@@ -1,6 +1,10 @@
 
 ifeq ($(CONFIG_SOC_QUALCOMM_SC7180),y)
 
+decompressor-y += decompressor.c
+decompressor-y += mmu.c
+decompressor-y += timer.c
+
 ################################################################################
 bootblock-y += bootblock.c
 bootblock-y += mmu.c
@@ -29,6 +33,7 @@ verstage-$(CONFIG_DRIVERS_UART) += qupv3_uart.c
 
 ################################################################################
 romstage-y += cbmem.c
+romstage-y += watchdog.c
 romstage-y += timer.c
 romstage-y += ../common/qclib.c
 romstage-y += qclib.c
@@ -40,6 +45,7 @@ romstage-y += qupv3_spi.c
 romstage-y += gpio.c
 romstage-y += qupv3_i2c.c
 romstage-y += clock.c
+romstage-y += carve_out.c
 romstage-$(CONFIG_SC7180_QSPI) += qspi.c
 romstage-y += qcom_qup_se.c
 romstage-y += qupv3_config.c
@@ -47,6 +53,7 @@ romstage-$(CONFIG_DRIVERS_UART) += qupv3_uart.c
 
 ################################################################################
 ramstage-y += soc.c
+ramstage-y += carve_out.c
 ramstage-y += timer.c
 ramstage-y += spi.c
 ramstage-y += qupv3_spi.c

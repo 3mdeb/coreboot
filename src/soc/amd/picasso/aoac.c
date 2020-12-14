@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <amdblocks/acpimmio.h>
+#include <amdblocks/aoac.h>
 #include <soc/southbridge.h>
 #include <delay.h>
 
@@ -21,47 +22,13 @@
  * waiting for each device to become available, a single delay will be
  * executed.  The console UART is handled separately from this table.
  */
-const static int aoac_devs[] = {
+const static unsigned int aoac_devs[] = {
 	FCH_AOAC_DEV_AMBA,
 	FCH_AOAC_DEV_I2C2,
 	FCH_AOAC_DEV_I2C3,
 	FCH_AOAC_DEV_I2C4,
 	FCH_AOAC_DEV_ESPI,
 };
-
-void power_on_aoac_device(unsigned int dev)
-{
-	uint8_t byte;
-
-	/* Power on the UART and AMBA devices */
-	byte = aoac_read8(AOAC_DEV_D3_CTL(dev));
-	byte |= FCH_AOAC_PWR_ON_DEV;
-	byte &= ~FCH_AOAC_TARGET_DEVICE_STATE;
-	byte |= FCH_AOAC_D0_INITIALIZED;
-	aoac_write8(AOAC_DEV_D3_CTL(dev), byte);
-}
-
-void power_off_aoac_device(unsigned int dev)
-{
-	uint8_t byte;
-
-	/* Power on the UART and AMBA devices */
-	byte = aoac_read8(AOAC_DEV_D3_CTL(dev));
-	byte &= ~FCH_AOAC_PWR_ON_DEV;
-	aoac_write8(AOAC_DEV_D3_CTL(dev), byte);
-}
-
-bool is_aoac_device_enabled(unsigned int dev)
-{
-	uint8_t byte;
-
-	byte = aoac_read8(AOAC_DEV_D3_STATE(dev));
-	byte &= (FCH_AOAC_PWR_RST_STATE | FCH_AOAC_RST_CLK_OK_STATE);
-	if (byte == (FCH_AOAC_PWR_RST_STATE | FCH_AOAC_RST_CLK_OK_STATE))
-		return true;
-	else
-		return false;
-}
 
 void wait_for_aoac_enabled(unsigned int dev)
 {

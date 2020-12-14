@@ -13,7 +13,49 @@
 #include <stdint.h>
 #include <soc/memmap.h>
 #include <soc/iomap.h>
+#include "chip.h"
 
+enum {
+	ALIB_DPTCI_FUNCTION_ID = 0xc,
+	THERMAL_CONTROL_LIMIT_ID = 0x3,
+	SUSTAINED_POWER_LIMIT_PARAM_ID = 0x5,
+	FAST_PPT_LIMIT_PARAM_ID = 0x6,
+	SLOW_PPT_LIMIT_PARAM_ID = 0x7,
+	DPTC_TOTAL_UPDATE_PARAMS = 4,
+};
+
+struct dptc_param {
+	uint8_t id;
+	uint32_t value;
+} __packed;
+
+struct dptc_input {
+	uint16_t size;
+	struct dptc_param params[DPTC_TOTAL_UPDATE_PARAMS];
+} __packed;
+
+#define DPTC_INPUTS(_thermctllmit, _sustained, _fast, _slow)			\
+		{								\
+			.size = sizeof(struct dptc_input),			\
+			.params = {						\
+				{						\
+					.id = THERMAL_CONTROL_LIMIT_ID,		\
+					.value = _thermctllmit,			\
+				},						\
+				{						\
+					.id = SUSTAINED_POWER_LIMIT_PARAM_ID,	\
+					.value = _sustained,			\
+				},						\
+				{						\
+					.id = FAST_PPT_LIMIT_PARAM_ID,		\
+					.value = _fast,				\
+				},						\
+				{						\
+					.id = SLOW_PPT_LIMIT_PARAM_ID,		\
+					.value = _slow,				\
+				},						\
+			},							\
+		}
 /*
  *
  *                     +--------------------------------+
@@ -33,10 +75,10 @@
  *                     |            FSP-M               |
  *                     |         (FSP_M_SIZE)           |
  *                     +--------------------------------+ FSP_M_ADDR
- *                     |                                |X86_RESET_VECTOR = ROMSTAGE_ADDR + ROMSTAGE_SIZE - 0x10
  *                     |           romstage             |
  *                     |        (ROMSTAGE_SIZE)         |
  *                     +--------------------------------+ ROMSTAGE_ADDR
+ *                     |                                | X86_RESET_VECTOR = BOOTBLOCK_ADDR + C_ENV_BOOTBLOCK_SIZE - 0x10
  *                     |           bootblock            |
  *                     |     (C_ENV_BOOTBLOCK_SIZE)     |
  *                     +--------------------------------+ BOOTBLOCK_ADDR
@@ -139,6 +181,59 @@ static void read_resources(struct device *dev)
 	gnb_apic->flags = IORESOURCE_MEM | IORESOURCE_ASSIGNED | IORESOURCE_FIXED;
 }
 
+static void dptc_call_alib(const char *buf_name, uint8_t *buffer, size_t size)
+{
+	/* Name (buf_name, Buffer(size) {...} */
+	acpigen_write_name(buf_name);
+	acpigen_write_byte_buffer(buffer, size);
+
+	/* \_SB.ALIB(0xc, buf_name) */
+	acpigen_emit_namestring("\\_SB.ALIB");
+	acpigen_write_integer(ALIB_DPTCI_FUNCTION_ID);
+	acpigen_emit_namestring(buf_name);
+}
+
+static void acipgen_dptci(void)
+{
+	const struct soc_amd_picasso_config *config = config_of_soc();
+
+	if (!config->dptc_enable)
+		return;
+
+	struct dptc_input default_input = DPTC_INPUTS(config->thermctl_limit_degreeC,
+							config->sustained_power_limit_mW,
+							config->fast_ppt_limit_mW,
+							config->slow_ppt_limit_mW);
+	struct dptc_input tablet_mode_input = DPTC_INPUTS(
+					config->thermctl_limit_tablet_mode_degreeC,
+					config->sustained_power_limit_tablet_mode_mW,
+					config->fast_ppt_limit_tablet_mode_mW,
+					config->slow_ppt_limit_tablet_mode_mW);
+	/* Scope (\_SB) */
+	acpigen_write_scope("\\_SB");
+
+	/* Method(DPTC, 0, Serialized) */
+	acpigen_write_method_serialized("DPTC", 0);
+
+	/* If (LEqual ("\_SB.PCI0.LPCB.EC0.TBMD", 1)) */
+	acpigen_write_if_lequal_namestr_int("\\_SB.PCI0.LPCB.EC0.TBMD", 1);
+
+	dptc_call_alib("TABB", (uint8_t *)(void *)&tablet_mode_input,
+			sizeof(tablet_mode_input));
+
+	acpigen_pop_len(); /* If */
+
+	/* Else */
+	acpigen_write_else();
+
+	dptc_call_alib("DEFB", (uint8_t *)(void *)&default_input, sizeof(default_input));
+
+	acpigen_pop_len(); /* Else */
+
+	acpigen_pop_len(); /* Method DPTC */
+	acpigen_pop_len(); /* Scope \_SB */
+}
+
 /* Used by \_SB.PCI0._CRS */
 static void root_complex_fill_ssdt(const struct device *device)
 {
@@ -164,6 +259,7 @@ static void root_complex_fill_ssdt(const struct device *device)
 	 */
 	acpigen_write_name_dword("TOM2", (msr.hi << 12) | msr.lo >> 20);
 	acpigen_pop_len();
+	acipgen_dptci();
 }
 
 static struct device_operations root_complex_operations = {

@@ -35,6 +35,8 @@
 
 #include "chip.h"
 
+#define  CPUID_6_EAX_ISST	(1 << 7)
+
 /*
  * List of suported C-states in this processor.
  */
@@ -167,7 +169,7 @@ void acpi_create_gnvs(struct global_nvs *gnvs)
 
 #if CONFIG(CONSOLE_CBMEM)
 	/* Update the mem console pointer. */
-	gnvs->cbmc = (u32)cbmem_find(CBMEM_ID_CONSOLE);
+	gnvs->cbmc = (u32)(uintptr_t)cbmem_find(CBMEM_ID_CONSOLE);
 #endif
 
 	if (CONFIG(CHROMEOS)) {
@@ -367,6 +369,19 @@ static void generate_p_state_entries(int core, int cores_per_package)
 	acpigen_pop_len();
 }
 
+static void generate_cppc_entries(int core_id)
+{
+	/* Generate GCPC table in first logical core */
+	if (core_id == 0) {
+		struct cppc_config cppc_config;
+		cpu_init_cppc_config(&cppc_config, CPPC_VERSION_2);
+		acpigen_write_CPPC_package(&cppc_config);
+	}
+
+	/* Write _CST entry for each logical core */
+	acpigen_write_CPPC_method();
+}
+
 void generate_cpu_entries(const struct device *device)
 {
 	int core_id, cpu_id, pcontrol_blk = ACPI_BASE_ADDRESS, plen = 6;
@@ -375,15 +390,10 @@ void generate_cpu_entries(const struct device *device)
 	int numcpus = totalcores/cores_per_package;
 	config_t *config = config_of_soc();
 	int is_s0ix_enable = config->s0ix_enable;
+	const bool isst_supported = cpuid_eax(6) & CPUID_6_EAX_ISST;
 
 	printk(BIOS_DEBUG, "Found %d CPU(s) with %d core(s) each.\n",
 	       numcpus, cores_per_package);
-
-	if (config->eist_enable && config->speed_shift_enable) {
-		struct cppc_config cppc_config;
-		cpu_init_cppc_config(&cppc_config, 2 /* version 2 */);
-		acpigen_write_CPPC_package(&cppc_config);
-	}
 
 	for (cpu_id = 0; cpu_id < numcpus; cpu_id++) {
 		for (core_id = 0; core_id < cores_per_package; core_id++) {
@@ -403,9 +413,11 @@ void generate_cpu_entries(const struct device *device)
 				/* Generate P-state tables */
 				generate_p_state_entries(core_id,
 						cores_per_package);
-				if (config->speed_shift_enable)
-					acpigen_write_CPPC_method();
 			}
+
+			if (isst_supported)
+				generate_cppc_entries(core_id);
+
 			acpigen_pop_len();
 		}
 	}
@@ -510,6 +522,9 @@ unsigned long acpi_madt_irq_overrides(unsigned long current)
 	irqovr = (void *)current;
 	current += acpi_create_madt_irqoverride(irqovr, 0, sci, sci, flags);
 
+	/* NMI */
+	current += acpi_create_madt_lapic_nmi((acpi_madt_lapic_nmi_t *)current, 0xff, 5, 1);
+
 	return current;
 }
 
@@ -542,7 +557,7 @@ void southbridge_inject_dsdt(const struct device *device)
 
 		/* Add it to DSDT.  */
 		acpigen_write_scope("\\");
-		acpigen_write_name_dword("NVSA", (u32) gnvs);
+		acpigen_write_name_dword("NVSA", (u32) (uintptr_t)gnvs);
 		acpigen_pop_len();
 	}
 }
@@ -686,7 +701,6 @@ const char *soc_acpi_name(const struct device *dev)
 	case PCH_DEVFN_EMMC:	return "EMMC";
 	case PCH_DEVFN_SDIO:	return "SDIO";
 	case PCH_DEVFN_SDCARD:	return "SDXC";
-	case PCH_DEVFN_LPC:	return "LPCB";
 	case PCH_DEVFN_P2SB:	return "P2SB";
 	case PCH_DEVFN_PMC:	return "PMC_";
 	case PCH_DEVFN_HDA:	return "HDAS";

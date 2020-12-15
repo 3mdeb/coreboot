@@ -1,4 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <delay.h>
 
-adadad
+void init_timer(void)
+{
+}

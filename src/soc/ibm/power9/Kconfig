@@ -1,0 +1,15 @@
+config CPU_POWER9
+	bool
+	help
+	  This example SoC code along with the example/min86 mainboard
+	  should serve as a minimal example how a buildable x86 SoC code
+	  base can look like.
+
+	  This can serve, for instance, as a basis to add new SoCs to
+	  coreboot. Starting with a buildable commit should help with
+	  the review of the actual code, and also avoid any regressions
+	  when common coreboot code changes.
+
+if CPU_POWER9
+	# nothing here yet
+endif

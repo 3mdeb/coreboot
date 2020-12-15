@@ -46,6 +46,10 @@ void run_romstage(void)
 
 	vboot_run_logic();
 
+	long long unsigned int *reg = (void *)0x000603FC0000F00F;
+	printk(BIOS_EMERG, "WORKING\n");
+	printk(BIOS_EMERG, "SCOM:? %llX\n", *reg);
+
 	if (ENV_X86 && CONFIG(BOOTBLOCK_NORMAL)) {
 		if (legacy_romstage_selector(&romstage))
 			goto fail;

@@ -4,4 +4,5 @@
 
 void init_timer(void)
 {
+  // no need to do anything here
 }

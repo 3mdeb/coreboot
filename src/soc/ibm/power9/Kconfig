@@ -1,4 +1,4 @@
-config CPU_POWER9
+config CPU_IBM_POWER9
 	bool
 	help
 	  This example SoC code along with the example/min86 mainboard
@@ -10,6 +10,6 @@ config CPU_POWER9
 	  the review of the actual code, and also avoid any regressions
 	  when common coreboot code changes.
 
-if CPU_POWER9
+if CPU_IBM_POWER9
 	# nothing here yet
 endif

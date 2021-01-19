@@ -17,6 +17,7 @@
 #include <timestamp.h>
 #include <fit_payload.h>
 #include <security/vboot/vboot_common.h>
+#include <arch/io.h>
 
 /* Only can represent up to 1 byte less than size_t. */
 const struct mem_region_device addrspace_32bit =
@@ -39,10 +40,116 @@ int prog_locate(struct prog *prog)
 	return 0;
 }
 
+void read_scom_direct(uint32_t, uint64_t*);
+void read_scom_direct(uint32_t reg_address, uint64_t *buffer)
+{
+	asm volatile(
+		"ldcix %0, %1, %2":
+		"=r"(*buffer):
+		"b"(0x800603FC00000000),
+		"r"(reg_address << 3));
+	eieio();
+}
+
+void write_scom_direct(uint32_t, uint64_t*);
+void write_scom_direct(uint32_t reg_address, uint64_t *buffer)
+{
+	asm volatile(
+		"stdcix %0, %1, %2"::
+		"b"(*buffer),
+		"b"(0x800603FC00000000),
+		"r"(reg_address << 3));
+	eieio();
+}
+
+#define PPC_BIT(bit)		(0x8000000000000000UL >> (bit))
+#define PPC_BITMASK(bs,be)	((PPC_BIT(bs) - PPC_BIT(be)) | PPC_BIT(bs))
+#define XSCOM_ADDR_IND_FLAG		PPC_BIT(0)
+#define XSCOM_ADDR_IND_ADDR		PPC_BITMASK(12,31)
+#define XSCOM_ADDR_IND_DATA		PPC_BITMASK(48,63)
+
+#define XSCOM_DATA_IND_READ		PPC_BIT(0)
+#define XSCOM_DATA_IND_COMPLETE		PPC_BIT(32)
+#define XSCOM_DATA_IND_ERR		PPC_BITMASK(33,35)
+#define XSCOM_DATA_IND_DATA		PPC_BITMASK(48,63)
+#define XSCOM_DATA_IND_FORM1_DATA	PPC_BITMASK(12,63)
+#define XSCOM_IND_MAX_RETRIES 10
+
+void write_scom_indirect(uint64_t, uint64_t);
+void write_scom_indirect(uint64_t reg_address, uint64_t value)
+{
+	uint64_t addr;
+	uint64_t data;
+	addr = reg_address & 0x7FFFFFFF;
+	data = reg_address & XSCOM_ADDR_IND_ADDR;
+	printk(BIOS_EMERG, "----------------\n");
+	printk(BIOS_EMERG, "SCOM WRITE\n\n");
+	printk(BIOS_EMERG, "WRITING addr = %llX, data = %llX\n", addr, data);
+	write_scom_direct(addr, &data);
+	for(int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
+		printk(BIOS_EMERG, "READING addr = %llX\n", addr);
+		read_scom_direct(addr, &data);
+		printk(BIOS_EMERG, "READ data = %llX\n", data);
+		if((data & XSCOM_DATA_IND_COMPLETE) && ((data & XSCOM_DATA_IND_ERR) == 0)) {
+			printk(BIOS_EMERG, "SUCCESS\n");
+			printk(BIOS_EMERG, "----------------\n");
+			return;
+		}
+		else if(data & XSCOM_DATA_IND_COMPLETE) {
+			printk(BIOS_EMERG, "FINISHED WITH ERROR\n");
+			printk(BIOS_EMERG, "----------------\n");
+			return;
+		}
+	}
+}
+
+void read_scom_indirect(uint64_t, uint64_t*);
+void read_scom_indirect(uint64_t reg_address, uint64_t *buffer)
+{
+	uint64_t addr;
+	uint64_t data;
+	addr = reg_address & 0x7FFFFFFF;
+	data = XSCOM_DATA_IND_READ | (reg_address & XSCOM_ADDR_IND_ADDR);
+	printk(BIOS_EMERG, "----------------\n");
+	printk(BIOS_EMERG, "SCOM READ\n\n");
+	printk(BIOS_EMERG, "WRITING addr = %llX, data = %llX\n", addr, data);
+	write_scom_direct(addr, &data);
+	for(int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
+		printk(BIOS_EMERG, "READING addr = %llX\n", addr);
+		read_scom_direct(addr, &data);
+		printk(BIOS_EMERG, "READ data = %llX\n", data);
+		if((data & XSCOM_DATA_IND_COMPLETE) && ((data & XSCOM_DATA_IND_ERR) == 0)) {
+			*buffer = data & XSCOM_DATA_IND_DATA;
+			printk(BIOS_EMERG, "SUCCESS\n");
+			printk(BIOS_EMERG, "----------------\n");
+			return;
+		}
+		else if(data & XSCOM_DATA_IND_COMPLETE) {
+			printk(BIOS_EMERG, "FINISHED WITH ERROR\n");
+			printk(BIOS_EMERG, "----------------\n");
+			return;
+		}
+	}
+
+}
+
 void run_romstage(void)
 {
+	uint64_t buffer;
+	read_scom_indirect(0x8000C8000701103Full, &buffer);
+	buffer = 0x7777777777777777;
+	write_scom_indirect(0x8000C8000701103Full, buffer);
+	read_scom_indirect(0x8000C8000701103Full, &buffer);
 	struct prog romstage =
 		PROG_INIT(PROG_ROMSTAGE, CONFIG_CBFS_PREFIX "/romstage");
+	uint64_t buffer;
+	read_scom_direct(0xF0008, &buffer);
+	printk(BIOS_EMERG, "SCOM F0008: %llX\n", buffer);
+	buffer = 0xFFFFFFFFFFFFFFFF;
+	write_scom_direct(0xF0008, &buffer);
+	printk(BIOS_EMERG, "just wrote\n");
+	read_scom_direct(0xF0008, &buffer);
+	printk(BIOS_EMERG, "SCOM F0008: %llX\n", buffer);
 
 	vboot_run_logic();
 

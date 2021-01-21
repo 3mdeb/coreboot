@@ -56,8 +56,8 @@ int prog_locate(struct prog *prog)
 #define SPR_HMER_HYP_RESOURCE_ERR	PPC_BIT(20)
 #define SPR_HMER_XSCOM_STATUS		PPC_BITMASK(21,23)
 
-void read_scom_direct(uint32_t, uint64_t*);
-void read_scom_direct(uint32_t reg_address, uint64_t *buffer)
+uint64_t read_scom_direct(uint32_t, uint64_t*);
+uint64_t read_scom_direct(uint32_t reg_address, uint64_t *buffer)
 {
 	asm volatile(
 		"ldcix %0, %1, %2":
@@ -65,6 +65,7 @@ void read_scom_direct(uint32_t reg_address, uint64_t *buffer)
 		"b"(0x800603FC00000000),
 		"r"(reg_address << 3));
 	eieio();
+	return *buffer;
 }
 
 void write_scom_direct(uint32_t, uint64_t*);
@@ -89,7 +90,7 @@ uint64_t read_hmer(void)
 #define PPC_BIT(bit)		(0x8000000000000000UL >> (bit))
 #define PPC_BITMASK(bs,be)	((PPC_BIT(bs) - PPC_BIT(be)) | PPC_BIT(bs))
 #define XSCOM_ADDR_IND_FLAG		PPC_BIT(0)
-#define XSCOM_ADDR_IND_ADDR		PPC_BITMASK(12,31)
+#define XSCOM_ADDR_IND_ADDR		PPC_BITMASK(11,31)
 #define XSCOM_ADDR_IND_DATA		PPC_BITMASK(48,63)
 
 #define XSCOM_DATA_IND_READ		PPC_BIT(0)
@@ -104,32 +105,54 @@ void write_scom_indirect(uint64_t reg_address, uint64_t value)
 {
 	uint64_t addr;
 	uint64_t data;
+	uint64_t tmp;
 	addr = reg_address & 0x7FFFFFFF;
 	data = reg_address & XSCOM_ADDR_IND_ADDR;
 	data |= value & XSCOM_ADDR_IND_DATA;
 	printk(BIOS_EMERG, "----------------\n");
 	printk(BIOS_EMERG, "SCOM WRITE\n\n");
-	printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+	printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+		(long long unsigned int)read_scom_direct(0x90010, &tmp),
+		(long long unsigned int)read_scom_direct(0x90011, &tmp),
+		(long long unsigned int)read_scom_direct(0x90012, &tmp),
+		(long long unsigned int)read_scom_direct(0x90013, &tmp));
+	printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 		read_hmer(),
 		read_hmer() & SPR_HMER_XSCOM_FAIL,
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);
 	printk(BIOS_EMERG, "WRITING addr = %llX, data = %llX\n", addr, data);
+	for(unsigned int i = 0; i < 0xFFFF; ++i) {
+		asm volatile("nop" :::"memory");
+	}
 	write_scom_direct(addr, &data);
-	printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+	printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 		read_hmer(),
 		read_hmer() & SPR_HMER_XSCOM_FAIL,
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);
+	printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+		(long long unsigned int)read_scom_direct(0x90010, &tmp),
+		(long long unsigned int)read_scom_direct(0x90011, &tmp),
+		(long long unsigned int)read_scom_direct(0x90012, &tmp),
+		(long long unsigned int)read_scom_direct(0x90013, &tmp));
 	for(int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
 		printk(BIOS_EMERG, "READING addr = %llX\n", addr);
+		for(unsigned int i = 0; i < 0xFFFF; ++i) {
+			asm volatile("nop" :::"memory");
+		}
 		read_scom_direct(addr, &data);
-		printk(BIOS_EMERG, "READ data = %llX\n", data);
-		printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+		printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 			read_hmer(),
 			read_hmer() & SPR_HMER_XSCOM_FAIL,
 			read_hmer() & SPR_HMER_XSCOM_DONE,
 			read_hmer() & SPR_HMER_XSCOM_STATUS);
+		printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+			(long long unsigned int)read_scom_direct(0x90010, &tmp),
+			(long long unsigned int)read_scom_direct(0x90011, &tmp),
+			(long long unsigned int)read_scom_direct(0x90012, &tmp),
+			(long long unsigned int)read_scom_direct(0x90013, &tmp));
+		printk(BIOS_EMERG, "READ data = %llX\n", data);
 		if((data & XSCOM_DATA_IND_COMPLETE) && ((data & XSCOM_DATA_IND_ERR) == 0)) {
 			printk(BIOS_EMERG, "SUCCESS\n");
 			printk(BIOS_EMERG, "----------------\n");
@@ -148,27 +171,54 @@ void read_scom_indirect(uint64_t reg_address, uint64_t *buffer)
 {
 	uint64_t addr;
 	uint64_t data;
+	uint64_t tmp;
 	addr = reg_address & 0x7FFFFFFF;
 	data = XSCOM_DATA_IND_READ | (reg_address & XSCOM_ADDR_IND_ADDR);
 	printk(BIOS_EMERG, "----------------\n");
 	printk(BIOS_EMERG, "SCOM READ\n\n");
-	printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+	printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+		(long long unsigned int)read_scom_direct(0x90010, &tmp),
+		(long long unsigned int)read_scom_direct(0x90011, &tmp),
+		(long long unsigned int)read_scom_direct(0x90012, &tmp),
+		(long long unsigned int)read_scom_direct(0x90013, &tmp));
+	printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 		read_hmer(),
 		read_hmer() & SPR_HMER_XSCOM_FAIL,
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);
 	printk(BIOS_EMERG, "WRITING addr = %llX, data = %llX\n", addr, data);
+	for(unsigned int i = 0; i < 0xFFFF; ++i) {
+		asm volatile("nop" :::"memory");
+	}
 	write_scom_direct(addr, &data);
-		printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+	printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 		read_hmer(),
 		read_hmer() & SPR_HMER_XSCOM_FAIL,
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);
+	printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+		(long long unsigned int)read_scom_direct(0x90010, &tmp),
+		(long long unsigned int)read_scom_direct(0x90011, &tmp),
+		(long long unsigned int)read_scom_direct(0x90012, &tmp),
+		(long long unsigned int)read_scom_direct(0x90013, &tmp));
 	for(int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
 		printk(BIOS_EMERG, "READING addr = %llX\n", addr);
+		for(unsigned int i = 0; i < 0xFFFF; ++i) {
+			asm volatile("nop" :::"memory");
+		}
 		read_scom_direct(addr, &data);
+		printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
+			read_hmer(),
+			read_hmer() & SPR_HMER_XSCOM_FAIL,
+			read_hmer() & SPR_HMER_XSCOM_DONE,
+			read_hmer() & SPR_HMER_XSCOM_STATUS);
+		printk(BIOS_EMERG, "*0x90010 = %llX,\n*0x90011 = %llX,\n*0x90012 = %llX,\n*0x90013 = %llX\n",
+			(long long unsigned int)read_scom_direct(0x90010, &tmp),
+			(long long unsigned int)read_scom_direct(0x90011, &tmp),
+			(long long unsigned int)read_scom_direct(0x90012, &tmp),
+			(long long unsigned int)read_scom_direct(0x90013, &tmp));
 		printk(BIOS_EMERG, "READ data = %llX\n", data);
-		printk(BIOS_EMERG, "hmer = %llX, fail = %llX, done = %llX, status = %llX\n",
+		printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
 			read_hmer(),
 			read_hmer() & SPR_HMER_XSCOM_FAIL,
 			read_hmer() & SPR_HMER_XSCOM_DONE,
@@ -192,6 +242,13 @@ void run_romstage(void)
 {
 	uint64_t buffer;
 	long long unsigned int hmer = 0;
+	uint64_t tmp;
+	read_scom_direct(0x7000001, &tmp);
+	printk(BIOS_EMERG, "0x7000001 = %llX\n", tmp);
+	tmp = 0;
+	write_scom_direct(0x7000001, &tmp);
+	read_scom_direct(0x7000001, &tmp);
+	printk(BIOS_EMERG, "0x7000001 = %llX\n", tmp);
 	asm volatile("mtspr 336, %0" :: "r" (hmer) : "memory");
 	read_scom_indirect(0x8000C8000701103Full, &buffer);
 	buffer = 0x7777777777777777;

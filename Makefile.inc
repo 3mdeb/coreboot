@@ -1163,7 +1163,10 @@ ifeq ($(CONFIG_ARCH_PPC64),y)
 	@printf "    SBSIGN  $(subst $(obj)/,,$(@))\n"
 	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$(objcbfs)/bootblock.bin $(top)/$(obj)/bootblock.signed 2> /dev/null
 	cd $(SBSINGTOOLS) && ./sign-with-local-keys.sh $(top)/$@ $(top)/$@.signed 2> /dev/null
-	@printf "    ECC  bootblock\n"
+	@printf "    ECC     $(subst $(obj)/,,$(@))\n"
+	$(ECCTOOL) --inject $(top)/$@.signed --output $(top)/$@.signed.ecc --p8
+	$(ECCTOOL) --inject $(top)/$@ --output $(top)/$@.ecc --p8
+	@printf "    ECC     bootblock\n"
 	dd  if=$(obj)/bootblock.signed  of=$(obj)/bootblock.signed.pad  ibs=25486 conv=sync 2> /dev/null
 	$(ECCTOOL) --inject $(obj)/bootblock.signed.pad --output $(obj)/bootblock.signed.ecc --p8
 	rm $(obj)/bootblock.signed $(obj)/bootblock.signed.pad

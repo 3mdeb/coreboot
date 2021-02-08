@@ -30,5 +30,12 @@ static inline uint64_t read_hmer(void)
 	return val;
 }
 
+static inline uint64_t read_msr(void)
+{
+	uint64_t val;
+	asm volatile("mfmsr %0" : "=r"(val) :: "memory");
+	return val;
+}
+
 #endif /* __ASSEMBLER__ */
 #endif /* CPU_PPC64_SPR_H */

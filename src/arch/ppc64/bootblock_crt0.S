@@ -56,6 +56,17 @@ _start:
 	blt		cr7, 1b
 */
 
+	/* Enable floating point and vector operations */
+	/* Vector operations are sometimes generated for code like 
+	 * 'uint8_t x[32] = {0}', this results in an exception when vector registers
+	 * (VEC) are not enabled. VSX (vector-scalar extension) is also enabled,
+	 * there is no reason not to. Floating point must also be enabled for VSX.
+	 */
+	mfmsr	%r3
+	ori		%r3, %r3, 0x2000	/* FP = 1 */
+	oris	%r3, %r3, 0x0280	/* VEC = 1, VSX = 1 */
+	mtmsr	%r3
+
 	/* Load official procedure descriptor address for main() */
 	lis		%r12, main@ha
 	addi	%r12, %r12, main@l

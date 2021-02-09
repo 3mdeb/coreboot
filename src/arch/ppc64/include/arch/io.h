@@ -58,4 +58,10 @@ static inline uint32_t inl(uint16_t port)
 	return buffer;
 }
 
+static inline void report_istep(uint8_t step, uint8_t substep)
+{
+	outb(step, 0x81);
+	outb(substep, 0x82);
+}
+
 #endif

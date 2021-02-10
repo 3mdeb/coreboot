@@ -80,6 +80,65 @@ static uint8_t syndrome_matrix[] = {
 	UE, UE, UE, UE,  4, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
 };
 
+static inline uint32_t rd32(void *addr)
+{
+	uint64_t ret;
+
+	/* Cache-inhibited load word */
+	asm volatile("lwzcix %0, 0, %1"
+				 : "=r" (ret)
+				 : "r" (addr)
+				 : );
+
+	return ret;
+}
+
+static uint64_t rd64_unaligned(void *addr, int first_read)
+{
+	static uint64_t tmp1;	/* static is used to reduce number of PNOR reads */
+	uint64_t tmp2;
+	uint64_t ret;
+	uint64_t addr_aligned = ALIGN_DOWN((uint64_t)addr, 8);
+	unsigned shift = 8 * ((uint64_t) addr - addr_aligned);
+
+	if (shift == 0			/* Previous tmp2 ended with ECC byte */
+	    || first_read) {	/* or it is the first invocation from remove_ecc */
+		asm volatile("ldcix %0, 0, %1"
+					 : "=r" (tmp1)
+					 : "r" (addr_aligned)
+					 : );
+	}
+
+	asm volatile("ldcix %0, 0, %1"
+				 : "=r" (tmp2)
+				 : "r" (addr_aligned+8)
+				 : );
+
+	ret = (tmp1 << shift) | (tmp2 >> (64 - shift));
+	tmp1 = tmp2;
+
+	return ret;
+}
+
+/*
+ * memcpy from cache-inhibited source
+ *
+ * Assume both dest and src are 8B-aligned and do not overlap. Copies ALIGN(n,8)
+ * bytes, make sure dest is big enough.
+ */
+static inline void memcpy_ci_src(void *dest, const void *src, size_t n)
+{
+	int i;
+	uint64_t tmp;
+	for (i = 0; i < n; i+=8) {
+		asm volatile("ldcix %0, %1, %2"
+					 : "=r" (tmp)
+					 : "b"(src), "r" (i));
+		asm volatile("stdx %0, %1, %2"
+					 :: "r" (tmp), "b"(dest), "r" (i)
+					 : "memory");
+	}
+}
 
 static uint8_t generate_ecc(uint64_t i_data)
 {
@@ -90,16 +149,18 @@ static uint8_t generate_ecc(uint64_t i_data)
 	}
 	return result;
 }
+
 static uint8_t verify_ecc(uint64_t i_data, uint8_t i_ecc)
 {
 	return syndrome_matrix[generate_ecc(i_data) ^ i_ecc ];
 }
+
 static uint8_t correct_ecc(uint64_t *io_data, uint8_t *io_ecc)
 {
 	uint8_t bad_bit = verify_ecc(*io_data, *io_ecc);
 
-	if ((bad_bit != GD) && (bad_bit != UE)) { // Good is done, UE is hopeless.
-		// Determine if the ECC or data part is bad, do bit flip.
+	if ((bad_bit != GD) && (bad_bit != UE)) { /* Good is done, UE is hopeless */
+		/* Determine if the ECC or data part is bad, do bit flip. */
 		if (bad_bit >= E7) {
 			*io_ecc ^= (1 << (bad_bit - E7));
 		} else {
@@ -110,40 +171,45 @@ static uint8_t correct_ecc(uint64_t *io_data, uint8_t *io_ecc)
 }
 
 static ecc_status_t remove_ecc(uint8_t* io_src, size_t i_srcSz,
-                        uint8_t* o_dst, size_t i_dstSz)
+                               uint8_t* o_dst, size_t i_dstSz)
 {
 	ecc_status_t rc = CLEAN;
+	int first_read = 1;
 
 	for(size_t i = 0, o = 0; i < i_srcSz;
 	    i += sizeof(uint64_t) + sizeof(uint8_t), o += sizeof(uint64_t)) {
-		// Read data and ECC parts.
-		uint64_t data = *(uint64_t*)(&io_src[i]);
-		data = be64toh(data);
+		/*
+		 * Read data and ECC parts. Reads from cache-inhibited storage always
+		 * have to be aligned!
+		 */
+		uint64_t data = rd64_unaligned(&io_src[i], first_read);
+		first_read = 0;
 
 		uint8_t ecc = io_src[i + sizeof(uint64_t)];
 
-		// Calculate failing bit and fix data.
+		/* Calculate failing bit and fix data */
 		uint8_t bad_bit = correct_ecc(&data, &ecc);
 
-		// Return data to big endian.
-		data = htobe64(data);
-
-		// Perform correction and status update.
+		/* Perform correction and status update */
 		if (bad_bit == UE)
 		{
 			rc = UNCORRECTABLE;
 		}
+		/* Unused, our source is not writable */
+		/*
 		else if (bad_bit != GD)
 		{
 			if (rc != UNCORRECTABLE)
 			{
 				rc = CORRECTED;
 			}
+
 			*(uint64_t*)(&io_src[i]) = data;
 			io_src[i + sizeof(uint64_t)] = ecc;
 		}
+		*/
 
-		// Copy fixed data to destination buffer.
+		/* Copy fixed data to destination buffer */
 		*(uint64_t*)(&o_dst[o]) = data;
 	}
 	return rc;
@@ -168,7 +234,7 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 {
 	const struct mem_region_device *mdev;
 	uint8_t tmp[8];
-	size_t off_a = offset & ~7ULL;
+	size_t off_a = ALIGN_DOWN(offset, 8);
 	size_t size_left = size;
 
 	mdev = container_of(rd, __typeof__(*mdev), rdev);
@@ -187,14 +253,14 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 
 	/* Align down size_left to 8B */
 	remove_ecc((uint8_t *) &mdev->base[(off_a * 9)/8],
-	           ((size_left & ~7ULL) * 9) / 8,
+	           (ALIGN_DOWN(size_left, 8) * 9) / 8,
 	           b,
-	           size_left & ~7ULL);
+	           ALIGN_DOWN(size_left, 8));
 
 	/* Copy the rest of requested unaligned data, if any */
 	if (size_left & 7) {
-		off_a += size_left & ~7ULL;
-		b += size_left & ~7ULL;
+		off_a += ALIGN_DOWN(size_left, 8);
+		b += ALIGN_DOWN(size_left, 8);
 		int i;
 		remove_ecc((uint8_t *) &mdev->base[(off_a * 9)/8], 9, tmp, 8);
 		for (i = 0; i < (size_left & 7); i++) {
@@ -235,42 +301,60 @@ struct region_device_ops ecc_rdev_ops = {
 static void find_cbfs_in_pnor(void)
 {
 	char *cbfs = NULL;
-	int i;
-	struct ffs_hdr *hdr = (struct ffs_hdr *)LPC_FLASH_TOP;
+	char *pnor_base = NULL;
+	unsigned int i, block_size, entry_count = 0;
+	struct ffs_hdr *hdr_pnor = (struct ffs_hdr *)LPC_FLASH_TOP;
 
-	while (hdr > (struct ffs_hdr *)LPC_FLASH_MIN) {
+	/* This loop could be skipped if we may assume that PNOR is always 64M */
+	while (hdr_pnor > (struct ffs_hdr *)LPC_FLASH_MIN) {
 		uint32_t csum = 0;
+		/* Size is aligned up to 8 because of how memcpy_ci_src works */
+		uint8_t buffer[ALIGN(FFS_HDR_SIZE, 8)];
+		struct ffs_hdr *hdr = (struct ffs_hdr *)buffer;
+
 		/* Assume block_size = 4K */
-		hdr = (struct ffs_hdr *)(((char *)hdr) - 0x1000);
+		hdr_pnor = (struct ffs_hdr *)(((char *)hdr_pnor) - 0x1000);
 
-		if (hdr->magic != FFS_MAGIC)
-			continue;
-		if (hdr->version != FFS_VERSION_1)
+		if (FFS_MAGIC != rd32(&hdr_pnor->magic))
 			continue;
 
+		if (FFS_VERSION_1 != rd32(&hdr_pnor->version))
+			continue;
+
+		/* Copy the header so we won't have to rd32() for further accesses */
+		memcpy_ci_src(buffer, hdr_pnor, FFS_HDR_SIZE);
 		csum = hdr->magic ^ hdr->version ^ hdr->size ^ hdr->entry_size ^
 		       hdr->entry_count ^ hdr->block_size ^ hdr->block_count ^
 		       hdr->resvd[0] ^ hdr->resvd[1] ^ hdr->resvd[2] ^ hdr->resvd[3] ^
 		       hdr->checksum;
-		if (csum == 0) break;
+		if (csum != 0) continue;
+
+		pnor_base = (char *) LPC_FLASH_TOP - hdr->block_size * hdr->block_count;
+		entry_count = hdr->entry_count;
+		block_size = hdr->block_size;
+
+		printk(BIOS_DEBUG, "Found FFS header at %p\n", hdr_pnor);
+		printk(BIOS_SPEW, "    size %x\n", hdr->size);
+		printk(BIOS_SPEW, "    entry_size %x\n", hdr->entry_size);
+		printk(BIOS_SPEW, "    entry_count %x\n", hdr->entry_count);
+		printk(BIOS_SPEW, "    block_size %x\n", hdr->block_size);
+		printk(BIOS_SPEW, "    block_count %x\n", hdr->block_count);
+		printk(BIOS_DEBUG, "PNOR base at %p\n", pnor_base);
+		break;
 	}
 
-	if (hdr <= (struct ffs_hdr *)LPC_FLASH_MIN)
-		return;
+	if (hdr_pnor <= (struct ffs_hdr *)LPC_FLASH_MIN)
+		die("FFS header not found!\n");
 
-	printk(BIOS_DEBUG, "Found FFS header at %p\n", hdr);
-	printk(BIOS_SPEW, "    size %x\n", hdr->size);
-	printk(BIOS_SPEW, "    entry_size %x\n", hdr->entry_size);
-	printk(BIOS_SPEW, "    entry_count %x\n", hdr->entry_count);
-	printk(BIOS_SPEW, "    block_size %x\n", hdr->block_size);
-	printk(BIOS_SPEW, "    block_count %x\n", hdr->block_count);
-	printk(BIOS_DEBUG, "PNOR base at %lx\n",
-	       LPC_FLASH_TOP - hdr->block_size * hdr->block_count);
-
-	for (i = 0; i < hdr->entry_count; i++) {
-		struct ffs_entry *e = &hdr->entries[i];
+	for (i = 0; i < entry_count; i++) {
 		uint32_t *val, csum = 0;
 		int j;
+		/* Size is aligned up to 8 because of how memcpy_ci_src works */
+		uint8_t buffer[ALIGN(FFS_ENTRY_SIZE, 8)];
+		struct ffs_entry *e = (struct ffs_entry *)buffer;
+
+		/* Copy the entry so we won't have to rd32() for further accesses */
+		memcpy_ci_src(buffer, &hdr_pnor->entries[i], FFS_ENTRY_SIZE);
 
 		printk(BIOS_SPEW, "%s: base %x, size %x  (%x)\n\t type %x, flags %x\n",
 		       e->name, e->base, e->size, e->actual, e->type, e->flags);
@@ -279,14 +363,13 @@ static void find_cbfs_in_pnor(void)
 			continue;
 
 		val = (uint32_t *) e;
-		for (j = 0; j < (sizeof(struct ffs_entry) / sizeof(uint32_t)); j++)
+		for (j = 0; j < (FFS_ENTRY_SIZE / sizeof(uint32_t)); j++)
 			csum ^= val[j];
 
 		if (csum != 0)
 			continue;
 
-		cbfs = (char *) LPC_FLASH_TOP
-		       - hdr->block_size * (hdr->block_count - e->base);
+		cbfs = (char *) pnor_base + block_size * e->base;
 
 		/* Skip PNOR partition header size */
 		cbfs += 0x1000;

@@ -429,7 +429,7 @@ static int fmap_append_area_test(struct fmap **fmap)
 	}
 
 	nareas_orig = le16toh((*fmap)->nareas);
-	(*fmap)->nareas = ~(0);
+	(*fmap)->nareas = htole16(~(0));
 	if (fmap_append_area(fmap, 0, 0, (const uint8_t *)"foo", 0) >= 0) {
 		printf("FAILURE: failed to abort with too many areas\n");
 		goto fmap_append_area_test_exit;

@@ -109,7 +109,12 @@ uint64_t read_scom_indirect(uint64_t reg_address)
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);
 	printk(BIOS_EMERG, "WRITING addr = %llX, data = %llX\n", addr, data);
-	for(unsigned intwrite_scom_indirect
+	for(unsigned int i = 0; i < 0xFFFF; ++i) {
+		asm volatile("nop" :::"memory");
+	}
+	write_scom_direct(addr, data);
+	printk(BIOS_EMERG, "#hmer = %llX,\n#fail = %llX,\n#done = %llX,\n#status = %llX\n",
+		read_hmer(),
 		read_hmer() & SPR_HMER_XSCOM_FAIL,
 		read_hmer() & SPR_HMER_XSCOM_DONE,
 		read_hmer() & SPR_HMER_XSCOM_STATUS);

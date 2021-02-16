@@ -310,6 +310,7 @@ static void prepare_dimm_data(void)
 }
 
 #include <cpu/power/scom.h>
+#include <cpu/power/scom_registers.h>
 
 #define X0_ENABLED (true)
 #define X1_ENABLED (true)
@@ -331,45 +332,9 @@ static void prepare_dimm_data(void)
 #define CHIP_IS_GROUP (0x02)
 #define ATTR_PROC_FABRIC_PUMP_MODE (CHIP_IS_NODE) // default value
 
-// Power Bus PB West Mode Configuration Register
-#define PB_WEST_MODE_CFG (0x501180A)
-// Power Bus PB CENT Mode Register
-#define PB_CENT_MODE_CFG (0x5011C0A)
-// Power Bus PB CENT GP command RATE DP0 Register
-#define PB_CENT_GP_COMMAND_RATE_DP0 (0x5011C26)
-// Power Bus PB CENT GP command RATE DP1 Register
-#define PB_CENT_GP_COMMAND_RATE_DP1 (0x5011C27)
-// Power Bus PB CENT RGP command RATE DP0 Register
-#define PB_CENT_RGP_COMMAND_RATE_DP0 (0x5011C28)
-// Power Bus PB CENT RGP command RATE DP1 Register
-#define PB_CENT_RGP_COMMAND_RATE_DP1 (0x5011C29)
-// Power Bus PB CENT SP command RATE DP0 Register
-#define PB_CENT_SP_COMMAND_RATE_DP0 (0x5011C2A)
-// Power Bus PB CENT SP command RATE DP1 Register
-#define PB_CENT_SP_COMMAND_RATE_DP1 (0x5011C2B)
-// Power Bus PB East Mode Configuration Register
-#define PB_EAST_MODE_CFG (0x501200A)
-// Power bus Electrical Framer/Parser 01 configuration register
-#define PB_ELE_PB_FRAMER_PARSER_01_CFG (0x501340A)
-// Power Bus Electrical Framer/Parser 23 Configuration Register
-#define PB_ELE_PB_FRAMER_PARSER_23_CFG (0x501340B)
-// Power Bus Electrical Framer/Parser 45 Configuration Register
-#define PB_ELE_PB_FRAMER_PARSER_45_CFG (0x501340C)
-// Power Bus Electrical Link Data Buffer 01 Configuration Register
-#define PB_ELE_PB_DATA_BUFF_01_CFG (0x5013410)
-// Power Bus Electrical Link Data Buffer 23 Configuration Register
-#define PB_ELE_PB_DATA_BUFF_23_CFG (0x5013411)
-// Power Bus Electrical Link Data Buffer 45 Configuration Register
-#define PB_ELE_PB_DATA_BUFF_45_CFG (0x5013412)
-// Power Bus Electrical Miscellaneous Configuration Register
-#define PB_ELE_MISC_CFG (0x5013423)
-// Power Bus Electrical Link Trace Configuration Register
-#define PB_ELE_LINK_TRACE_CFG (0x5013424)
-
 #define FBC_IOE_TL_FIR_ACTION0 (0x0000000000000000ULL)
 #define FBC_IOE_TL_FIR_ACTION1 (0x0049000000000000ULL)
-#define PU_PB_IOE_FIR_ACTION0_REG (0x5013406)
-#define PU_PB_IOE_FIR_ACTION1_REG (0x5013407)
+
 #define FBC_IOE_TL_FIR_MASK (0xFF24F0303FFFF11FULL)
 #define P9_FBC_UTILS_MAX_ELECTRICAL_LINKS (3)
 #define FBC_IOE_TL_FIR_MASK_X0_NF (0x00C00C0C00000880ULL)
@@ -377,19 +342,9 @@ static void prepare_dimm_data(void)
 #define FBC_IOE_TL_FIR_MASK_X2_NF (0x000300C0C0000220ULL)
 #define PU_PB_IOE_FIR_MASK_REG (0x5013403)
 
-uint64_t xbusChiplets[] = {0x06};
-#define ARRAY_LENGTH(a) (sizeof(a)/sizeof(*a))
-
 #define FBC_IOE_DL_FIR_ACTION0 (0)
 #define FBC_IOE_DL_FIR_ACTION1 (0x303c00000001ffc)
 #define FBC_IOE_DL_FIR_MASK (0xfcfc3fffffffe003)
-#define XBUS_LL0_IOEL_FIR_ACTION0_REG (0x6011806)
-#define XBUS_LL0_IOEL_FIR_ACTION1_REG (0x6011807)
-#define XBUS_LL0_LL0_LL0_IOEL_FIR_MASK_REG (0x6011803)
-
-#define PB_ELE_CONFIG_REG (0x601180A)
-#define PB_ELE_REPLAY_TRESHOLD_REG (0x6011818)
-#define PB_ELE_ECC_TRESHOLD_REG (0x6011819)
 
 #define BOTH (0x0)
 #define EVEN_ONLY (0x1)
@@ -397,11 +352,14 @@ uint64_t xbusChiplets[] = {0x06};
 #define NONE (0x3)
 #define ATTR_LINK_TRAIN BOTH
 
+// this is probably wrong
+#define PROC_CHIPLET (0x10)
+
 void p9_fbc_ioe_tl_scom(void);
 void istep89(void);
 void p9_fbc_no_hp_scom(void);
 void tl_fir(void);
-void p9_fbc_ioe_dl_scom(uint64_t TGT0, uint64_t &TGT1);
+void p9_fbc_ioe_dl_scom(uint64_t TGT0);
 
 void istep89(void)
 {
@@ -409,34 +367,18 @@ void istep89(void)
 	p9_fbc_no_hp_scom();
     p9_fbc_ioe_tl_scom();
 
-    // setup IOE (XBUS FBC IO) DL SCOMs
-    for(size_t xbusChipletIndex = 0; xbusChipletIndex < ARRAY_LENGTH(xbusChiplets); ++xbusChipletIndex)
-    {
-        p9_fbc_ioe_dl_scom(xbusChiplets[xbusChipletIndex], i_target);
-        write_scom_for_chiplet(xbusChipletIndex, XBUS_LL0_IOEL_FIR_ACTION0_REG, FBC_IOE_DL_FIR_ACTION0);
-        write_scom_for_chiplet(xbusChipletIndex, XBUS_LL0_IOEL_FIR_ACTION1_REG, FBC_IOE_DL_FIR_ACTION1);
-        write_scom_for_chiplet(xbusChipletIndex, XBUS_LL0_LL0_LL0_IOEL_FIR_MASK_REG, FBC_IOE_DL_FIR_MASK);
-    }
-
-    // set FBC optics config mode attribute
-    l_obus_chiplets = i_target.getChildren<fapi2::TARGET_TYPE_OBUS>();
-
-    for l_iter in l_obus_chiplets:
-    {
-        uint8_t l_unit_pos;
-        l_unit_pos = fapi2::ATTR_CHIP_UNIT_POS[l_iter];
-        l_fbc_optics_cfg_mode[l_unit_pos] = fapi2::ATTR_OPTICS_CONFIG_MODE[l_iter];
-    }
-    fapi2::ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE[i_target] = l_fbc_optics_cfg_mode;
+    p9_fbc_ioe_dl_scom(XB_CHIPLET_ID);
+    write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_IOEL_FIR_ACTION0_REG, FBC_IOE_DL_FIR_ACTION0);
+    write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_IOEL_FIR_ACTION1_REG, FBC_IOE_DL_FIR_ACTION1);
+    write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_LL0_LL0_IOEL_FIR_MASK_REG, FBC_IOE_DL_FIR_MASK);
 	printk(BIOS_EMERG, "ending istep 8.9\n");
 }
 
-void p9_fbc_ioe_dl_scom(uint64_t TGT0, uint64_t TGT1)
-{
-    // REGISTERS read
-    uint64_t pb_ioe_ll0_ioel_config = read_scom_for_chiplet(TGT0, 0x601180A); // ELL Configuration Register
-    uint64_t pb_ioe_ll0_ioel_replay_threshold = read_scom_for_chiplet(TGT0, 0x6011818); // ELL Replay Threshold Register
-    uint64_t pb_ioe_ll0_ioel_sl_ecc_threshold = read_scom_for_chiplet(TGT0, 0x6011819); // ELL SL ECC Threshold Register
+void p9_fbc_ioe_dl_scom(uint64_t TGT0)
+{   
+    uint64_t pb_ioe_ll0_ioel_config = read_scom_for_chiplet(TGT0, ELL_CFG_REG);
+    uint64_t pb_ioe_ll0_ioel_replay_threshold = read_scom_for_chiplet(TGT0, ELL_REPLAY_TRESHOLD_REG);
+    uint64_t pb_ioe_ll0_ioel_sl_ecc_threshold = read_scom_for_chiplet(TGT0, ELL_SL_ECC_TRESHOLD_REG);
     if (ATTR_LINK_TRAIN == BOTH)
     {
         pb_ioe_ll0_ioel_config |= 0x8000000000000000;
@@ -447,61 +389,46 @@ void p9_fbc_ioe_dl_scom(uint64_t TGT0, uint64_t TGT1)
     }
     pb_ioe_ll0_ioel_config &= 0xFFEFFFFFFFFFFFFF;
     pb_ioe_ll0_ioel_config |= 0x280F000F00000000;
-    pb_ioe_ll0_ioel_sl_ecc_threshold |= 0x0070000000000000;
     pb_ioe_ll0_ioel_replay_threshold &= 0x0FFFFFFFFFFFFFFF;
     pb_ioe_ll0_ioel_replay_threshold |= 0x6FE0000000000000;
-
     pb_ioe_ll0_ioel_sl_ecc_threshold &= 0x7FFFFFFFFFFFFFFF;
-    pb_ioe_ll0_ioel_sl_ecc_threshold |= 0x7F00000000000000;
-    // REGISTERS write
-    TGT0[0x601180A] = pb_ioe_ll0_ioel_config;
-    TGT0[0x6011818] = pb_ioe_ll0_ioel_replay_threshold;
-    TGT0[0x6011819] = pb_ioe_ll0_ioel_sl_ecc_threshold;
+    pb_ioe_ll0_ioel_sl_ecc_threshold |= 0x7F70000000000000;
+
+    write_scom_for_chiplet(TGT0, ELL_CFG_REG, pb_ioe_ll0_ioel_config);
+    write_scom_for_chiplet(TGT0, ELL_REPLAY_TRESHOLD_REG, pb_ioe_ll0_ioel_replay_threshold);
+    write_scom_for_chiplet(TGT0, ELL_SL_ECC_TRESHOLD_REG, pb_ioe_ll0_ioel_sl_ecc_threshold);
 }
 
 void tl_fir(void)
 {
-    write_scom(PU_PB_IOE_FIR_ACTION0_REG, FBC_IOE_TL_FIR_ACTION0);
-    write_scom(PU_PB_IOE_FIR_ACTION1_REG, FBC_IOE_TL_FIR_ACTION1);
+    write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_ACTION0_REG, FBC_IOE_TL_FIR_ACTION0);
+    write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_ACTION1_REG, FBC_IOE_TL_FIR_ACTION1);
     uint64_t l_fir_mask = FBC_IOE_TL_FIR_MASK;
 
-    if (len(l_xbusChiplets) == 0)
-    {
-        // no valid links, mask
-        // l_fir_mask.flush<1>();
-        l_fir_mask = 0xFFFFFFFFFFFFFFFF;
-    }
-    else
-    {
-        bool l_x_functional[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
-        {
-            false,
-            false,
-            false
-        };
-        uint64_t l_x_non_functional_mask[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
-        {
-            FBC_IOE_TL_FIR_MASK_X0_NF,
-            FBC_IOE_TL_FIR_MASK_X1_NF,
-            FBC_IOE_TL_FIR_MASK_X2_NF
-        };
-        for l_iter in l_xbusChiplets:
-        {
-            uint8_t l_unit_pos;
-            l_unit_pos = fapi2::ATTR_CHIP_UNIT_POS[l_iter];
-            l_x_functional[l_unit_pos] = true;
-        }
-
-        for(unsigned int ll = 0; ll < P9_FBC_UTILS_MAX_ELECTRICAL_LINKS; ++ll)
-        {
-            if (!l_x_functional[ll])
-            {
-                l_fir_mask |= l_x_non_functional_mask[ll];
-            }
-        }
-        // shoudn't this happen for no xbus chiplets too?
-        write_scom(PU_PB_IOE_FIR_MASK_REG, l_fir_mask);
-    }
+    l_fir_mask |= FBC_IOE_TL_FIR_MASK_X0_NF;
+    // bool l_x_functional[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
+    // {
+    //     false,
+    //     false,
+    //     false
+    // };
+    // uint64_t l_x_non_functional_mask[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
+    // {
+    //     FBC_IOE_TL_FIR_MASK_X0_NF,
+    //     FBC_IOE_TL_FIR_MASK_X1_NF,
+    //     FBC_IOE_TL_FIR_MASK_X2_NF
+    // };
+    // uint8_t l_unit_pos;
+    // l_unit_pos = fapi2::ATTR_CHIP_UNIT_POS[XB_CHIPLET_ID];
+    // l_x_functional[l_unit_pos] = true;
+    // for(unsigned int ll = 0; ll < P9_FBC_UTILS_MAX_ELECTRICAL_LINKS; ++ll)
+    // {
+    //     if (!l_x_functional[ll])
+    //     {
+    //         l_fir_mask |= l_x_non_functional_mask[ll];
+    //     }
+    // }
+    write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_MASK_REG, l_fir_mask);
 }
 
 void p9_fbc_no_hp_scom(void)
@@ -509,15 +436,15 @@ void p9_fbc_no_hp_scom(void)
     uint64_t is_flat_8 = false;
 
     // REGISTERS read
-    uint64_t pb_com_pb_west_mode = read_scom(PB_WEST_MODE_CFG);
-    uint64_t pb_com_pb_cent_mode = read_scom(PB_CENT_MODE_CFG);
-    uint64_t pb_com_pb_cent_gp_cmd_rate_dp0 = read_scom(PB_CENT_GP_COMMAND_RATE_DP0);
-    uint64_t pb_com_pb_cent_gp_cmd_rate_dp1 = read_scom(PB_CENT_GP_COMMAND_RATE_DP1);
-    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp0 = read_scom(PB_CENT_RGP_COMMAND_RATE_DP0);
-    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp1 = read_scom(PB_CENT_RGP_COMMAND_RATE_DP1);
-    uint64_t pb_com_pb_cent_sp_cmd_rate_dp0 = read_scom(PB_CENT_SP_COMMAND_RATE_DP0);
-    uint64_t pb_com_pb_cent_sp_cmd_rate_dp1 = read_scom(PB_CENT_SP_COMMAND_RATE_DP1);
-    uint64_t pb_com_pb_east_mode = read_scom(PB_EAST_MODE_CFG);
+    uint64_t pb_com_pb_west_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_WEST_MODE_CFG);
+    uint64_t pb_com_pb_cent_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_MODE_CFG);
+    uint64_t pb_com_pb_cent_gp_cmd_rate_dp0 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP0);
+    uint64_t pb_com_pb_cent_gp_cmd_rate_dp1 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP1);
+    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp0 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_RGP_COMMAND_RATE_DP0);
+    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp1 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_RGP_COMMAND_RATE_DP1);
+    uint64_t pb_com_pb_cent_sp_cmd_rate_dp0 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_SP_COMMAND_RATE_DP0);
+    uint64_t pb_com_pb_cent_sp_cmd_rate_dp1 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_SP_COMMAND_RATE_DP1);
+    uint64_t pb_com_pb_east_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_EAST_MODE_CFG);
 
     if (ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP
     || (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG == 0))
@@ -610,27 +537,27 @@ void p9_fbc_no_hp_scom(void)
     pb_com_pb_east_mode |= 0x00000002a0000000;
 
     // REGISTERS write
-    write_scom(PB_WEST_MODE_CFG, pb_com_pb_west_mode);
-    write_scom(PB_CENT_MODE_CFG, pb_com_pb_cent_mode);
-    write_scom(PB_CENT_GP_COMMAND_RATE_DP0, pb_com_pb_cent_gp_cmd_rate_dp0);
-    write_scom(PB_CENT_GP_COMMAND_RATE_DP1, pb_com_pb_cent_gp_cmd_rate_dp1);
-    write_scom(PB_CENT_RGP_COMMAND_RATE_DP0, pb_com_pb_cent_rgp_cmd_rate_dp0);
-    write_scom(PB_CENT_RGP_COMMAND_RATE_DP1, pb_com_pb_cent_rgp_cmd_rate_dp1);
-    write_scom(PB_CENT_SP_COMMAND_RATE_DP0, pb_com_pb_cent_sp_cmd_rate_dp0);
-    write_scom(PB_CENT_SP_COMMAND_RATE_DP1, pb_com_pb_cent_sp_cmd_rate_dp1);
-    write_scom(PB_EAST_MODE_CFG, pb_com_pb_east_mode);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_WEST_MODE_CFG, pb_com_pb_west_mode);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_MODE_CFG, pb_com_pb_cent_mode);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP0, pb_com_pb_cent_gp_cmd_rate_dp0);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP1, pb_com_pb_cent_gp_cmd_rate_dp1);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_RGP_COMMAND_RATE_DP0, pb_com_pb_cent_rgp_cmd_rate_dp0);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_RGP_COMMAND_RATE_DP1, pb_com_pb_cent_rgp_cmd_rate_dp1);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_SP_COMMAND_RATE_DP0, pb_com_pb_cent_sp_cmd_rate_dp0);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_SP_COMMAND_RATE_DP1, pb_com_pb_cent_sp_cmd_rate_dp1);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_EAST_MODE_CFG, pb_com_pb_east_mode);
 }
 
 void p9_fbc_ioe_tl_scom(void)
 {
-	uint64_t pb_ioe_scom_pb_fp01_cfg = read_scom(PB_ELE_PB_FRAMER_PARSER_01_CFG);
-    uint64_t pb_ioe_scom_pb_fp23_cfg = read_scom(PB_ELE_PB_FRAMER_PARSER_23_CFG);
-    uint64_t pb_ioe_scom_pb_fp45_cfg = read_scom(PB_ELE_PB_FRAMER_PARSER_45_CFG);
-    uint64_t pb_ioe_scom_pb_elink_data_01_cfg_reg = read_scom(PB_ELE_PB_DATA_BUFF_01_CFG);
-    uint64_t pb_ioe_scom_pb_elink_data_23_cfg_reg = read_scom(PB_ELE_PB_DATA_BUFF_23_CFG);
-    uint64_t pb_ioe_scom_pb_elink_data_45_cfg_reg = read_scom(PB_ELE_PB_DATA_BUFF_45_CFG);
-    uint64_t pb_ioe_scom_pb_misc_cfg = read_scom(PB_ELE_MISC_CFG);
-    uint64_t pb_ioe_scom_pb_trace_cfg = read_scom(PB_ELE_LINK_TRACE_CFG);
+	uint64_t pb_ioe_scom_pb_fp01_cfg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_01_CFG);
+    uint64_t pb_ioe_scom_pb_fp23_cfg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_23_CFG);
+    uint64_t pb_ioe_scom_pb_fp45_cfg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_45_CFG);
+    uint64_t pb_ioe_scom_pb_elink_data_01_cfg_reg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_01_CFG);
+    uint64_t pb_ioe_scom_pb_elink_data_23_cfg_reg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_23_CFG);
+    uint64_t pb_ioe_scom_pb_elink_data_45_cfg_reg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_45_CFG);
+    uint64_t pb_ioe_scom_pb_misc_cfg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_MISC_CFG);
+    uint64_t pb_ioe_scom_pb_trace_cfg = read_scom_for_chiplet(PROC_CHIPLET, PB_ELE_LINK_TRACE_CFG);
 
 	if(X0_ENABLED)
 	{
@@ -670,7 +597,7 @@ void p9_fbc_ioe_tl_scom(void)
     }
 	// if (X2_ENABLED && DD2X_PARTS)
     // {
-    //     pb_ioe_scom_pb_fp45_cfg.insert<4, 8, 56, uint64_t>(0x15 - (l_def_dd2_lo_limit_n / l_def_dd2_lo_limit_d))
+    //     pb_ioe_scom_pb_fp45_cfg.insert<4, 8, 56, uint64_t>(0x15 - (l_def_dd2_lo_limit_n /    ))
     //     pb_ioe_scom_pb_fp45_cfg.insert<36, 8, 56, uint64_t>(0x15 - (l_def_dd2_lo_limit_n / l_def_dd2_lo_limit_d))
     // }
     // else if ((X0_ENABLED && DD1_PARTS && DD1_LO_LIMIT_R < DD1_LO_LIMIT_H)
@@ -800,14 +727,14 @@ void p9_fbc_ioe_tl_scom(void)
     }
 
     // REGISTERS write
-    write_scom(PB_ELE_PB_FRAMER_PARSER_01_CFG, pb_ioe_scom_pb_fp01_cfg);
-    write_scom(PB_ELE_PB_FRAMER_PARSER_23_CFG, pb_ioe_scom_pb_fp23_cfg);
-    write_scom(PB_ELE_PB_FRAMER_PARSER_45_CFG, pb_ioe_scom_pb_fp45_cfg);
-    write_scom(PB_ELE_PB_DATA_BUFF_01_CFG, pb_ioe_scom_pb_elink_data_01_cfg_reg);
-    write_scom(PB_ELE_PB_DATA_BUFF_23_CFG, pb_ioe_scom_pb_elink_data_23_cfg_reg);
-    write_scom(PB_ELE_PB_DATA_BUFF_45_CFG, pb_ioe_scom_pb_elink_data_45_cfg_reg);
-    write_scom(PB_ELE_MISC_CFG, pb_ioe_scom_pb_misc_cfg);
-    write_scom(PB_ELE_LINK_TRACE_CFG, pb_ioe_scom_pb_trace_cfg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_01_CFG, pb_ioe_scom_pb_fp01_cfg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_23_CFG, pb_ioe_scom_pb_fp23_cfg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_FRAMER_PARSER_45_CFG, pb_ioe_scom_pb_fp45_cfg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_01_CFG, pb_ioe_scom_pb_elink_data_01_cfg_reg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_23_CFG, pb_ioe_scom_pb_elink_data_23_cfg_reg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_45_CFG, pb_ioe_scom_pb_elink_data_45_cfg_reg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_MISC_CFG, pb_ioe_scom_pb_misc_cfg);
+    write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_LINK_TRACE_CFG, pb_ioe_scom_pb_trace_cfg);
 }
 
 void main(void)

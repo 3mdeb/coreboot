@@ -26,6 +26,8 @@
 .globl _start
 _start:
 	/* QEMU with hb-mode=on starts at address 0x10, while hardware at 0x0. */
+	/* TODO: add a flag to not insert nops and FIXUP_ENDIAN when building for
+	 * SEEPROM, every byte counts */
 	nop
 	nop
 	nop
@@ -39,22 +41,21 @@ _start:
 	lis		%r1, _estack@ha
 	addi	%r1, %r1, _estack@l
 
-	/* Clear .bss section */
-	/* Curently not needed, .bss is zeroed in the file. If it were to be used,
-	 * make sure that .bss is 128B aligned (size of cache line), otherwise dcbz
-	 * will clear (part of) .opd section! */
-/*
-	lis		%r5, _bss@ha
-	addi	%r5, %r5, _bss@l
-	lis		%r6, _ebss@ha
-	addi	%r6, %r6, _ebss@l
+	/* L3 cache is invalid except for [0, end of HBBL] range. Make the rest of
+	 * it valid, or embrace the checstops. End of loaded part of HBBL is at
+	 * address 0x8 (see https://github.com/open-power/hostboot/blob/master/src/import/chips/p9/procedures/hwp/nest/p9_sbe_hb_structures.H#L84),
+	 * the first 4 bytes are for the jump into HBBL). */
+	ld	%r5, 12(0)
+
+	/* Validate and initialize to zeroes the rest of first 2MB of cache */
+	/* FIXME: this overwrites the code if clearing >2MB. Why we don't have 10MB? */
+	lis		%r6, 0x20
 	addi	%r6, %r6, -1
 1:
 	dcbz	0, %r5
 	addi	%r5, %r5, 128
 	cmpld	cr7, %r5, %r6
 	blt		cr7, 1b
-*/
 
 	/* Enable floating point and vector operations */
 	/* Vector operations are sometimes generated for code like 

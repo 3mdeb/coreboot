@@ -14,6 +14,7 @@ static struct mem_region_device boot_dev =
 #define LPC_FLASH_MIN (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_FW_SPACE)
 #define LPC_FLASH_TOP (LPC_FLASH_MIN + FW_SPACE_SIZE)
 
+/* TODO: at some point we will have to change it to a bigger partition (HBI?) */
 #define CBFS_PARTITION_NAME "HBB"
 
 /* ffs_entry is not complete in included ffs.h, it lacks user data layout.
@@ -333,6 +334,8 @@ static void find_cbfs_in_pnor(void)
 		entry_count = hdr->entry_count;
 		block_size = hdr->block_size;
 
+		/* TODO: add a flag to reduce verbosity when building for SEEPROM,
+		 * every byte counts */
 		printk(BIOS_DEBUG, "Found FFS header at %p\n", hdr_pnor);
 		printk(BIOS_SPEW, "    size %x\n", hdr->size);
 		printk(BIOS_SPEW, "    entry_size %x\n", hdr->entry_size);

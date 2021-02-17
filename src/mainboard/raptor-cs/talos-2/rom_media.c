@@ -334,15 +334,18 @@ static void find_cbfs_in_pnor(void)
 		entry_count = hdr->entry_count;
 		block_size = hdr->block_size;
 
-		/* TODO: add a flag to reduce verbosity when building for SEEPROM,
-		 * every byte counts */
-		printk(BIOS_DEBUG, "Found FFS header at %p\n", hdr_pnor);
+		printk(BIOS_DEBUG, "FFS header at %p\n", hdr_pnor);
+
+		/* Every byte counts when building for SEEPROM */
+#if !CONFIG(BOOTBLOCK_IN_SEEPROM)
 		printk(BIOS_SPEW, "    size %x\n", hdr->size);
 		printk(BIOS_SPEW, "    entry_size %x\n", hdr->entry_size);
 		printk(BIOS_SPEW, "    entry_count %x\n", hdr->entry_count);
 		printk(BIOS_SPEW, "    block_size %x\n", hdr->block_size);
 		printk(BIOS_SPEW, "    block_count %x\n", hdr->block_count);
 		printk(BIOS_DEBUG, "PNOR base at %p\n", pnor_base);
+#endif
+
 		break;
 	}
 
@@ -359,8 +362,11 @@ static void find_cbfs_in_pnor(void)
 		/* Copy the entry so we won't have to rd32() for further accesses */
 		memcpy_ci_src(buffer, &hdr_pnor->entries[i], FFS_ENTRY_SIZE);
 
+		/* Every byte counts when building for SEEPROM */
+#if !CONFIG(BOOTBLOCK_IN_SEEPROM)
 		printk(BIOS_SPEW, "%s: base %x, size %x  (%x)\n\t type %x, flags %x\n",
 		       e->name, e->base, e->size, e->actual, e->type, e->flags);
+#endif
 
 		if (strcmp(e->name, CBFS_PARTITION_NAME) != 0)
 			continue;
@@ -382,7 +388,7 @@ static void find_cbfs_in_pnor(void)
 			cbfs += 0x200;
 		}
 
-		printk(BIOS_DEBUG, "Found CBFS partition at %p\n", cbfs);
+		printk(BIOS_DEBUG, "CBFS partition at %p\n", cbfs);
 		boot_dev.base = cbfs;
 		break;
 	}

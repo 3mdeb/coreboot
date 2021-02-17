@@ -26,13 +26,13 @@
 .globl _start
 _start:
 	/* QEMU with hb-mode=on starts at address 0x10, while hardware at 0x0. */
-	/* TODO: add a flag to not insert nops and FIXUP_ENDIAN when building for
-	 * SEEPROM, every byte counts */
+#if !CONFIG(BOOTBLOCK_IN_SEEPROM)
 	nop
 	nop
 	nop
 	nop
 	FIXUP_ENDIAN
+#endif
 
 	/* Set program priority to medium */
 	or		%r2, %r2, %r2
@@ -41,6 +41,7 @@ _start:
 	lis		%r1, _estack@ha
 	addi	%r1, %r1, _estack@l
 
+#if CONFIG(BOOTBLOCK_IN_SEEPROM)
 	/* L3 cache is invalid except for [0, end of HBBL] range. Make the rest of
 	 * it valid, or embrace the checstops. End of loaded part of HBBL is at
 	 * address 0x8 (see https://github.com/open-power/hostboot/blob/master/src/import/chips/p9/procedures/hwp/nest/p9_sbe_hb_structures.H#L84),
@@ -56,6 +57,7 @@ _start:
 	addi	%r5, %r5, 128
 	cmpld	cr7, %r5, %r6
 	blt		cr7, 1b
+#endif
 
 	/* Enable floating point and vector operations */
 	/* Vector operations are sometimes generated for code like 

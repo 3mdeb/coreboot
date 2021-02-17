@@ -370,15 +370,15 @@ void istep89(void)
     p9_fbc_ioe_dl_scom(XB_CHIPLET_ID);
     write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_IOEL_FIR_ACTION0_REG, FBC_IOE_DL_FIR_ACTION0);
     write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_IOEL_FIR_ACTION1_REG, FBC_IOE_DL_FIR_ACTION1);
-    write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_LL0_LL0_IOEL_FIR_MASK_REG, FBC_IOE_DL_FIR_MASK);
+    write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_LL0_IOEL_FIR_MASK_REG, FBC_IOE_DL_FIR_MASK);
 	printk(BIOS_EMERG, "ending istep 8.9\n");
 }
 
 void p9_fbc_ioe_dl_scom(uint64_t TGT0)
 {   
-    uint64_t pb_ioe_ll0_ioel_config = read_scom_for_chiplet(TGT0, ELL_CFG_REG);
-    uint64_t pb_ioe_ll0_ioel_replay_threshold = read_scom_for_chiplet(TGT0, ELL_REPLAY_TRESHOLD_REG);
-    uint64_t pb_ioe_ll0_ioel_sl_ecc_threshold = read_scom_for_chiplet(TGT0, ELL_SL_ECC_TRESHOLD_REG);
+    uint64_t pb_ioe_ll0_ioel_config = read_scom_for_chiplet(TGT0, PB_ELL_CFG_REG);
+    uint64_t pb_ioe_ll0_ioel_replay_threshold = read_scom_for_chiplet(TGT0, PB_ELL_REPLAY_TRESHOLD_REG);
+    uint64_t pb_ioe_ll0_ioel_sl_ecc_threshold = read_scom_for_chiplet(TGT0, PB_ELL_SL_ECC_TRESHOLD_REG);
     if (ATTR_LINK_TRAIN == BOTH)
     {
         pb_ioe_ll0_ioel_config |= 0x8000000000000000;
@@ -394,9 +394,9 @@ void p9_fbc_ioe_dl_scom(uint64_t TGT0)
     pb_ioe_ll0_ioel_sl_ecc_threshold &= 0x7FFFFFFFFFFFFFFF;
     pb_ioe_ll0_ioel_sl_ecc_threshold |= 0x7F70000000000000;
 
-    write_scom_for_chiplet(TGT0, ELL_CFG_REG, pb_ioe_ll0_ioel_config);
-    write_scom_for_chiplet(TGT0, ELL_REPLAY_TRESHOLD_REG, pb_ioe_ll0_ioel_replay_threshold);
-    write_scom_for_chiplet(TGT0, ELL_SL_ECC_TRESHOLD_REG, pb_ioe_ll0_ioel_sl_ecc_threshold);
+    write_scom_for_chiplet(TGT0, PB_ELL_CFG_REG, pb_ioe_ll0_ioel_config);
+    write_scom_for_chiplet(TGT0, PB_ELL_REPLAY_TRESHOLD_REG, pb_ioe_ll0_ioel_replay_threshold);
+    write_scom_for_chiplet(TGT0, PB_ELL_SL_ECC_TRESHOLD_REG, pb_ioe_ll0_ioel_sl_ecc_threshold);
 }
 
 void tl_fir(void)

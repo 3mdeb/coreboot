@@ -1,10 +1,9 @@
-#include <types.h>
+#include <console/console.h>
+#include <cpu/power/isteps.h>
+#include <cpu/power/scom.h>
+#include <cpu/power/scom_registers.h>
 #include <timer.h>
-
-#define XBUS_PHY_FIR_ACTION0 (0x0000000000000000ULL)
-#define XBUS_PHY_FIR_ACTION1 (0x2068680000000000ULL)
-#define XBUS_PHY_FIR_MASK    (0xDF9797FFFFFFC000ULL)
-#define XBUS_FIR_MASK_REG    (0x06010C0)
+#include <types.h>
 
 // void *call_proc_xbus_scominit(void *io_pArgs)
 // {
@@ -26,7 +25,7 @@
 //     }
 // }
 
-// fapi2::ReturnCode p9_io_xbus_scominit(
+// void p9_io_xbus_scominit(
 //     const fapi2::Target<fapi2::TARGET_TYPE_XBUS> &i_target,
 //     const fapi2::Target<fapi2::TARGET_TYPE_XBUS> &i_connected_target,
 //     const uint8_t group)
@@ -91,57 +90,6 @@
 //     }
 //     EDIP_TX_MSBSWAP[i_tgt, i_grp, lane0] = field_data;
 // }
-
-// fapi2::ReturnCode set_rx_master_mode(
-//     const fapi2::Target< fapi2::TARGET_TYPE_XBUS >& i_target,
-//     const fapi2::Target< fapi2::TARGET_TYPE_XBUS >& i_ctarget )
-// {
-//     uint8_t  l_primary_group_id   = 0;
-//     uint8_t  l_primary_chip_id    = 0;
-//     uint32_t l_primary_id         = 0;
-//     uint8_t  l_primary_attr       = 0;
-//     uint8_t  l_connected_group_id = 0;
-//     uint8_t  l_connected_chip_id  = 0;
-//     uint32_t l_connected_id       = 0;
-//     uint8_t  l_connected_attr     = 0;
-
-//     p9_get_proc_fabric_group_id(i_target,  l_primary_group_id);
-//     p9_get_proc_fabric_group_id(i_ctarget, l_connected_group_id);
-
-//     p9_get_proc_fabric_chip_id(i_target,  l_primary_chip_id);
-//     p9_get_proc_fabric_chip_id(i_ctarget, l_connected_chip_id);
-
-//     l_primary_id   = ((uint32_t)l_primary_group_id   << 8) + (uint32_t)l_primary_chip_id;
-//     l_connected_id = ((uint32_t)l_connected_group_id << 8) + (uint32_t)l_connected_chip_id;
-
-//     if(l_primary_id < l_connected_id) {
-//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_target] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_TRUE;
-//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_ctarget] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_FALSE;
-//     }
-//     else {
-//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_target] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_FALSE;
-//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_ctarget] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_TRUE;
-//     }
-// }
-
-// fapi2::ReturnCode p9_get_proc_fabric_group_id(
-//     const fapi2::Target<fapi2::TARGET_TYPE_XBUS>& i_target, uint8_t& o_group_id)
-// {
-//     fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> l_proc = i_target.getParent<fapi2::TARGET_TYPE_PROC_CHIP>();
-//     // Retrieve node attribute
-//     o_group_id = fapi2::ATTR_PROC_FABRIC_GROUP_ID[l_proc];
-// }
-
-// fapi2::ReturnCode p9_get_proc_fabric_chip_id(
-//     const fapi2::Target<fapi2::TARGET_TYPE_XBUS>& i_target, uint8_t& o_chip_id)
-// {
-//     fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> l_proc = i_target.getParent<fapi2::TARGET_TYPE_PROC_CHIP>();
-//     // Retrieve pos ID attribute
-//     o_chip_id = fapi2::ATTR_PROC_FABRIC_CHIP_ID[l_proc];
-// }
-
-// default value
-#define l_TGT0_ATTR_IO_XBUS_MASTER_MODE (0)
 
 void p9_xbus_g0_scom(
     /*const fapi2::Target<fapi2::TARGET_TYPE_XBUS> &*/ uint64_t TGT0,
@@ -1537,23 +1485,24 @@ void p9_xbus_g0_scom(
 
     // P9A_XBUS_0_RX0_RX_GLBSM_CNTL3_EO_PG
     l_scom_buffer = read_scom(0x800AE80006010C3F);
-    l_scom_buffer.insert<56, 2, 62, uint64_t>(0x02);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF3F;
+    l_scom_buffer |= 0x0000000000000020;
     write_scom(0x800AE80006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX0_RX_GLBSM_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800AF80006010C3F);
-    l_scom_buffer.insert<48, 4, 60, uint64_t>(0x0C);
-    l_scom_buffer.insert<52, 4, 60, uint64_t>(0x0C);
+    l_scom_buffer &= 0xFFFFFFFFFFFF00FF;
+    l_scom_buffer |= 0x000000000000CC00;
     write_scom(0x800AF80006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX0_RX_DATASM_SPARE_MODE_PG
     l_scom_buffer = read_scom(0x800B800006010C3F);
-    l_scom_buffer.insert<60, 1, 63, uint64_t>(0x0); // l_IOF1_RX_RX0_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
+    l_scom_buffer &= 0xFFFFFFFFFFFFFFF7; // l_IOF1_RX_RX0_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
     write_scom(0x800B800006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_SPARE_MODE_PG
     l_scom_buffer = read_scom(0x800C040006010C3F);
-    l_scom_buffer.insert<56, 2, 62, uint64_t>(0);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF3F;
     write_scom(0x800C040006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_ID1_PG
@@ -1563,19 +1512,21 @@ void p9_xbus_g0_scom(
 
     // P9A_XBUS_0_TX0_TX_CTL_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800C140006010C3F);
-    l_scom_buffer &= 0xFFFFFFFFFFFF7FFF; // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
-    l_scom_buffer.insert<59, 1, 63, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
-    l_scom_buffer.insert<53, 5, 59, uint64_t>(0b00001);
+    // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
+    // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
+    l_scom_buffer &= 0xFFFFFFFFFFFF783F;
+    l_scom_buffer |= 0x0000000000000050;
     write_scom(0x800C140006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_CTL_MODE2_EO_PG
     l_scom_buffer = read_scom(0x800C1C0006010C3F);
-    l_scom_buffer.insert<56, 7, 57, uint64_t>(0x11);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF01;
+    l_scom_buffer |= 0x0000000000000022;
     write_scom(0x800C1C0006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_CTL_CNTLG1_EO_PG
     l_scom_buffer = read_scom(0x800C240006010C3F);
-    l_scom_buffer.insert<48, 2, 62, uint64_t>(0x0); // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
+    l_scom_buffer &= 0xFFFFFFFFFFFF3FFF; // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
     write_scom(0x800C240006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_ID2_PG
@@ -1586,8 +1537,10 @@ void p9_xbus_g0_scom(
 
     // P9A_XBUS_0_TX0_TX_CTL_MODE1_E_PG
     l_scom_buffer = read_scom(0x800C8C0006010C3F);
-    l_scom_buffer.insert<55, 3, 61, uint64_t>(0x5); // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
-    l_scom_buffer.insert<58, 2, 62, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // l_IOF1_TX_WRAP_TX0_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    l_scom_buffer &= 0xfffffffffffffe0f;
+    l_scom_buffer |= 0x0000000000000150;
     write_scom(0x800C8C0006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_CTL_MODE2_E_PG
@@ -1597,30 +1550,28 @@ void p9_xbus_g0_scom(
 
     // P9A_XBUS_0_TX0_TX_CTL_MODE3_E_PG
     l_scom_buffer = read_scom(0x800CF40006010C3F);
-    l_scom_buffer.insert<48, 8, 56, uint64_t>(0x71111);
+    l_scom_buffer &= 0xFFFFFFFFFFFF00FF;
+    l_scom_buffer |= 0x0000000000007F00;
     write_scom(0x800CF40006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX0_TX_CTLSM_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800D2C0006010C3F);
-    l_scom_buffer.insert<59, 1, 63, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX0_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
+    l_scom_buffer |= 0x0000000000000010; // l_IOF1_TX_WRAP_TX0_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
     write_scom(0x800D2C0006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX_IMPCAL_P_4X_PB
     l_scom_buffer = read_scom(0x800F1C0006010C3F);
-    l_scom_buffer.insert<48, 5, 59, uint64_t>(0x70);
+    l_scom_buffer &= 0xFFFFFFFFFFFF07FF;
+    l_scom_buffer |= 0x0000000000007000;
     write_scom(0x800F1C0006010C3F, l_scom_buffer);
 }
 
-fapi2::ReturnCode p9_xbus_g1_scom(
-    const fapi2::Target<fapi2::TARGET_TYPE_XBUS> &TGT0,
-    const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> &TGT1,
-    const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> &TGT2)
+void p9_xbus_g1_scom(
+    /* const fapi2::Target<fapi2::TARGET_TYPE_XBUS>*/ uint64_t TGT0,
+    /* const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>*/ uint64_t TGT1,
+    /* const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>*/ uint64_t TGT2)
 {
-    l_chip_id = fapi2::ATTR_NAME[TGT2];
-    l_chip_ec = fapi2::ATTR_EC[TGT2];
-    l_TGT1_ATTR_IS_SIMULATION = fapi2::ATTR_IS_SIMULATION[TGT1];
-    l_TGT0_ATTR_IO_XBUS_MASTER_MODE = fapi2::ATTR_IO_XBUS_MASTER_MODE[TGT0];
-    fapi2::buffer<uint64_t> l_scom_buffer;
+    uint64_t l_scom_buffer;
 
     // P9A_XBUS_RX1_RXPACKS0_SLICE2_RX_DATA_DAC_SPARE_MODE_PL
     l_scom_buffer = read_scom(0x8000002006010C3F);
@@ -1862,7 +1813,7 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_RX1_RXPACKS2_SLICE3_RX_DAC_CNTL1_EO_PL
     l_scom_buffer = read_scom(0x8000083106010C3F);
-    l_scom_buffer.insert<54, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_ON
+    l_scom_buffer |= 0x0000000000000200; // l_IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_ON
     write_scom(0x8000083106010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RXPACKS0_SLICE2_RX_DAC_CNTL5_EO_PL
@@ -2364,8 +2315,8 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     // P9A_XBUS_0_RX1_RXPACKS0_SLICE2_RX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8002C82006010C3F);
     // l_IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
-    l_scom_buffer &= 0xFFFFFFFFFFFF01FF
-    l_scom_buffer |= 0x0000000000004200
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x0000000000004200;
     write_scom(0x8002C82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RXPACKS0_SLICE0_RX_BIT_MODE2_E_PL
@@ -2378,7 +2329,7 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     // P9A_XBUS_0_RX1_RXPACKS0_SLICE3_RX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8002C82206010C3F);
     // l_IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
-    l_scom_buffer &= 0xFFFFFFFFFFFF01FF
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
     write_scom(0x8002C82206010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RXPACKS0_SLICE1_RX_BIT_MODE2_E_PL
@@ -2419,8 +2370,8 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     // P9A_XBUS_0_RX1_RXPACKS2_SLICE0_RX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8002C82806010C3F);
     // l_IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
-    l_scom_buffer &= 0xFFFFFFFFFFFF01FF
-    l_scom_buffer |= 0x0000000000004200
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x0000000000004200;
     write_scom(0x8002C82806010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RXPACKS2_SLICE2_RX_BIT_MODE2_E_PL
@@ -2461,7 +2412,7 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     // P9A_XBUS_0_RX1_RXPACKS3_SLICE0_RX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8002C82E06010C3F);
     // l_IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
-    l_scom_buffer &= 0xFFFFFFFFFFFF01FF
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
     write_scom(0x8002C82E06010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RXPACKS3_SLICE4_RX_BIT_MODE2_E_PL
@@ -2474,8 +2425,8 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     // P9A_XBUS_0_RX1_RXPACKS3_SLICE5_RX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8002C83006010C3F);
     // l_IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_5_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
-    l_scom_buffer &= 0xFFFFFFFFFFFF01FF
-    l_scom_buffer |= 0x0000000000004200
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x0000000000004200;
     write_scom(0x8002C83006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TXPACKS0_SLICE0_TX_MODE1_PL
@@ -2771,7 +2722,9 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TXPACKS0_SLICE2_TX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8004442206010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x7b); // l_IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    // l_IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    l_scom_buffer &= 0xFFFFFFFFFFFF0100;
+    l_scom_buffer |= 0x000000000000F600;
     write_scom(0x8004442206010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TXPACKS0_SLICE3_TX_BIT_MODE2_E_PL
@@ -2790,7 +2743,9 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TXPACKS1_SLICE1_TX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8004442506010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x10); // l_IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    // l_IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x0000000000002000;
     write_scom(0x8004442506010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TXPACKS1_SLICE2_TX_BIT_MODE2_E_PL
@@ -2816,7 +2771,9 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TXPACKS2_SLICE1_TX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8004442906010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x4e); // l_IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    // l_IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x0000000000009C00;
     write_scom(0x8004442906010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TXPACKS2_SLICE2_TX_BIT_MODE2_E_PL
@@ -2835,7 +2792,9 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TXPACKS3_SLICE0_TX_BIT_MODE2_E_PL
     l_scom_buffer = read_scom(0x8004442C06010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x5e); // l_IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    // l_IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    l_scom_buffer &= 0xFFFFFFFFFFFF01FF;
+    l_scom_buffer |= 0x000000000000bc00;
     write_scom(0x8004442C06010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TXPACKS3_SLICE1_TX_BIT_MODE2_E_PL
@@ -2874,7 +2833,8 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_RX1_RX_ID1_PG
     l_scom_buffer = read_scom(0x8008082006010C3F);
-    l_scom_buffer.insert<48, 6, 58, uint64_t>(1);
+    l_scom_buffer &= 0xffffffffffff03ff;
+    l_scom_buffer |= 0x0000000000000400;
     write_scom(0x8008082006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE1_EO_PG
@@ -2898,16 +2858,18 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_RX0_RX_CTL_MODE23_EO_PG
     l_scom_buffer = read_scom(0x8008C00006010C3F);
-    l_scom_buffer.insert<48, 2, 62, uint64_t>(0b01);
+    l_scom_buffer &= 0xFFFFFFFFFFFF3FFF;
+    l_scom_buffer |= 0x0000000000004000;
     write_scom(0x8008C00006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE23_EO_PG
     l_scom_buffer = read_scom(0x8008C02006010C3F);
-    l_scom_buffer &= 0xFFFFFFFFFFFFFEFF; // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PEAK_TUNE_OFF
-    l_scom_buffer.insert<57, 2, 62, uint64_t>(0x3);
-    l_scom_buffer.insert<59, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFEHISPD_EN_ON
-    l_scom_buffer.insert<60, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFE12_EN_ON
-    l_scom_buffer.insert<56, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_LTE_EN_ON
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PEAK_TUNE_OFF
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFEHISPD_EN_ON
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_LTE_EN_ON
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFE12_EN_ON
+    l_scom_buffer &= 0xFFFFFFFFFFFFFEFF; 
+    l_scom_buffer |= 0x00000000000000F8;
     write_scom(0x8008C02006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE29_EO_PG
@@ -2932,13 +2894,15 @@ fapi2::ReturnCode p9_xbus_g1_scom(
     if(l_TGT0_ATTR_IO_XBUS_MASTER_MODE) {
         l_scom_buffer |= 0x0000000000008000; // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_MASTER_MODE_MASTER
     }
-    l_scom_buffer.insert<58, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PDWN_LITE_DISABLE_ON
-    l_scom_buffer.insert<57, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_FENCE_FENCED
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PDWN_LITE_DISABLE_ON
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_FENCE_FENCED
+    l_scom_buffer |= 0x0000000000000060;
     write_scom(0x8009902006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE2_E_PG
     l_scom_buffer = read_scom(0x8009982006010C3F);
-    l_scom_buffer.insert<48, 5, 59, uint64_t>(0x01);
+    l_scom_buffer &= 0xFFFFFFFFFFFF07FF;
+    l_scom_buffer |= 0x0000000000000800;
     write_scom(0x8009982006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE3_E_PG
@@ -2955,21 +2919,22 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE6_E_PG
     l_scom_buffer = read_scom(0x8009B82006010C3F);
-    l_scom_buffer &= 0xffffffffffff0003;
+    l_scom_buffer &= 0xFFFFFFFFFFFF0003;
     l_scom_buffer |= 0x0000000000002244;
     write_scom(0x8009B82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE8_E_PG
     l_scom_buffer = read_scom(0x8009C82006010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x1111);
-    l_scom_buffer.insert<55, 4, 60, uint64_t>(0x5); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR1_DURATION_TAP5
-    l_scom_buffer.insert<61, 3, 61, uint64_t>(0x05);
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR1_DURATION_TAP5
+    l_scom_buffer &= 0xFFFFFFFFFFFF0018;
+    l_scom_buffer |= 0x0000000000001EA5;
     write_scom(0x8009C82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE9_E_PG
     l_scom_buffer = read_scom(0x8009D02006010C3F);
-    l_scom_buffer.insert<48, 7, 57, uint64_t>(0x7111);
-    l_scom_buffer.insert<55, 4, 60, uint64_t>(0x5); // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR2_DURATION_TAP5
+    // l_IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR2_DURATION_TAP5
+    l_scom_buffer &= 0x7fffffffffff800;
+    l_scom_buffer |= 0x0000000000003f5;
     write_scom(0x8009D02006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE11_E_PG
@@ -2979,56 +2944,63 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_RX1_RX_CTL_MODE12_E_PG
     l_scom_buffer = read_scom(0x8009E82006010C3F);
-    l_scom_buffer.insert<48, 8, 56, uint64_t>(0x71111);
+    l_scom_buffer &= 0xFFFFFFFFFFFF00FF;
+    l_scom_buffer |= 0x0000000000007F00;
     write_scom(0x8009E82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_GLBSM_SPARE_MODE_PG
     l_scom_buffer = read_scom(0x800A802006010C3F);
-    l_scom_buffer.insert<56, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_DESKEW_BUMP_AFTER_AFTER
-    l_scom_buffer.insert<50, 1, 63, uint64_t>(0x1); // l_IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_PG_GLBSM_SPARE_MODE_2_ON
+    // l_IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_DESKEW_BUMP_AFTER_AFTER
+    // l_IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_PG_GLBSM_SPARE_MODE_2_ON
+    l_scom_buffer |= 0x0000000000002080;
     write_scom(0x800A802006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_GLBSM_CNTL3_EO_PG
     l_scom_buffer = read_scom(0x800AE82006010C3F);
-    l_scom_buffer.insert<56, 2, 62, uint64_t>(0x02);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF3F;
+    l_scom_buffer |= 0x0000000000000080;
     write_scom(0x800AE82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_GLBSM_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800AF82006010C3F);
-    l_scom_buffer.insert<48, 4, 60, uint64_t>(0x0C);
-    l_scom_buffer.insert<52, 4, 60, uint64_t>(0x0C);
+    l_scom_buffer &= 0xFFFFFFFFFFFF00FF;
+    l_scom_buffer |= 0x000000000000CC00;
     write_scom(0x800AF82006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_RX1_RX_DATASM_SPARE_MODE_PG
     l_scom_buffer = read_scom(0x800B802006010C3F);
-    l_scom_buffer.insert<60, 1, 63, uint64_t>(0x0); // l_IOF1_RX_RX1_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
+    // l_IOF1_RX_RX1_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
+    l_scom_buffer &= 0xFFFFFFFFFFFFFFF7;
     write_scom(0x800B802006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_SPARE_MODE_PG
     l_scom_buffer = read_scom(0x800C042006010C3F);
-    l_scom_buffer.insert<56, 2, 62, uint64_t>(0);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF3F;
     write_scom(0x800C042006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_ID1_PG
     l_scom_buffer = read_scom(0x800C0C2006010C3F);
-    l_scom_buffer.insert<48, 6, 58, uint64_t>(1);
+    l_scom_buffer &= 0xFFFFFFFFFFFF03FF;
+    l_scom_buffer |= 0x0000000000000400;
     write_scom(0x800C0C2006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_CTL_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800C142006010C3F);
-    l_scom_buffer &= 0xFFFFFFFFFFFF7FFF; // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
-    l_scom_buffer.insert<59, 1, 63, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
-    l_scom_buffer.insert<53, 5, 59, uint64_t>(0b00001);
+    // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
+    // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
+    l_scom_buffer &= 0xFFFFFFFFFFFF783F;
+    l_scom_buffer |= 0x0000000000000050;
     write_scom(0x800C142006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_CTL_MODE2_EO_PG
     l_scom_buffer = read_scom(0x800C1C2006010C3F);
-    l_scom_buffer.insert<56, 7, 57, uint64_t>(0x11);
+    l_scom_buffer &= 0xFFFFFFFFFFFFFF01;
+    l_scom_buffer |= 0x0000000000000F22;
     write_scom(0x800C1C2006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_CTL_CNTLG1_EO_PG
     l_scom_buffer = read_scom(0x800C242006010C3F);
-    l_scom_buffer.insert<48, 2, 62, uint64_t>(0x0); // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
+    l_scom_buffer &= 0xFFFFFFFFFFFF3FFF; // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
     write_scom(0x800C242006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_ID2_PG
@@ -3039,8 +3011,10 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TX_CTL_MODE1_E_PG
     l_scom_buffer = read_scom(0x800C8C2006010C3F);
-    l_scom_buffer.insert<55, 3, 61, uint64_t>(0x5); // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
-    l_scom_buffer.insert<58, 2, 62, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // l_IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    l_scom_buffer &= 0xfffffffffffffe0f;
+    l_scom_buffer |= 0x0000000000000150;
     write_scom(0x800C8C2006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_CTL_MODE2_E_PG
@@ -3050,16 +3024,73 @@ fapi2::ReturnCode p9_xbus_g1_scom(
 
     // P9A_XBUS_0_TX1_TX_CTL_MODE3_E_PG
     l_scom_buffer = read_scom(0x800CF42006010C3F);
-    l_scom_buffer.insert<48, 8, 56, uint64_t>(0x71111);
+    l_scom_buffer &= 0xFFFFFFFFFFFF00FF;
+    l_scom_buffer |= 0x0000000000007F00;
     write_scom(0x800CF42006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX1_TX_CTLSM_MODE1_EO_PG
     l_scom_buffer = read_scom(0x800D2C2006010C3F);
-    l_scom_buffer.insert<59, 1, 63, uint64_t>(0x1); // l_IOF1_TX_WRAP_TX1_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
+    l_scom_buffer |= 0x0000000000000010; // l_IOF1_TX_WRAP_TX1_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
     write_scom(0x800D2C2006010C3F, l_scom_buffer);
 
     // P9A_XBUS_0_TX_IMPCAL_P_4X_PB
     l_scom_buffer = read_scom(0x800F1C0006010C3F);
-    l_scom_buffer.insert<48, 5, 59, uint64_t>(0x70);
+    l_scom_buffer &= 0xFFFFFFFFFFFF07FF;
+    l_scom_buffer |= 0x0000000000007000;
     write_scom(0x800F1C0006010C3F, l_scom_buffer);
 }
+
+void istep810(void)
+{
+    printk(BIOS_EMERG, "starting istep 8.10\n");
+	printk(BIOS_EMERG, "ending istep 8.10\n");
+    return;
+}
+
+// fapi2::ReturnCode set_rx_master_mode(
+//     const fapi2::Target< fapi2::TARGET_TYPE_XBUS >& i_target,
+//     const fapi2::Target< fapi2::TARGET_TYPE_XBUS >& i_ctarget )
+// {
+//     uint8_t  l_primary_group_id   = 0;
+//     uint8_t  l_primary_chip_id    = 0;
+//     uint32_t l_primary_id         = 0;
+//     uint8_t  l_primary_attr       = 0;
+//     uint8_t  l_connected_group_id = 0;
+//     uint8_t  l_connected_chip_id  = 0;
+//     uint32_t l_connected_id       = 0;
+//     uint8_t  l_connected_attr     = 0;
+
+//     p9_get_proc_fabric_group_id(i_target,  l_primary_group_id);
+//     p9_get_proc_fabric_group_id(i_ctarget, l_connected_group_id);
+
+//     p9_get_proc_fabric_chip_id(i_target,  l_primary_chip_id);
+//     p9_get_proc_fabric_chip_id(i_ctarget, l_connected_chip_id);
+
+//     l_primary_id   = ((uint32_t)l_primary_group_id   << 8) + (uint32_t)l_primary_chip_id;
+//     l_connected_id = ((uint32_t)l_connected_group_id << 8) + (uint32_t)l_connected_chip_id;
+
+//     if(l_primary_id < l_connected_id) {
+//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_target] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_TRUE;
+//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_ctarget] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_FALSE;
+//     }
+//     else {
+//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_target] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_FALSE;
+//         fapi2::ATTR_IO_XBUS_MASTER_MODE[i_ctarget] = fapi2::ENUM_ATTR_IO_XBUS_MASTER_MODE_TRUE;
+//     }
+// }
+
+// fapi2::ReturnCode p9_get_proc_fabric_group_id(
+//     const fapi2::Target<fapi2::TARGET_TYPE_XBUS>& i_target, uint8_t& o_group_id)
+// {
+//     fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> l_proc = i_target.getParent<fapi2::TARGET_TYPE_PROC_CHIP>();
+//     // Retrieve node attribute
+//     o_group_id = fapi2::ATTR_PROC_FABRIC_GROUP_ID[l_proc];
+// }
+
+// fapi2::ReturnCode p9_get_proc_fabric_chip_id(
+//     const fapi2::Target<fapi2::TARGET_TYPE_XBUS>& i_target, uint8_t& o_chip_id)
+// {
+//     fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> l_proc = i_target.getParent<fapi2::TARGET_TYPE_PROC_CHIP>();
+//     // Retrieve pos ID attribute
+//     o_chip_id = fapi2::ATTR_PROC_FABRIC_CHIP_ID[l_proc];
+// }

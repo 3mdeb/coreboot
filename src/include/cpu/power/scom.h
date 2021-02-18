@@ -120,17 +120,17 @@ void write_scom_indirect(uint64_t reg_address, uint64_t data);
 
 static inline void write_scom(uint64_t addr, uint64_t data)
 {
-	// if (addr & XSCOM_ADDR_IND_FLAG)
-	// 	write_scom_indirect(addr, data);
-	// else
+	if (addr & XSCOM_ADDR_IND_FLAG)
+		write_scom_indirect(addr, data);
+	else
 		write_scom_direct(addr, data);
 }
 
 static inline uint64_t read_scom(uint64_t addr)
 {
-	// if (addr & XSCOM_ADDR_IND_FLAG)
-	// 	return read_scom_indirect(addr);
-	// else
+	if (addr & XSCOM_ADDR_IND_FLAG)
+		return read_scom_indirect(addr);
+	else
 		return read_scom_direct(addr);
 }
 

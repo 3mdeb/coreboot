@@ -2,6 +2,8 @@
 
 #include <arch/cpu.h>
 
+
 asmlinkage void car_stage_entry(void)
 {
+    printk(BIOS_EMERG, "hello from SoC!\n");
 }

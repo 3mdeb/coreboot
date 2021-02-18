@@ -315,6 +315,7 @@ static void prepare_dimm_data(void)
 
 void main(void)
 {
+<<<<<<< HEAD
 	console_init();
 <<<<<<< HEAD
 
@@ -355,4 +356,10 @@ void main(void)
     istep810();
 >>>>>>> add istep 8.10
 	run_ramstage();
+=======
+    console_init();
+    istep89();
+    istep810();
+    run_ramstage();
+>>>>>>> fix indentation
 }

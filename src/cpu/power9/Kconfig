@@ -1,7 +1,11 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 config CPU_POWER9
+=======
+config CPU_QEMU_POWER8
+>>>>>>> cpu/power9: fix directory structure and timer build fault
 =======
 config CPU_QEMU_POWER8
 >>>>>>> cpu/power9: fix directory structure and timer build fault

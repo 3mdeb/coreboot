@@ -2,7 +2,10 @@
 
 bootblock-y += bootblock.c
 bootblock-y += rom_media.c
+bootblock-y += sha256.c
+
 romstage-y += cbmem.c
 romstage-y += romstage.c
 romstage-y += rom_media.c
+
 ramstage-y += rom_media.c

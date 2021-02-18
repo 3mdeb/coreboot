@@ -6,8 +6,8 @@
 
 void main(void)
 {
-	console_init();
-	istep89();
+    console_init();
+    istep89();
     istep810();
-	run_ramstage();
+    run_ramstage();
 }

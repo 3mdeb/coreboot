@@ -1,6 +1,10 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+<<<<<<< HEAD
 config CPU_POWER9
+=======
+config CPU_QEMU_POWER8
+>>>>>>> cpu/power9: fix directory structure and timer build fault
 	bool
 	select ARCH_BOOTBLOCK_PPC64
 	select ARCH_VERSTAGE_PPC64

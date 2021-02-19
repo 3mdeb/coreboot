@@ -3043,7 +3043,7 @@ void p9_xbus_g1_scom(
 void istep_8_10(void)
 {
     printk(BIOS_EMERG, "starting istep 8.10\n");
-    read_scom(0x800F1C0006010C3F);
+    read_scom(0x8000C8000701103Full);
 	printk(BIOS_EMERG, "ending istep 8.10\n");
     return;
 }

@@ -34,10 +34,10 @@
 #define FBC_IOE_DL_FIR_ACTION1 (0x303c00000001ffc)
 #define FBC_IOE_DL_FIR_MASK (0xfcfc3fffffffe003)
 
-#define BOTH (0x0)
-#define EVEN_ONLY (0x1)
-#define ODD_ONLY (0x2)
-#define NONE (0x3)
+#define BOTH        (0x0)
+#define EVEN_ONLY   (0x1)
+#define ODD_ONLY    (0x2)
+#define NONE        (0x3)
 #define ATTR_LINK_TRAIN BOTH
 
 #define PROC_CHIPLET (0x10) // this is probably wrong
@@ -47,12 +47,12 @@
 #define XBUS_FIR_MASK_REG    (0x06010C0)
 #define l_TGT0_ATTR_IO_XBUS_MASTER_MODE (0) // default value
 
-void istep810(void);
-void p9_xbus_g1_scom(uint64_t TGT0, uint64_t TGT1, uint64_t TGT2);
-void p9_xbus_g0_scom(uint64_t TGT0, uint64_t TGT1, uint64_t TGT2);
-
 void p9_fbc_ioe_tl_scom(void);
-void istep89(void);
+void istep_8_9(void);
 void p9_fbc_no_hp_scom(void);
 void tl_fir(void);
 void p9_fbc_ioe_dl_scom(uint64_t TGT0);
+
+void istep_8_10(void);
+void p9_xbus_g1_scom(uint64_t TGT0, uint64_t TGT1, uint64_t TGT2);
+void p9_xbus_g0_scom(uint64_t TGT0, uint64_t TGT1, uint64_t TGT2);

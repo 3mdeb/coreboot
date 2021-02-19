@@ -1,5 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+<<<<<<< HEAD
 ifeq ($(CONFIG_CPU_IBM_POWER9),y)
 
 bootblock-y += bootblock.c
@@ -16,8 +17,18 @@ romstage-y += istep_13_13.c
 romstage-y += istep_14_2.c
 romstage-y += i2c.c
 romstage-y += ccs.c
+=======
+# ifeq ($(CPU_IBM_POWER9),y)
+
+bootblock-y += bootblock.c
+postcar-y += exit_car.S
+romstage-y += romstage.c
+romstage-y += istep_8_9.c
+romstage-y += istep_8_10.c
+romstage-y += ../../../cpu/power/power9/scom.c
+>>>>>>> move isteps 8.9, 8.10 to soc subdir
 
 ramstage-y += chip.c
 ramstage-y += timer.c
 
-endif
+# endif

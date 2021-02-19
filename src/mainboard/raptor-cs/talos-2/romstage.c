@@ -313,6 +313,8 @@ static void prepare_dimm_data(void)
 	}
 }
 
+void scom_init(void);
+
 void main(void)
 {
 <<<<<<< HEAD
@@ -358,8 +360,7 @@ void main(void)
 	run_ramstage();
 =======
     console_init();
-    istep89();
-    istep810();
+    scom_init();
     run_ramstage();
 >>>>>>> fix indentation
 }

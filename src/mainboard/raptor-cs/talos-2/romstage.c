@@ -4,10 +4,11 @@
 #include <cpu/power/isteps.h>
 #include <program_loading.h>
 
+void scom_init(void);
+
 void main(void)
 {
     console_init();
-    istep89();
-    istep810();
+    scom_init();
     run_ramstage();
 }

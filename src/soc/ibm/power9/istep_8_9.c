@@ -3,7 +3,7 @@
 #include <cpu/power/scom.h>
 #include <cpu/power/scom_registers.h>
 
-void istep89(void)
+void istep_8_9(void)
 {
 	printk(BIOS_EMERG, "starting istep 8.9\n");
 	p9_fbc_no_hp_scom();
@@ -45,32 +45,8 @@ void tl_fir(void)
 {
     write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_ACTION0_REG, FBC_IOE_TL_FIR_ACTION0);
     write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_ACTION1_REG, FBC_IOE_TL_FIR_ACTION1);
-    uint64_t l_fir_mask = FBC_IOE_TL_FIR_MASK;
-
-    l_fir_mask |= FBC_IOE_TL_FIR_MASK_X0_NF;
-    // bool l_x_functional[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
-    // {
-    //     false,
-    //     false,
-    //     false
-    // };
-    // uint64_t l_x_non_functional_mask[P9_FBC_UTILS_MAX_ELECTRICAL_LINKS] =
-    // {
-    //     FBC_IOE_TL_FIR_MASK_X0_NF,
-    //     FBC_IOE_TL_FIR_MASK_X1_NF,
-    //     FBC_IOE_TL_FIR_MASK_X2_NF
-    // };
-    // uint8_t l_unit_pos;
-    // l_unit_pos = fapi2::ATTR_CHIP_UNIT_POS[XB_CHIPLET_ID];
-    // l_x_functional[l_unit_pos] = true;
-    // for(unsigned int ll = 0; ll < P9_FBC_UTILS_MAX_ELECTRICAL_LINKS; ++ll)
-    // {
-    //     if (!l_x_functional[ll])
-    //     {
-    //         l_fir_mask |= l_x_non_functional_mask[ll];
-    //     }
-    // }
-    write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_MASK_REG, l_fir_mask);
+    // not sure about this one, maybe X1 or X2 mask?
+    write_scom_for_chiplet(PROC_CHIPLET, PU_PB_IOE_FIR_MASK_REG, FBC_IOE_TL_FIR_MASK | FBC_IOE_TL_FIR_MASK_X0_NF);
 }
 
 void p9_fbc_no_hp_scom(void)
@@ -213,25 +189,10 @@ void p9_fbc_ioe_tl_scom(void)
 
 	if(X0_ENABLED && DD2X_PARTS)
 	{
+        // not sure about this one
 		pb_ioe_scom_pb_fp01_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp01_cfg |= 0x00C0000000C00000;
+        pb_ioe_scom_pb_fp01_cfg |= 0x00D0000000D00000;
 	}
-	
-	if(X2_ENABLED)
-    {
-        pb_ioe_scom_pb_fp45_cfg &= 0xfff004bffff007bf;
-        pb_ioe_scom_pb_fp45_cfg |= 0x0002010000020000;
-    }
-    else
-    {
-        pb_ioe_scom_pb_fp45_cfg |= 0x84000000840;
-    }
-
-	if (X2_ENABLED && DD2X_PARTS)
-    {
-        pb_ioe_scom_pb_fp45_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp45_cfg |= 0x00C0000000C00000;
-    }
 
     if (X0_ENABLED && OPTICS_IS_A_BUS)
     {
@@ -265,10 +226,12 @@ void p9_fbc_ioe_tl_scom(void)
         pb_ioe_scom_pb_trace_cfg |= 0x0000000041410000;
     }
 
+
     if (X1_ENABLED && DD2X_PARTS)
     {
+        // not sure about this one
         pb_ioe_scom_pb_fp23_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp23_cfg |= 0x00C0000000C00000;
+        pb_ioe_scom_pb_fp23_cfg |= 0x00D0000000D00000;
     }
 
     if(X1_ENABLED)
@@ -291,6 +254,23 @@ void p9_fbc_ioe_tl_scom(void)
     else
     {
         pb_ioe_scom_pb_fp23_cfg |= 0x0000084000000840;
+    }
+	
+	if(X2_ENABLED)
+    {
+        pb_ioe_scom_pb_fp45_cfg &= 0xfff004bffff007bf;
+        pb_ioe_scom_pb_fp45_cfg |= 0x0002010000020000;
+    }
+    else
+    {
+        pb_ioe_scom_pb_fp45_cfg |= 0x84000000840;
+    }
+
+	if (X2_ENABLED && DD2X_PARTS)
+    {
+        // not sure about this one
+        pb_ioe_scom_pb_fp45_cfg &= 0xF00FFFFFF00FFFFF;
+        pb_ioe_scom_pb_fp45_cfg |= 0x00D0000000D00000;
     }
 
     if(X2_ENABLED)

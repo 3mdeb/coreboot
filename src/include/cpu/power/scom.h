@@ -148,5 +148,21 @@ static inline uint64_t read_scom_for_chiplet(chiplet_id_t chiplet, uint64_t addr
 	return read_scom(addr);
 }
 
+static inline void scom_and_or_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t and, uint64_t or)
+{
+	uint64_t data = read_scom_for_chiplet(chiplet, addr);
+	write_scom_for_chiplet(chiplet, addr, (data & and) | or);
+}
+
+static inline void scom_and_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t and)
+{
+	scom_and_or_for_chiplet(chiplet, addr, and, 0);
+}
+
+static inline void scom_or_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t or)
+{
+	scom_and_or_for_chiplet(chiplet, addr, ~0, or);
+}
+
 #endif /* __ASSEMBLER__ */
 #endif /* CPU_PPC64_SCOM_H */

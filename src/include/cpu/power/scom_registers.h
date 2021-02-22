@@ -1,4 +1,5 @@
 #define PB_WEST_MODE_CFG_REG               (0x501180A) // Power Bus PB West Mode Configuration Register
+#define PB_CENT_SM0_PB_CENT_FIR_REG        (0x5011C00) // Power Bus PB CENT FIR Register
 #define PB_CENT_MODE_CFG_REG               (0x5011C0A) // Power Bus PB CENT Mode Register
 #define PB_CENT_GP_COMMAND_RATE_DP0_REG    (0x5011C26) // Power Bus PB CENT GP command RATE DP0 Register
 #define PB_CENT_GP_COMMAND_RATE_DP1_REG    (0x5011C27) // Power Bus PB CENT GP command RATE DP1 Register

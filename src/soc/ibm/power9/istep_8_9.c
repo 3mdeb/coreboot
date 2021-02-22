@@ -1,5 +1,5 @@
 #include <console/console.h>
-#include <cpu/power/isteps.h>
+#include <cpu/power/istep_8_9.h>
 #include <cpu/power/scom.h>
 #include <cpu/power/scom_registers.h>
 
@@ -53,7 +53,6 @@ void p9_fbc_no_hp_scom(void)
 {
     uint64_t is_flat_8 = false;
 
-    // REGISTERS read
     uint64_t pb_com_pb_west_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_WEST_MODE_CFG_REG);
     uint64_t pb_com_pb_cent_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_MODE_CFG_REG);
     uint64_t pb_com_pb_cent_gp_cmd_rate_dp0 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP0_REG);
@@ -154,7 +153,6 @@ void p9_fbc_no_hp_scom(void)
     pb_com_pb_east_mode &= 0xFFFFFFFC0FFFFFFF;
     pb_com_pb_east_mode |= 0x00000002a0000000;
 
-    // REGISTERS write
     write_scom_for_chiplet(PROC_CHIPLET, PB_WEST_MODE_CFG_REG, pb_com_pb_west_mode);
     write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_MODE_CFG_REG, pb_com_pb_cent_mode);
     write_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP0_REG, pb_com_pb_cent_gp_cmd_rate_dp0);
@@ -313,7 +311,6 @@ void p9_fbc_ioe_tl_scom(void)
         pb_ioe_scom_pb_misc_cfg &= 0xDFFFFFFFFFFFFFFF;
     }
 
-    // REGISTERS write
     write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_LINK_TRACE_CFG_REG, pb_ioe_scom_pb_trace_cfg);
     write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_MISC_CFG_REG, pb_ioe_scom_pb_misc_cfg);
     write_scom_for_chiplet(PROC_CHIPLET, PB_ELE_PB_DATA_BUFF_01_CFG_REG, pb_ioe_scom_pb_elink_data_01_cfg_reg);

@@ -2,12 +2,17 @@
 
 #include <console/console.h>
 <<<<<<< HEAD
+<<<<<<< HEAD
 #include <cpu/power/vpd.h>
 #include <cpu/power/istep_13.h>
 #include <cpu/power/istep_14.h>
 =======
 #include <cpu/power/isteps.h>
 >>>>>>> add istep 8.10
+=======
+#include <cpu/power/istep_8_9.h>
+#include <cpu/power/istep_8_10.h>
+>>>>>>> src/include/cpu/power/istep_8_9.c: remove attributes found in hosboot config files
 #include <program_loading.h>
 #include <lib.h>	// hexdump
 #include <spd_bin.h>
@@ -313,8 +318,6 @@ static void prepare_dimm_data(void)
 	}
 }
 
-void scom_init(void);
-
 void main(void)
 {
 <<<<<<< HEAD
@@ -360,7 +363,8 @@ void main(void)
 	run_ramstage();
 =======
     console_init();
-    scom_init();
+    istep_8_9();
+    istep_8_10();
     run_ramstage();
 >>>>>>> fix indentation
 }

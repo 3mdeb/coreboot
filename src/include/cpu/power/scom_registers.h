@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
 #define PB_WEST_MODE_CFG_REG               (0x501180A) // Power Bus PB West Mode Configuration Register
 #define PB_CENT_SM0_PB_CENT_FIR_REG        (0x5011C00) // Power Bus PB CENT FIR Register
 #define PB_CENT_MODE_CFG_REG               (0x5011C0A) // Power Bus PB CENT Mode Register
@@ -26,3 +28,4 @@
 #define PB_ELL_SL_ECC_TRESHOLD_REG         (0x6011819) // Power Bus ELL SL ECC Threshold Register
 #define XBUS_FIR_ACTION0_REG               (0x6010C06)
 #define XBUS_FIR_ACTION1_REG               (0x6010C07)
+#define XBUS_FIR_MASK_REG                  (0x6010C03)

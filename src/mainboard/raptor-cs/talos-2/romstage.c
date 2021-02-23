@@ -2,16 +2,16 @@
 
 #include <console/console.h>
 #include <cpu/power/vpd.h>
+#include <cpu/power/istep_13.h>
 #include <program_loading.h>
 #include <device/smbus_host.h>
-#include <device/dram/ddr4.h>
 #include <lib.h>	// hexdump
 #include <spd_bin.h>
 
 void main(void)
 {
 	int i;
-	dimm_attr dimm[CONFIG_DIMM_MAX];
+	dimm_attr dimm[CONFIG_DIMM_MAX] = {0};
 
 	console_init();
 	vpd_pnor_main();
@@ -25,8 +25,12 @@ void main(void)
 	dump_spd_info(&blk);
 
 	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
-		spd_decode_ddr4(&dimm[i], blk.spd_array[i]);
+		if (blk.spd_array[i] != NULL)
+			spd_decode_ddr4(&dimm[i], blk.spd_array[i]);
 	}
+
+	report_istep(13,1);	// no-op
+	istep_13_2(dimm);
 
 	run_ramstage();
 }

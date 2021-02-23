@@ -535,6 +535,6 @@ void istep_8_10(void)
     printk(BIOS_EMERG, "starting istep 8.10\n");
     p9_io_xbus_scominit(0);
     p9_io_xbus_scominit(1);
-	printk(BIOS_EMERG, "ending istep 8.10\n");
+    printk(BIOS_EMERG, "ending istep 8.10\n");
     return;
 }

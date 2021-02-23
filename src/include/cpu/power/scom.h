@@ -134,6 +134,22 @@ static inline uint64_t read_scom(uint64_t addr)
 		return read_scom_direct(addr);
 }
 
+static inline void scom_and_or(uint64_t addr, uint64_t and, uint64_t or)
+{
+	uint64_t data = read_scom(addr);
+	write_scom(addr, (data & and) | or);
+}
+
+static inline void scom_and(uint64_t addr, uint64_t and)
+{
+	scom_and_or(addr, and, 0);
+}
+
+static inline void scom_or(uint64_t addr, uint64_t or)
+{
+	scom_and_or(addr, ~0, or);
+}
+
 static inline void write_scom_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t data)
 {
 	addr &= ~PPC_BITMASK(34,39);

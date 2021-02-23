@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
 #include <console/console.h>
 #include <cpu/power/istep_8_9.h>
 #include <cpu/power/scom.h>
@@ -51,8 +53,6 @@ void tl_fir(void)
 
 void p9_fbc_no_hp_scom(void)
 {
-    uint64_t is_flat_8 = false;
-
     uint64_t pb_com_pb_west_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_WEST_MODE_CFG_REG);
     uint64_t pb_com_pb_cent_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_MODE_CFG_REG);
     uint64_t pb_com_pb_cent_gp_cmd_rate_dp0 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_GP_COMMAND_RATE_DP0_REG);
@@ -63,60 +63,29 @@ void p9_fbc_no_hp_scom(void)
     uint64_t pb_com_pb_cent_sp_cmd_rate_dp1 = read_scom_for_chiplet(PROC_CHIPLET, PB_CENT_SP_COMMAND_RATE_DP1_REG);
     uint64_t pb_com_pb_east_mode = read_scom_for_chiplet(PROC_CHIPLET, PB_EAST_MODE_CFG_REG);
 
-    if (ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP
-    || (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG == 0))
-    {
-        pb_com_pb_cent_gp_cmd_rate_dp0 = 0;
-        pb_com_pb_cent_gp_cmd_rate_dp1 = 0;
-    }
-    else if (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP
-          && ATTR_PROC_FABRIC_X_LINKS_CNFG > 0 && ATTR_PROC_FABRIC_X_LINKS_CNFG < 3)
-    {
-        pb_com_pb_cent_gp_cmd_rate_dp0 = 0x030406171C243448;
-        pb_com_pb_cent_gp_cmd_rate_dp1 = 0x040508191F283A50;
-    }
-    else if (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG > 2)
-    {
-        pb_com_pb_cent_gp_cmd_rate_dp0 = 0x0304062832405C80;
-        pb_com_pb_cent_gp_cmd_rate_dp1 = 0x0405082F3B4C6D98;
-    }
+    pb_com_pb_cent_gp_cmd_rate_dp0 = 0;
+    pb_com_pb_cent_gp_cmd_rate_dp1 = 0;
 
-    if (ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG == 0)
+    if (ATTR_PROC_FABRIC_X_LINKS_CNFG == 0)
     {
         pb_com_pb_cent_rgp_cmd_rate_dp0 = 0;
         pb_com_pb_cent_rgp_cmd_rate_dp1 = 0;
         pb_com_pb_cent_sp_cmd_rate_dp0 = 0;
         pb_com_pb_cent_sp_cmd_rate_dp1 = 0;
     }
-    else if (ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG > 0 && ATTR_PROC_FABRIC_X_LINKS_CNFG < 3)
+    else if (ATTR_PROC_FABRIC_X_LINKS_CNFG > 0 && ATTR_PROC_FABRIC_X_LINKS_CNFG < 3)
     {
         pb_com_pb_cent_rgp_cmd_rate_dp0 = 0x030406080A0C1218;
         pb_com_pb_cent_rgp_cmd_rate_dp1 = 0x040508080A0C1218;
         pb_com_pb_cent_sp_cmd_rate_dp0 = 0x030406080A0C1218;
         pb_com_pb_cent_sp_cmd_rate_dp1 = 0x030406080A0C1218;
     }
-    else if ((ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG == 3)
-          || (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG == 0))
+    else if (ATTR_PROC_FABRIC_X_LINKS_CNFG == 3)
     {
         pb_com_pb_cent_rgp_cmd_rate_dp0 = 0x0304060D10141D28;
         pb_com_pb_cent_rgp_cmd_rate_dp1 = 0x0405080D10141D28;
         pb_com_pb_cent_sp_cmd_rate_dp0 = 0x05070A0D10141D28;
         pb_com_pb_cent_sp_cmd_rate_dp1 = 0x05070A0D10141D28;
-    }
-    else if ((ATTR_PROC_FABRIC_PUMP_MODE == CHIP_IS_GROUP && is_flat_8)
-          || (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG > 0 && ATTR_PROC_FABRIC_X_LINKS_CNFG < 3))
-    {
-        pb_com_pb_cent_rgp_cmd_rate_dp0 = 0x030406171C243448;
-        pb_com_pb_cent_rgp_cmd_rate_dp1 = 0x040508191F283A50;
-        pb_com_pb_cent_sp_cmd_rate_dp0 = 0x080C12171C243448;
-        pb_com_pb_cent_sp_cmd_rate_dp1 = 0x0A0D14191F283A50;
-    }
-    else if (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && ATTR_PROC_FABRIC_X_LINKS_CNFG > 2)
-    {
-        pb_com_pb_cent_rgp_cmd_rate_dp0 = 0x0304062832405C80;
-        pb_com_pb_cent_rgp_cmd_rate_dp1 = 0x0405082F3B4C6D98;
-        pb_com_pb_cent_sp_cmd_rate_dp0 = 0x08141F2832405C80;
-        pb_com_pb_cent_sp_cmd_rate_dp1 = 0x0A18252F3B4C6D98;
     }
 
     if (ATTR_PROC_FABRIC_X_LINKS_CNFG == 0 && ATTR_PROC_FABRIC_A_LINKS_CNFG == 0)
@@ -127,24 +96,12 @@ void p9_fbc_no_hp_scom(void)
     {
         pb_com_pb_east_mode &= 0xF1FFFFFFFFFFFFFF;
     }
-    if (ATTR_PROC_FABRIC_PUMP_MODE != CHIP_IS_GROUP && is_flat_8)
-    {
-        pb_com_pb_west_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_west_mode |= 0x00003E8000000000;
-        pb_com_pb_cent_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_cent_mode |= 0x00003E8000000000;
-        pb_com_pb_east_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_east_mode |= 0x00003E8000000000;
-    }
-    else
-    {
-        pb_com_pb_west_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_west_mode |= 0x0000FAFC00000000;
-        pb_com_pb_cent_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_cent_mode |= 0x00007EFC00000000;
-        pb_com_pb_east_mode &= 0xFFFF0003FFFFFFFF;
-        pb_com_pb_east_mode |= 0x000007EFC0000000;
-    }
+    pb_com_pb_west_mode &= 0xFFFF0003FFFFFFFF;
+    pb_com_pb_west_mode |= 0x0000FAFC00000000;
+    pb_com_pb_cent_mode &= 0xFFFF0003FFFFFFFF;
+    pb_com_pb_cent_mode |= 0x00007EFC00000000;
+    pb_com_pb_east_mode &= 0xFFFF0003FFFFFFFF;
+    pb_com_pb_east_mode |= 0x000007EFC0000000;
 
     pb_com_pb_west_mode &= 0xFFFFFFFC0FFFFFFF;
     pb_com_pb_west_mode |= 0x00000002a0000000;
@@ -185,19 +142,7 @@ void p9_fbc_ioe_tl_scom(void)
 		pb_ioe_scom_pb_fp01_cfg |= 0x84000000840;
 	}
 
-	if(X0_ENABLED && DD2X_PARTS)
-	{
-        // not sure about this one
-		pb_ioe_scom_pb_fp01_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp01_cfg |= 0x00D0000000D00000;
-	}
-
-    if (X0_ENABLED && OPTICS_IS_A_BUS)
-    {
-        pb_ioe_scom_pb_elink_data_01_cfg_reg &= 0xFFFFFF07FFFFFFFF;
-        pb_ioe_scom_pb_elink_data_01_cfg_reg |= 0x0000001000000000;
-    }
-    else if(X0_ENABLED)
+    if(X0_ENABLED)
     {
         pb_ioe_scom_pb_elink_data_01_cfg_reg |= 0x0000001F00000000;
     }
@@ -224,28 +169,12 @@ void p9_fbc_ioe_tl_scom(void)
         pb_ioe_scom_pb_trace_cfg |= 0x0000000041410000;
     }
 
-
-    if (X1_ENABLED && DD2X_PARTS)
-    {
-        // not sure about this one
-        pb_ioe_scom_pb_fp23_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp23_cfg |= 0x00D0000000D00000;
-    }
-
     if(X1_ENABLED)
     {
         pb_ioe_scom_pb_fp23_cfg &= 0xfff004bffff007bf;
         pb_ioe_scom_pb_fp23_cfg |= 0x0002010000020000;
-        if (OPTICS_IS_A_BUS)
-        {
-            pb_ioe_scom_pb_elink_data_23_cfg_reg &= 0xFE0FFFFFFFFFFFFF;
-            pb_ioe_scom_pb_elink_data_23_cfg_reg |= 0x0100000000000000;
-        }
-        else
-        {
-            pb_ioe_scom_pb_elink_data_23_cfg_reg &= 0xFE0FFFFFFFFFFFFF;
-            pb_ioe_scom_pb_elink_data_23_cfg_reg |= 0x01F0000000000000;
-        }
+        pb_ioe_scom_pb_elink_data_23_cfg_reg &= 0xFE0FFFFFFFFFFFFF;
+        pb_ioe_scom_pb_elink_data_23_cfg_reg |= 0x01F0000000000000;
         pb_ioe_scom_pb_elink_data_23_cfg_reg &= 0x808080FF808080FF;
         pb_ioe_scom_pb_elink_data_23_cfg_reg |= 0x403C3C00403C3C00;
     }
@@ -264,26 +193,10 @@ void p9_fbc_ioe_tl_scom(void)
         pb_ioe_scom_pb_fp45_cfg |= 0x84000000840;
     }
 
-	if (X2_ENABLED && DD2X_PARTS)
-    {
-        // not sure about this one
-        pb_ioe_scom_pb_fp45_cfg &= 0xF00FFFFFF00FFFFF;
-        pb_ioe_scom_pb_fp45_cfg |= 0x00D0000000D00000;
-    }
-
     if(X2_ENABLED)
     {
-        if (OPTICS_IS_A_BUS)
-        {
-            pb_ioe_scom_pb_elink_data_45_cfg_reg &= 0xFFFFFF07FFFFFFFF;
-            pb_ioe_scom_pb_elink_data_45_cfg_reg |= 0x0000008000000000;
-        }
-        else
-        {
-            pb_ioe_scom_pb_elink_data_45_cfg_reg |= 0x000000F800000000;
-        }
         pb_ioe_scom_pb_elink_data_45_cfg_reg &= 0x808080FF808080FF;
-        pb_ioe_scom_pb_elink_data_45_cfg_reg |= 0x403C3C00403C3C00;
+        pb_ioe_scom_pb_elink_data_45_cfg_reg |= 0x403C3CF8403C3C00;
     }
 
     if(X0_IS_PAIRED)

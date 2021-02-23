@@ -26,6 +26,6 @@
 #define PB_ELL_CFG_REG                     (0x601180A) // Power Bus ELL Configuration Register
 #define PB_ELL_REPLAY_TRESHOLD_REG         (0x6011818) // Power Bus ELL Replay Threshold Register
 #define PB_ELL_SL_ECC_TRESHOLD_REG         (0x6011819) // Power Bus ELL SL ECC Threshold Register
+#define XBUS_FIR_MASK_REG                  (0x6010C03)
 #define XBUS_FIR_ACTION0_REG               (0x6010C06)
 #define XBUS_FIR_ACTION1_REG               (0x6010C07)
-#define XBUS_FIR_MASK_REG                  (0x6010C03)

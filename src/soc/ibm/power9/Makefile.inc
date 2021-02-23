@@ -9,4 +9,6 @@ romstage-y += romstage.c
 ramstage-y += chip.c
 ramstage-y += timer.c
 
+subdirs += iteps
+
 endif

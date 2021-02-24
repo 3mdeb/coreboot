@@ -12,25 +12,25 @@
 #define RES_ERR_REG(bus)	(0xA000C | ((bus) << 12))
 
 // CMD register
-#define LEN_SHIFT(x)	((uint64_t)(x) << 32)
-#define ADDR_SHIFT(x)	((uint64_t)(x) << 49)
-#define READ_NOT_WRITE	0x0001000000000000
+#define LEN_SHIFT(x)		((uint64_t)(x) << 32)
+#define ADDR_SHIFT(x)		((uint64_t)(x) << 49)
+#define READ_NOT_WRITE		0x0001000000000000
 #define START			0x8000000000000000
 #define WITH_ADDR		0x4000000000000000
 #define READ_CONT		0x2000000000000000
 #define STOP			0x1000000000000000
 
 // STATUS register
-#define DATA_REQUEST	0x0200000000000000
-#define CMD_COMPLETE	0x0100000000000000
-#define FIFO_COUNT_FLD	0x0000000F00000000
+#define DATA_REQUEST		0x0200000000000000
+#define CMD_COMPLETE		0x0100000000000000
+#define FIFO_COUNT_FLD		0x0000000F00000000
 #define BUSY			0x0000030000000000
-#define UNRECOVERABLE	0xFC80000000000000
+#define UNRECOVERABLE		0xFC80000000000000
 
 #define CLEAR_ERR		0x8000000000000000
 
 #define I2C_MAX_FIFO_CAPACITY	8
-#define SPD_I2C_BUS				3
+#define SPD_I2C_BUS		3
 
 /* return -1 if SMBus errors otherwise return 0 */
 static int get_spd(u8 *spd, u8 addr)
@@ -107,7 +107,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 
 	for (i = 0; i < seg_count; i++) {
 		unsigned int len;
-		uint64_t rnw, stop, read_cont;
+		uint64_t read_not_write, stop, read_cont;
 
 		/* Only read for now, implement different flags when needed */
 		if (segment[i].flags & ~I2C_M_RD) {
@@ -115,19 +115,19 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 			return -1;
 		}
 
-		rnw = (segment[i].flags & I2C_M_RD) ? READ_NOT_WRITE : 0;
+		read_not_write = (segment[i].flags & I2C_M_RD) ? READ_NOT_WRITE : 0;
 		stop = (i == seg_count - 1) ? STOP : 0;
-		read_cont = (!stop && !rnw) ? READ_CONT : 0;
+		read_cont = (!stop && !read_not_write) ? READ_CONT : 0;
 
 		write_scom(RES_ERR_REG(bus), CLEAR_ERR);
-		write_scom(CMD_REG(bus), START | stop | WITH_ADDR | rnw | read_cont |
+		write_scom(CMD_REG(bus), START | stop | WITH_ADDR | read_not_write | read_cont |
 		                         ADDR_SHIFT(segment[i].slave) |
 		                         LEN_SHIFT(segment[i].len));
 
 		for (len = 0; len < segment[i].len; len++, bytes_transfered++) {
 			r = read_scom(STATUS_REG(bus));
 
-			if (rnw) {
+			if (read_not_write) {
 				/* Read */
 				while ((r & (DATA_REQUEST | FIFO_COUNT_FLD)) == 0) {
 					if (r & UNRECOVERABLE) {

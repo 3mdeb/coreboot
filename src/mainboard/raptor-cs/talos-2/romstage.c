@@ -11,7 +11,7 @@
 void main(void)
 {
 	int i;
-	dimm_attr dimm[CONFIG_DIMM_MAX] = {0};
+	dimm_attr dimms[CONFIG_DIMM_MAX] = {0};
 
 	console_init();
 	vpd_pnor_main();
@@ -26,11 +26,12 @@ void main(void)
 
 	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
 		if (blk.spd_array[i] != NULL)
-			spd_decode_ddr4(&dimm[i], blk.spd_array[i]);
+			spd_decode_ddr4(&dimms[i], blk.spd_array[i]);
 	}
 
 	report_istep(13,1);	// no-op
-	istep_13_2(dimm);
+	istep_13_2(dimms);
+	istep_13_3(&blk);
 
 	run_ramstage();
 }

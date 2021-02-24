@@ -21,7 +21,7 @@
 void istep_13_2(dimm_attr dimms[CONFIG_DIMM_MAX])
 {
 	printk(BIOS_EMERG, "starting istep 13.2\n");
-	int d;
+	int dimm;
 
 	report_istep(13,2);
 
@@ -33,10 +33,10 @@ void istep_13_2(dimm_attr dimms[CONFIG_DIMM_MAX])
 	 * TODO: 2 CPUs with one DIMM will not work with this code.
 	 */
 	bool fail = true;
-	for (d = 0; d < CONFIG_DIMM_MAX; d++) {
-		if (dimms[d].dram_type == SPD_MEMORY_TYPE_DDR4_SDRAM &&
-		    dimms[d].dimm_type == SPD_DIMM_TYPE_RDIMM &&
-		    dimms[d].ecc_extension == true) {
+	for (dimm = 0; dimm < CONFIG_DIMM_MAX; dimm++) {
+		if (dimms[dimm].dram_type == SPD_MEMORY_TYPE_DDR4_SDRAM &&
+		    dimms[dimm].dimm_type == SPD_DIMM_TYPE_RDIMM &&
+		    dimms[dimm].ecc_extension == true) {
 			fail = false;
 			break;
 		}

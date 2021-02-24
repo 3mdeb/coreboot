@@ -5,3 +5,4 @@
 
 void istep_13_2(dimm_attr dimms[CONFIG_DIMM_MAX]);
 void istep_13_3(struct spd_block *blk);
+void istep_13_4(dimm_attr dimms[CONFIG_DIMM_MAX]);

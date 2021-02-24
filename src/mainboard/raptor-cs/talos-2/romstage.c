@@ -38,6 +38,7 @@ void main(void)
 	report_istep(13,1);	// no-op
 	istep_13_2(dimms);
 	istep_13_3(&blk);
+	istep_13_4(dimms);
 
 	run_ramstage();
 }

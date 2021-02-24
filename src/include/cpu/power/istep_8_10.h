@@ -8,5 +8,5 @@
 
 void istep_8_10(void);
 void p9_io_xbus_scominit(const uint8_t);
-void p9_xbus_g0_scom(chiplet_id_t);
-void p9_xbus_g1_scom(chiplet_id_t);
+void p9_xbus_g0_scom(void);
+void p9_xbus_g1_scom(void);

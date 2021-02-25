@@ -19,6 +19,7 @@
 #define SPR_HMER_TRIG_FIR_HMI		PPC_BIT(17)
 #define SPR_HMER_HYP_RESOURCE_ERR	PPC_BIT(20)
 #define SPR_HMER_XSCOM_STATUS		PPC_BITMASK(21,23)
+#define SPR_HMER_XSCOM_OCCUPIED		PPC_BIT(23)
 
 #ifndef __ASSEMBLER__
 #include <types.h>
@@ -28,6 +29,11 @@ static inline uint64_t read_hmer(void)
 	uint64_t val;
 	asm volatile("mfspr %0,%1" : "=r"(val) : "i"(SPR_HMER) : "memory");
 	return val;
+}
+
+static inline void clear_hmer(void)
+{
+	asm volatile("mtspr %0, %1" :: "i"(SPR_HMER), "r"(0) : "memory");
 }
 
 static inline uint64_t read_msr(void)

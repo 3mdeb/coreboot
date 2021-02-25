@@ -33,6 +33,7 @@
 #ifndef __ASSEMBLER__
 #include <types.h>
 #include <arch/io.h>
+#include <cpu/power/spr.h>
 
 // TODO: these are probably specific to POWER9
 typedef enum
@@ -85,26 +86,53 @@ typedef enum
 	EC23_CHIPLET_ID = 0x37      ///< Core23 chiplet (Quad5, EX11, C1)
 } chiplet_id_t;
 
+void reset_scom_engine(void);
+
 static uint64_t read_scom_direct(uint64_t reg_address)
 {
 	uint64_t val;
-	asm volatile(
-		"ldcix %0, %1, %2":
-		"=r"(val):
-		"b"(0x800603FC00000000),
-		"r"(reg_address << 3));
-	eieio();
+	uint64_t hmer;
+	do {
+		clear_hmer();
+		eieio();
+		asm volatile(
+			"ldcix %0, %1, %2":
+			"=r"(val):
+			"b"(0x800603FC00000000),
+			"r"(reg_address << 3));
+		eieio();
+		hmer = read_hmer();
+	} while ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED);
+
+	if (hmer & SPR_HMER_XSCOM_STATUS) {
+		reset_scom_engine();
+		/*
+		 * All F's are returned in case of error, but code polls for a set bit
+		 * after changes that can make such error appear (e.g. clock settings).
+		 * Return 0 so caller won't have to test for all F's in that case.
+		 */
+		return 0;
+	}
 	return val;
 }
 
 static void write_scom_direct(uint64_t reg_address, uint64_t data)
 {
-	asm volatile(
-		"stdcix %0, %1, %2"::
-		"r"(data),
-		"b"(0x800603FC00000000),
-		"r"(reg_address << 3));
-	eieio();
+	uint64_t hmer;
+	do {
+		clear_hmer();
+		eieio();
+		asm volatile(
+			"stdcix %0, %1, %2"::
+			"r"(data),
+			"b"(0x800603FC00000000),
+			"r"(reg_address << 3));
+		eieio();
+		hmer = read_hmer();
+	} while ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED);
+
+	if (hmer & SPR_HMER_XSCOM_STATUS)
+		reset_scom_engine();
 }
 
 /*

@@ -192,3 +192,18 @@ uint64_t read_scom_indirect(uint64_t reg_address)
 
 	return data & XSCOM_DATA_IND_DATA;
 }
+
+/* This function should be rarely called, don't make it inlined */
+void reset_scom_engine(void)
+{
+	/*
+	 * With cross-CPU SCOM accesses, first register should be cleared on the
+	 * executing CPU, the other two on target CPU. In that case it may be
+	 * necessary to do the remote writes in assembly directly to skip checking
+	 * HMER and possibly end in a loop.
+	 */
+	write_scom_direct(0x00090018, 0);
+	write_scom_direct(0x00090012, 0);
+	write_scom_direct(0x00090013, 0);
+	eieio();
+}

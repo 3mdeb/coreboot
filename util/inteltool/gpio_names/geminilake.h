@@ -91,7 +91,7 @@ static const char *const glk_group_northwest_names[] = {
 	"*GPIO_214","N/A",				"N/A",				"N/A",					"N/A",				"N/A", 	"N/A",
 };
 
-static const char *const glk_group_north_names[] {
+static const char *const glk_group_north_names[] = {
 	"*GPIO_76",	"SVID0_ALERT_N",	"N/A",				"N/A",				"N/A",			"N/A",
 	"*GPIO_77",	"SCID0_DATA",		"N/A",				"N/A",				"N/A",			"N/A",
 	"*GPIO_78",	"SVID0_CLK",		"N/A",				"N/A",				"N/A",			"N/A",
@@ -173,7 +173,7 @@ static const char *const glk_group_north_names[] {
 	"*GPIO_155","LPC_FRAME_N",		"ESPI_CS_N",		"N/A",				"N/A",			"N/A",
 };
 
-static const char *const glk_group_audio_names[] {
+static const char *const glk_group_audio_names[] = {
 	"*GPIO_156",	"AVS_I2S0_MCLK",	"N/A",				"N/A",
 	"*GPIO_157",	"AVS_I2S0_BCLK",	"N/A",				"N/A",
 	"*GPIO_158",	"AVS_I2S0_WS_SYNC",	"N/A",				"N/A",
@@ -196,7 +196,7 @@ static const char *const glk_group_audio_names[] {
 	"*GPIO_175",	"AVS_DMIC_DATA_2",	"N/A",				"N/A",
 };
 
-static const char *const glk_group_scc_names[] {
+static const char *const glk_group_scc_names[] = {
 	"*GPIO_176","SMB_ALERT_N",		"N/A",			"N/A",
 	"*GPIO_177","SMB_CLK",			"SIO_I2C7_SCL",	"N/A",
 	"*GPIO_178","SMB_DATA",			"SIO_I2C7_SDA",	"N/A",
@@ -232,7 +232,7 @@ static const char *const glk_group_scc_names[] {
 };
 
 static const struct gpio_group glk_group_northwest = {
-	.display	= "------- GPIO Group NorthWest -------",
+	.display	= "----- GPIO Group NorthWest -----",
 	.pad_count	= ARRAY_SIZE(glk_group_northwest_names) / 7,
 	.func_count	= 7,
 	.pad_names	= glk_group_north_names,
@@ -243,14 +243,14 @@ static const struct gpio_group *const glk_community_northwest_groups[] = {
 };
 
 static const struct gpio_community glk_community_northwest = {
-	.name		= "----- GPIO Community NorthWest -----",
-	.pcr_port_id	= 0xc5, // whats this??
+	.name		= "--- GPIO Community NorthWest ---",
+	.pcr_port_id	= 0xc4,
 	.group_count	= ARRAY_SIZE(glk_community_northwest_groups),
 	.groups		= glk_community_northwest_groups,
 };
 
 static const struct gpio_group glk_group_north = {
-	.display	= "----- GPIO Group North -----",
+	.display	= "------- GPIO Group North -------",
 	.pad_count	= ARRAY_SIZE(glk_group_north_names) / 6,
 	.func_count	= 6,
 	.pad_names	= glk_group_north_names,
@@ -261,14 +261,14 @@ static const struct gpio_group *const glk_community_north_groups[] = {
 };
 
 static const struct gpio_community glk_community_north = {
-	.name		= "--- GPIO Community North ---",
-	.pcr_port_id	= 0xc4,
+	.name		= "----- GPIO Community North -----",
+	.pcr_port_id	= 0xc5,
 	.group_count	= ARRAY_SIZE(glk_community_north_groups),
 	.groups		= glk_community_north_groups,
 };
 
 static const struct gpio_group glk_group_audio = {
-	.display	= "-------- GPIO Group Audio -------",
+	.display	= "------- GPIO Group Audio -------",
 	.pad_count	= ARRAY_SIZE(glk_group_audio_names) / 4,
 	.func_count	= 4,
 	.pad_names	= glk_group_audio_names,
@@ -279,14 +279,14 @@ static const struct gpio_group *const glk_community_audio_groups[] = {
 };
 
 static const struct gpio_community glk_community_audio = {
-	.name		= "------ GPIO Community Audio -----",
-	.pcr_port_id	= 0xc7,
+	.name		= "----- GPIO Community Audio -----",
+	.pcr_port_id	= 0xc9,
 	.group_count	= ARRAY_SIZE(glk_community_audio_groups),
 	.groups		= glk_community_audio_groups,
 };
 
 static const struct gpio_group glk_group_scc = {
-	.display	= "----- GPIO Group SCC -----",
+	.display	= "-------- GPIO Group SCC --------",
 	.pad_count	= ARRAY_SIZE(glk_group_scc_names) / 4,
 	.func_count	= 4,
 	.pad_names	= glk_group_scc_names,
@@ -297,8 +297,8 @@ static const struct gpio_group *const glk_community_scc_groups[] = {
 };
 
 static const struct gpio_community glk_community_scc = {
-	.name		= "--- GPIO Community SCC ---",
-	.pcr_port_id	= 0xc0,
+	.name		= "------ GPIO Community SCC ------",
+	.pcr_port_id	= 0xc8,
 	.group_count	= ARRAY_SIZE(glk_community_scc_groups),
 	.groups		= glk_community_scc_groups,
 };

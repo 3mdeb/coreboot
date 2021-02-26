@@ -98,7 +98,7 @@ static uint64_t read_scom_direct(uint64_t reg_address)
 		asm volatile(
 			"ldcix %0, %1, %2":
 			"=r"(val):
-			"b"(0x800603FC00000000),
+			"b"(MMIO_GROUP0_CHIP0_SCOM_BASE_ADDR),
 			"r"(reg_address << 3));
 		eieio();
 		hmer = read_hmer();
@@ -125,7 +125,7 @@ static void write_scom_direct(uint64_t reg_address, uint64_t data)
 		asm volatile(
 			"stdcix %0, %1, %2"::
 			"r"(data),
-			"b"(0x800603FC00000000),
+			"b"(MMIO_GROUP0_CHIP0_SCOM_BASE_ADDR),
 			"r"(reg_address << 3));
 		eieio();
 		hmer = read_hmer();

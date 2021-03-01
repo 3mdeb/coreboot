@@ -7,7 +7,6 @@ postcar-y += exit_car.S
 romstage-y += romstage.c
 romstage-y += istep_8_9.c
 romstage-y += istep_8_10.c
-romstage-y += ../../../cpu/power/power9/scom.c
 
 ramstage-y += chip.c
 ramstage-y += timer.c

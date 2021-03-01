@@ -40,14 +40,6 @@ void ioel_fir(void)
 
 void p9_fbc_no_hp_scom(void)
 {
-    uint64_t pb_com_pb_cent_mode = read_scom(PB_CENT_MODE_CFG_REG);
-    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp0 = read_scom(PB_CENT_RGP_COMMAND_RATE_DP0_REG);
-    uint64_t pb_com_pb_cent_rgp_cmd_rate_dp1 = read_scom(PB_CENT_RGP_COMMAND_RATE_DP1_REG);
-    uint64_t pb_com_pb_cent_sp_cmd_rate_dp0 = read_scom(PB_CENT_SP_COMMAND_RATE_DP0_REG);
-    uint64_t pb_com_pb_cent_sp_cmd_rate_dp1 = read_scom(PB_CENT_SP_COMMAND_RATE_DP1_REG);
-    uint64_t pb_com_pb_east_mode = read_scom(PB_EAST_MODE_CFG_REG);
-    uint64_t pb_com_pb_west_mode = read_scom(PB_WEST_MODE_CFG_REG);
-
     scom_and_or(PB_WEST_MODE_CFG_REG, 0xFFFF00000FFFFFFF, 0xFAFEA0000000);
     scom_and_or(PB_CENT_MODE_CFG_REG, 0xFFFF00000FFFFFFF, 0x7EFEA0000000);
     write_scom(PB_CENT_GP_COMMAND_RATE_DP0_REG, 0);

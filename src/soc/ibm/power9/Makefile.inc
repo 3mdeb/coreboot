@@ -29,8 +29,11 @@ postcar-y += exit_car.S
 romstage-y += romstage.c
 romstage-y += istep_8_9.c
 romstage-y += istep_8_10.c
+<<<<<<< HEAD
 romstage-y += ../../../cpu/power/power9/scom.c
 >>>>>>> move isteps 8.9, 8.10 to soc subdir
+=======
+>>>>>>> src/soc/ibm/power9: review fixes
 
 ramstage-y += chip.c
 ramstage-y += timer.c

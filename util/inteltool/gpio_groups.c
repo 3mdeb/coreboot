@@ -167,8 +167,9 @@ const struct gpio_community *const *get_gpio_communities(struct pci_dev *const s
 		*community_count = ARRAY_SIZE(icelake_pch_h_communities);
 		*pad_stepping = 16;
 		return icelake_pch_h_communities;
-	case PCI_DEVICE_ID_INTEL_CELERON_PENTIUM_SILVER_LPC:
+	case PCI_DEVICE_ID_INTEL_GLK_LPC:
 		*community_count = ARRAY_SIZE(geminilake_communities);
+		*pad_stepping = 16;
 		return geminilake_communities;
 	default:
 		return NULL;

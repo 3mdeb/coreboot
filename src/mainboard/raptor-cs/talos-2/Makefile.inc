@@ -7,6 +7,7 @@ romstage-y += romstage.c
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 romstage-y += rom_media.c
 romstage-y += vpd.c
 ramstage-y += rom_media.c
@@ -21,3 +22,5 @@ romstage-y += ../../../cpu/power/power9/scom.c
 romstage-y += ../../../soc/ibm/power9/istep_8_9.c
 romstage-y += ../../../soc/ibm/power9/istep_8_10.c
 >>>>>>> src/include/cpu/power/istep_8_9.c: remove attributes found in hosboot config files
+=======
+>>>>>>> src/soc/ibm/power9/istep_8_10.c: Change mask values to PPC_BITMASK() and PPC_BIT()

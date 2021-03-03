@@ -26,46 +26,30 @@
  *        - Data is stored as a ring image in the SBE that is frequency specific
  *        - 5 different frequencies (1866, 2133, 2400, 2667, EXP)
  */
-void istep_13_3(struct spd_block *blk)
+void istep_13_3(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.3\n");
-	int dimm;
-	int tckmin = 0x06;		// Platform limit
 	uint64_t ring_id;
 
 	report_istep(13,3);
 
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
-	/*
-	 * We need to find the highest common (for all DIMMs and the platform)
-	 * supported frequency, meaning we need to compare minimum clock cycle times
-	 * and choose the highest value. For the range supported by the platform we
-	 * can check MTB only.
-	 *
-	 * TODO: maximum for 2 DIMMs on one port (channel) is 2400 MT/s, this loop
-	 * doesn't check for that.
-	 */
-	for (dimm = 0; dimm < CONFIG_DIMM_MAX; dimm++) {
-		if (blk->spd_array[dimm] != NULL && blk->spd_array[dimm][18] > tckmin)
-			tckmin = blk->spd_array[dimm][18];
-	}
-
-	switch (tckmin) {
-		case 0x06:
+	switch (mem_data.speed) {
+		case 2666:
 			ring_id = RING_ID_2666;
 			break;
-		case 0x07:
+		case 2400:
 			ring_id = RING_ID_2400;
 			break;
-		case 0x08:
+		case 2133:
 			ring_id = RING_ID_2133;
 			break;
-		case 0x09:
+		case 1866:
 			ring_id = RING_ID_1866;
 			break;
 		default:
-			die("Unsupported tCKmin: %d ps (+/- 125)\n", tckmin * 125);
+			die("Unsupported memory speed (%d MT/s)\n", mem_data.speed);
 	}
 
 	/*

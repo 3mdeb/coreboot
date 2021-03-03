@@ -6,9 +6,6 @@
 #include <cpu/power/scom_registers.h>
 #include <timer.h>
 
-#define MCS_PER_PROC		2
-#define DIMMS_PER_MCS		4
-
 /*
  * 13.2 mem_pll_reset: Reset PLL for MCAs in async
  *
@@ -21,40 +18,19 @@
  *    - Disable listen_to_sync for MEM chiplet, whenever MEM is not in sync to
  *      NEST
  */
-void istep_13_2(dimm_attr dimms[CONFIG_DIMM_MAX])
+void istep_13_2(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.2\n");
 	int i;
 	long time_elapsed = 0;
-	bool mcs_functional[MCS_PER_PROC] = {false, false};
 	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 	report_istep(13,2);
 
-	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
-		if (dimms[i].dram_type == SPD_MEMORY_TYPE_DDR4_SDRAM &&
-		    dimms[i].dimm_type == SPD_DIMM_TYPE_RDIMM &&
-		    dimms[i].ecc_extension == true) {
-			mcs_functional[i/DIMMS_PER_MCS] = true;
-			/* Skip to next MCS */
-			i = (i/DIMMS_PER_MCS + 1) * DIMMS_PER_MCS;
-		}
-	}
-
-	/*
-	 * There is only one MCBIST per CPU. Fail if there are no supported DIMMs
-	 * connected, otherwise assume it is functional. There is no reason to redo
-	 * this test in the rest of isteps.
-	 *
-	 * TODO: 2 CPUs with one DIMM (in total) will not work with this code.
-	 */
-	if (mcs_functional[0] == false && mcs_functional[1] == false)
-		die("No DIMMs detected, aborting\n");
-
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mcs_functional[i])
+		if (!mem_data.mcs[i].functional)
 			continue;
 
 		// Assert endpoint reset
@@ -150,7 +126,7 @@ void istep_13_2(dimm_attr dimms[CONFIG_DIMM_MAX])
 
 	/* Separate loop so we won't have to wait for timeout twice */
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mcs_functional[i])
+		if (!mem_data.mcs[i].functional)
 			continue;
 
 		/*

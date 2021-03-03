@@ -7,9 +7,6 @@
 #include <delay.h>
 #include <timer.h>
 
-#define MCS_PER_PROC		2
-#define DIMMS_PER_MCS		4
-
 /*
  * TODO: ATTR_PG value should come from MVPD partition, but it is empty after
  * build. Default value from talos.xml (5 for all chiplets) probably never makes
@@ -243,30 +240,18 @@ static void p9_sbe_common_configure_chiplet_FIR(chiplet_id_t id)
  *      MCAs are using the nest PLL, HWP detect and exits
  *    - Drop fences and tholds on MBA/MCAs to start the functional clocks
  */
-void istep_13_6(dimm_attr dimms[CONFIG_DIMM_MAX])
+void istep_13_6(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.6\n");
 	int i;
-	bool mcs_functional[MCS_PER_PROC] = {false, false};
 	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 	report_istep(13,6);
 
-	/* We already did it in 13.2. Maybe this should be done on a higher level? */
-	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
-		if (dimms[i].dram_type == SPD_MEMORY_TYPE_DDR4_SDRAM &&
-		    dimms[i].dimm_type == SPD_DIMM_TYPE_RDIMM &&
-		    dimms[i].ecc_extension == true) {
-			mcs_functional[i/DIMMS_PER_MCS] = true;
-			/* Skip to next MCS */
-			i = (i/DIMMS_PER_MCS + 1) * DIMMS_PER_MCS;
-		}
-	}
-
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mcs_functional[i])
+		if (!mem_data.mcs[i].functional)
 			continue;
 
 		// Call p9_mem_startclocks_cplt_ctrl_action_function for Mc chiplets

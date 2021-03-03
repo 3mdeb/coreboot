@@ -6,9 +6,6 @@
 #include <cpu/power/scom_registers.h>
 #include <delay.h>
 
-#define MCS_PER_PROC		2
-#define DIMMS_PER_MCS		4
-
 /*
  * 13.4 mem_pll_setup: Setup PLL for MBAs
  *
@@ -20,30 +17,18 @@
  *      - Moved PLL out of bypass (just DDR)
  *    - Performs PLL checking
  */
-void istep_13_4(dimm_attr dimms[CONFIG_DIMM_MAX])
+void istep_13_4(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.4\n");
 	int i;
-	bool mcs_functional[MCS_PER_PROC] = {false, false};
 	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 	report_istep(13,4);
 
-	/* We already did it in 13.2. Maybe this should be done on a higher level? */
-	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
-		if (dimms[i].dram_type == SPD_MEMORY_TYPE_DDR4_SDRAM &&
-		    dimms[i].dimm_type == SPD_DIMM_TYPE_RDIMM &&
-		    dimms[i].ecc_extension == true) {
-			mcs_functional[i/DIMMS_PER_MCS] = true;
-			/* Skip to next MCS */
-			i = (i/DIMMS_PER_MCS + 1) * DIMMS_PER_MCS;
-		}
-	}
-
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mcs_functional[i])
+		if (!mem_data.mcs[i].functional)
 			continue;
 
 		// Drop PLDY bypass of Progdelay logic

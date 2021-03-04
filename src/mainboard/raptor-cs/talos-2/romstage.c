@@ -276,8 +276,34 @@ static void prepare_dimm_data(void)
 			mem_data.mcs[mcs].mca[mca].nrrd_l = find_min_mtb_ftb(dimm, 39, 118);
 
 			/* Minimum Refresh Recovery Delay Time */
-			/* Assuming no fine refresh mode */
+			/* Assuming no fine refresh mode. */
 			mem_data.mcs[mcs].mca[mca].nrfc = find_min_multi_mtb(dimm, 30, 31, 0xFF, 8);
+
+			/* Minimum Refresh Recovery Delay Time for Different Logical Rank (3DS only) */
+			/*
+			 * This one is set per MCA, but it depends on DRAM density, which can be
+			 * mixed between DIMMs under the same channel. We need to choose the bigger
+			 * minimum time, which corresponds to higher density.
+			 *
+			 * Assuming no fine refresh mode.
+			 */
+			val0 = dimm[0].present ? dimm[0].spd[4] & 0xF : 0;
+			val1 = dimm[1].present ? dimm[1].spd[4] & 0xF : 0;
+			min = (val0 < val1) ? val1 : val0;
+
+			switch (min) {
+				case 0x4:
+					mem_data.mcs[mcs].mca[mca].nrfc_dlr = ns_to_nck(90);
+					break;
+				case 0x5:
+					mem_data.mcs[mcs].mca[mca].nrfc_dlr = ns_to_nck(120);
+					break;
+				case 0x6:
+					mem_data.mcs[mcs].mca[mca].nrfc_dlr = ns_to_nck(185);
+					break;
+				default:
+					die("Unsupported DRAM density\n");
+			}
 
 			printk(BIOS_SPEW, "MCS%d, MCA%d times (in clock cycles):\n", mcs, mca);
 			dump_mca_data(&mem_data.mcs[mcs].mca[mca]);
@@ -300,6 +326,7 @@ void main(void)
 	report_istep(13,5);	// no-op
 	istep_13_6();
 	report_istep(13,7);	// no-op
+	istep_13_8();
 
 	run_ramstage();
 }

@@ -36,8 +36,7 @@
 static int get_spd(u8 *spd, u8 addr)
 {
 	if (i2c_read_bytes(SPD_I2C_BUS, addr, 0, spd, SPD_PAGE_LEN) < 0) {
-		printk(BIOS_INFO, "No memory DIMM at address %02X\n",
-			addr << 1);
+		printk(BIOS_INFO, "No memory DIMM at address %02X\n", addr);
 		return -1;
 	}
 

@@ -9,10 +9,25 @@
 #define DIMMS_PER_MCA		2
 #define DIMMS_PER_MCS		(DIMMS_PER_MCA * MCA_PER_MCS)
 
+/* These should be in one of the SPD headers. */
+#define WIDTH_x4		0
+#define WIDTH_x8		1
+
+#define DENSITY_256Mb		0
+#define DENSITY_512Mb		1
+#define DENSITY_1Gb		2
+#define DENSITY_2Gb		3
+#define DENSITY_4Gb		4
+#define DENSITY_8Gb		5
+#define DENSITY_16Gb		6
+#define DENSITY_32Gb		7
+
 typedef struct {
 	bool present;
 	uint8_t mranks;
 	uint8_t log_ranks;
+	uint8_t width;
+	uint8_t density;
 	uint8_t *spd;
 } rdimm_data_t;
 
@@ -26,19 +41,19 @@ typedef struct {
 	 * MCA/port/channel and not per DIMM. All units are clock cycles,
 	 * absolute time values are rarely used.
 	 */
+	uint16_t nfaw;
+	uint16_t nras;
+	uint16_t nrfc;
+	uint16_t nrfc_dlr;	// nRFC for Different Logical Rank (3DS only)
 	uint8_t cl;
 	uint8_t nccd_l;
 	uint8_t nwtr_s;
 	uint8_t nwtr_l;
-	uint16_t nfaw;
 	uint8_t nrcd;
 	uint8_t nrp;
-	uint16_t nras;
 	uint8_t nwr;
 	uint8_t nrrd_s;
 	uint8_t nrrd_l;
-	uint16_t nrfc;
-	uint16_t nrfc_dlr;	// nRFC for Different Logical Rank (3DS only)
 } mca_data_t;
 
 typedef struct {

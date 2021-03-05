@@ -1,0 +1,1211 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
+#include <arch/byteorder.h>
+#include <console/console.h>
+#include <cpu/power/istep_8_10.h>
+#include <cpu/power/scom.h>
+#include <cpu/power/scom_registers.h>
+#include <timer.h>
+#include <types.h>
+
+void istep_8_10(void)
+{
+    printk(BIOS_EMERG, "starting istep 8.10\n");
+    report_istep(8, 10);
+    // p9_io_xbus_scominit(0);
+    // p9_io_xbus_scominit(1);
+    printk(BIOS_EMERG, "ending istep 8.10\n");
+    return;
+}
+
+void p9_io_xbus_scominit(const uint8_t group)
+{
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8009F8000000003F, PPC_BIT(52));
+    wait_us(50, false);
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x800C9C000000003F, PPC_BIT(48));
+    wait_us(50, false);
+
+    if(0 == group)
+    {
+        p9_xbus_g0_scom();
+    }
+    else if(1 == group)
+    {
+        p9_xbus_g1_scom();
+    }
+
+    if(!(read_scom(PB_CENT_SM0_PB_CENT_FIR_REG) & PPC_BIT(13)))
+    {
+        write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_FIR_ACTION0_REG, XBUS_PHY_FIR_ACTION0);
+        write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_FIR_ACTION1_REG, XBUS_PHY_FIR_ACTION1);
+        write_scom_for_chiplet(XB_CHIPLET_ID, XBUS_FIR_MASK_REG, XBUS_PHY_FIR_MASK);
+    }
+}
+
+void p9_xbus_g0_scom()
+{
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DATA_DAC_SPARE_MODE_PL
+        // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_5_OFF
+        // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_6_OFF
+        // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_7_OFF
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000000006010C3F | id << 32,
+            ~PPC_BITMASK(53, 55));
+    }
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL1_EO_PL
+        // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_OFF
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000080006010C3F | id << 32,
+            ~PPC_BIT(54));
+    }
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE1_RX_DAC_CNTL1_EO_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_1_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8000081106010C3F, PPC_BIT(54));
+    scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000080006010C3F | 0x11 << 32,
+            PPC_BIT(54));
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL5_EO_PL
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000280006010C3F | id << 32,
+            ~PPC_BITMASK(44, 56));
+    }
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL6_EO_PL
+        scom_and_or_for_chiplet(XB_CHIPLET_ID,
+        0x8000300006010C3F | id << 32,
+        ~PPC_BITMASK(52, 60),
+        PPC_BITMASK(49, 50) | PPC_BITMASK(54, 56));
+    }
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL9_E_PL
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000C00006010C3F | id << 32,
+            ~PPC_BITMASK(48, 60));
+    }
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_BIT_MODE1_EO_PL
+        // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_OFF
+        scom_and_for_chiplet(XB_CHIPLET_ID,
+        0x8002200006010C3F | id << 32,
+        ~PPC_BIT(48));
+    }
+
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE4_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_4_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00006010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(51));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE5_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_5_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_B_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00106010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(48, 51) | PPC_BITMASK(58, 62));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_C_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00206010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(53, 56) | PPC_BITMASK(58, 61));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_D_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00306010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(57, 61) | PPC_BITMASK(61, 63) );
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_E_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00406010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(54, 58) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_F_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00506010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(55, 59) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_G_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00606010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_H_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00706010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00806010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(51));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_H_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00906010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_G_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00A06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_F_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00B06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(55, 59) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_E_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00C06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(54, 58) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_D_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00D06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(57, 61) | PPC_BITMASK(61, 63) );
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_C_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00E06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(53, 56) | PPC_BITMASK(58, 61));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_B_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C00F06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(48, 51) | PPC_BITMASK(58, 62));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C01006010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(51));
+
+
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE4_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_4_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80006010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49) | PPC_BIT(52));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE5_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_5_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80106010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(50, 54));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80206010C3F,
+        ~PPC_BITMASK(48, 54));
+            // register P9A_XBUS_0_RX0_RXPACKS3_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_D_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80306010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(49, 50));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80406010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49));
+    // register P9A_XBUS_0_RX0_RXPACKS3_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_3_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80506010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80606010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80706010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX0_RXPACKS2_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_2_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80806010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49) | PPC_BIT(52));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80906010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80A06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80B06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49));
+    // register P9A_XBUS_0_RX0_RXPACKS1_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_1_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80C06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_D_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80D06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(49, 50));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80E06010C3F,
+        ~PPC_BITMASK(48, 54));
+            // register P9A_XBUS_0_RX0_RXPACKS0_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C80F06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(50, 54));
+    // register P9A_XBUS_0_RX0_RXPACKS0_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX0_RXPACKS_0_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8002C81006010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(49) | PPC_BIT(52));
+
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_TX0_TXPACKS[0:3]_SLICE[0:4]_TX_MODE1_PL
+        // IOF1_TX_WRAP_TX0_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_LANE_PDWN_ENABLED
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8004040006010C3F | id << 32,
+            ~PPC_BIT(48));
+    }
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // register P9A_XBUS_0_TX0_TXPACKS[0:3]_SLICE[0:4]_TX_MODE2_PL
+        // IOF1_TX_WRAP_TX0_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_CAL_LANE_SEL_ON
+        scom_or_for_chiplet(
+            XB_CHIPLET_ID,
+            0x80040C0006010C3F | id << 32,
+            PPC_BIT(62));
+    }
+
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0006010C3F,
+        ~PPC_BITMASK(48, 63));
+            // register P9A_XBUS_0_TX0_TXPACKS0_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0106010C3F,
+        ~PPC_BITMASK(48, 63));
+            // register P9A_XBUS_0_TX0_TXPACKS0_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_C_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0206010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(59, 62));
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_D_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0306010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(59, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_E_HALF_B_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0406010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_F_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0506010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(57, 61));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_G_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0606010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(52, 53) | PPC_BITMASK(57, 58) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_H_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0706010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(52, 54) | PPC_BITMASK(57, 59) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0806010C3F,
+        ~PPC_BITMASK(48, 63));
+            // register P9A_XBUS_0_TX0_TXPACKS2_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_H_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0906010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(52, 54) | PPC_BITMASK(57, 59) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_G_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0A06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(52, 53) | PPC_BITMASK(57, 58) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_F_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0B06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(57, 61));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_E_HALF_B_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0C06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_D_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0D06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(59, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_C_0_15
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0E06010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BITMASK(59, 62));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C0F06010C3F,
+        ~PPC_BITMASK(48, 63));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE4_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_4_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x80043C1006010C3F,
+        ~PPC_BITMASK(48, 63));
+
+
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440006010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48));
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440106010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(48, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440206010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(48, 51) | PPC_BITMASK(53, 54));
+    // register P9A_XBUS_0_TX0_TXPACKS0_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_0_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440306010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440406010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440506010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(50));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440606010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS1_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_1_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440706010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440806010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440906010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440A06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS2_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_2_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440B06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440C06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440D06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440E06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_B_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004440F06010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BITMASK(48, 52));
+    // register P9A_XBUS_0_TX0_TXPACKS3_SLICE4_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX0_TXPACKS_3_TXPACK_DD_SLICE_4_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8004441006010C3F,
+        ~PPC_BITMASK(48, 54),
+        PPC_BIT(48));
+
+
+    // register P9A_XBUS_0_RX0_RX_SPARE_MODE_PG
+    // IOF1_RX_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PG_SPARE_MODE_1_ON
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008000006010C3F,
+        PPC_BIT(49));
+    // register P9A_XBUS_0_RX0_RX_ID1_PG
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008080006010C3F,
+        ~PPC_BITMASK(48, 53));
+    // register P9A_XBUS_0_RX0_RX_CTL_MODE1_EO_PG
+    // IOF1_RX_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_CLKDIST_PDWN_OFF
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008100006010C3F,
+        ~PPC_BIT(48));
+    // register P9A_XBUS_0_RX0_RX_CTL_MODE5_EO_PG
+    // IOF1_RX_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // IOF1_RX_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008300006010C3F,
+        ~PPC_BITMASK(51, 55),
+        PPC_BIT(51) | PPC_BIT(53) | PPC_BIT(55));
+    // register P9A_XBUS_0_RX0_RX_CTL_MODE7_EO_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008400006010C3F,
+        ~PPC_BITMASK(60, 63),
+        PPC_BIT(62) | PPC_BIT(60));
+    // register P9A_XBUS_0_RX0_RX_CTL_MODE23_EO_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008C00006010C3F,
+        ~PPC_BITMASK(55, 60),
+        PPC_BIT(51) | PPC_BITMASK(56, 60));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE23_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PEAK_TUNE_OFF
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_LTE_EN_OFF
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFEHISPD_EN_ON
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFE12_EN_ON
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8008D00006010C3F,
+        ~PPC_BITMASK(48, 63),
+        PPC_BIT(51) | PPC_BIT(57) | PPC_BIT(61));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE29_EO_PG
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009700006010C3F,
+        PPC_BIT(48));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE27_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RC_ENABLE_CTLE_1ST_LATCH_OFFSET_CAL_ON
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009800006010C3F,
+        ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+        PPC_BIT(59));
+    // P9A_XBUS_0_RX1_RX_ID2_PG
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009900006010C3F,
+        PPC_BITMASK(57, 58));
+    // P9A_XBUS_0_RX1_RX_CTL_MODE1_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_MASTER_MODE_MASTER
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PDWN_LITE_DISABLE_ON
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_FENCE_FENCED
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009980006010C3F,
+        ~PPC_BITMASK(48, 52),
+        PPC_BIT(52));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE2_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009A00006010C3F,
+        ~PPC_BITMASK(48, 51),
+        PPC_BIT(48) | PPC_BITMASK(50, 51));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE3_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009B00006010C3F,
+        ~PPC_BITMASK(48, 51),
+        PPC_BIT(51));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE5_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009B80006010C3F,
+        ~PPC_BITMASK(44, 56),
+        PPC_BIT(50) | PPC_BIT(54) | PPC_BIT(57) | PPC_BIT(61));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE6_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009C80006010C3F,
+        ~(PPC_BITMASK(48, 58) | PPC_BITMASK(61, 63)),
+        PPC_BITMASK(51, 54) | PPC_BIT(56) | PPC_BIT(58) | PPC_BIT(61) | PPC_BIT(63));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE8_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR1_DURATION_TAP5
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009D00006010C3F,
+        ~PPC_BITMASK(48, 58),
+        PPC_BITMASK(50, 56) | PPC_BIT(58));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE9_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR2_DURATION_TAP5
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009E00006010C3F,
+        ~PPC_BITMASK(48, 55));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE12_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8009E80006010C3F,
+        ~PPC_BITMASK(48, 55),
+        PPC_BITMASK(49, 55));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_SPARE_MODE_PG
+    // IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_DESKEW_BUMP_AFTER_AFTER
+    // IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_PG_GLBSM_SPARE_MODE_2_ON
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800A800006010C3F,
+        PPC_BIT(11) | PPC_BIT(35));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_CNTL3_EO_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800AE80006010C3F,
+        ~PPC_BITMASK(56, 57),
+        PPC_BIT(58));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_MODE1_EO_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800AF80006010C3F,
+        ~PPC_BITMASK(48, 55),
+        PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53));
+    // register P9A_XBUS_0_RX1_RX_DATASM_SPARE_MODE_PG
+    // IOF1_RX_RX1_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800B800006010C3F,
+        ~PPC_BIT(60));
+    // register P9A_XBUS_0_TX1_TX_SPARE_MODE_PG
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C040006010C3F,
+        ~PPC_BITMASK(56, 57));
+    // register P9A_XBUS_0_TX1_TX_ID1_PG
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C0C0006010C3F,
+        ~PPC_BITMASK(48, 53));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C140006010C3F,
+        ~(PPC_BITMASK(53, 57) | PPC_BIT(48)),
+        PPC_BIT(57) | PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE2_EO_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C1C0006010C3F,
+        ~PPC_BITMASK(56, 62),
+        PPC_BIT(58) | PPC_BIT(62));
+    // register P9A_XBUS_0_TX1_TX_CTL_CNTLG1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C240006010C3F,
+        ~PPC_BITMASK(48, 49));
+    // register P9A_XBUS_0_TX1_TX_ID2_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C840006010C3F,
+        ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+        PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE1_E_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800C8C0006010C3F,
+        ~PPC_BITMASK(55, 59),
+        PPC_BIT(55) | PPC_BIT(57) | PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE2_E_PG
+    scom_and_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800CEC0006010C3F,
+        ~PPC_BITMASK(48, 55));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE3_E_PG
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800CF40006010C3F,
+        ~PPC_BITMASK(48, 55),
+        PPC_BITMASK(49, 55));
+    // register P9A_XBUS_0_TX1_TX_CTLSM_MODE1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800D2C0006010C3F,
+        PPC_BIT(59));
+    // register P9A_XBUS_0_TX_IMPCAL_P_4X_PB
+    scom_and_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x800F1C0006010C3F,
+        ~PPC_BITMASK(48, 52),
+        PPC_BITMASK(49, 51));
+}
+
+void p9_xbus_g1_scom()
+{
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DATA_DAC_SPARE_MODE_PL
+        // l_IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_5_OFF
+        // l_IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_6_OFF
+        // l_IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_7_OFF
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000002006010C3F | id << 32,
+            ~PPC_BITMASK(53, 55));
+    }
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL1_EO_PL
+        // IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_OFF
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000082006010C3F | id << 32,
+            ~PPC_BIT(54));
+    }
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE3_RX_DAC_CNTL1_EO_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_ON
+    scom_or_for_chiplet(
+        XB_CHIPLET_ID,
+        0x8000083106010C3F | 0x11 << 32,
+        PPC_BIT(54));
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL5_EO_PL
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000282006010C3F | id << 32,
+            ~PPC_BITMASK(44, 56));
+    }
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL6_EO_PL
+        scom_and_or_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000302006010C3F | id << 32,
+            ~PPC_BITMASK(52, 60), PPC_BITMASK(49, 50) | PPC_BITMASK(54, 56));
+    }
+
+    for(unsigned int id = 0; id <= 0x11; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL9_E_PL
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8000C02006010C3F | id << 32,
+            ~PPC_BITMASK(48, 60));
+    }
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_BIT_MODE1_EO_PL
+        // IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_OFF
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8002202006010C3F | id << 32,
+            ~PPC_BIT(48));
+    }
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE3_RX_BIT_MODE1_EO_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8002202006010C3F | 0x11 << 32, PPC_BIT(48));
+
+
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02006010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(51));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_B_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02106010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(48, 51) | PPC_BITMASK(58, 62));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_C_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02206010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(49, 52) | PPC_BITMASK(58, 61));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_D_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02306010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(53, 57) | PPC_BITMASK(61, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_E_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02406010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(54, 58) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_F_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02506010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(55, 59) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_G_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02606010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_H_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02706010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02806010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(51));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_H_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02906010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_G_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02A06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE3_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_F_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02B06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(55, 59) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE1_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_E_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02C06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(54, 58) | PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE2_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_D_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02D06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(53, 57) | PPC_BITMASK(61, 63));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE0_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_C_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02E06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(49, 52) | PPC_BITMASK(58, 61));
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_4_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_B_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C02F06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(48, 51) | PPC_BITMASK(58, 62));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE4_RX_BIT_MODE1_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_5_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_0_15_PATTERN_24_A_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C03006010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(51));
+
+
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82006010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49) | PPC_BIT(52));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82106010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(50, 54));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x8002C82206010C3F, ~PPC_BITMASK(48, 54));
+    // register P9A_XBUS_0_RX1_RXPACKS0_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_0_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_D_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82306010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(49, 50));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82406010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82506010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82606010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX1_RXPACKS1_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_1_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82706010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82806010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49) | PPC_BIT(52));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82906010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX1_RXPACKS2_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_GH_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82A06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(54, 55));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE3_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82B06010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE1_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_1_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_EF_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82C06010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE2_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_2_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_D_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82D06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(49, 50));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE0_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_0_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_C_12_ACGH_16_22
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x8002C82E06010C3F, ~PPC_BITMASK(48, 54));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE4_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_4_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C82F06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(50, 54));
+    // register P9A_XBUS_0_RX1_RXPACKS3_SLICE5_RX_BIT_MODE2_E_PL
+    // IOF1_RX_RX1_RXPACKS_3_RXPACK_RD_SLICE_5_RD_RX_BIT_REGS_RX_PRBS_SEED_VALUE_16_22_PATTERN_24_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C83006010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49) | PPC_BIT(52));
+
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // register P9A_XBUS_0_TX1_TXPACKS[0:3]_SLICE[0:4]_TX_MODE1_PL
+        // IOF1_TX_WRAP_TX1_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_LANE_PDWN_ENABLED
+        scom_and_for_chiplet(
+            XB_CHIPLET_ID,
+            0x8004042006010C3F | id << 32,
+            ~PPC_BIT(48));
+    }
+
+    for(unsigned int id = 0; id <= 0x10; ++id)
+    {
+        // register P9A_XBUS_0_TX1_TXPACKS[0:3]_SLICE[0:4]_TX_MODE2_PL
+        // IOF1_TX_WRAP_TX1_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_CAL_LANE_SEL_ON
+        scom_or_for_chiplet(
+            XB_CHIPLET_ID,
+            0x80040C2006010C3F | id << 32,
+            PPC_BIT(62));
+    }
+
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x80043C2006010C3F, ~PPC_BITMASK(48, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x80043C2106010C3F, ~PPC_BITMASK(48, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_C_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2206010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(59, 62));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_D_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2306010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(59, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_E_HALF_B_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2406010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_F_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2506010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(57, 61));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_G_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2606010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(52, 53) | PPC_BITMASK(57, 58) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_H_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2706010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(52, 54) | PPC_BITMASK(57, 59) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x80043C2806010C3F, ~PPC_BITMASK(48, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_H_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2906010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(52, 54) | PPC_BITMASK(57, 59) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_G_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2A06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(52, 53) | PPC_BITMASK(57, 58) | PPC_BITMASK(62, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_F_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2B06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(57, 61));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE0_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_E_HALF_B_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2C06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(60, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE1_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_D_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2D06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(59, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE2_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_C_0_15
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x80043C2E06010C3F, ~PPC_BITMASK(48, 63), PPC_BITMASK(59, 62));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE3_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x80043C2F06010C3F, ~PPC_BITMASK(48, 63));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE4_TX_BIT_MODE1_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_4_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_0_15_PATTERN_TX_AB_HALF_A_0_15
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x80043C3006010C3F, ~PPC_BITMASK(48, 63));
+
+
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442006010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(54));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442106010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(48, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442206010C3F, ~(PPC_BITMASK(48, 51) | PPC_BITMASK(56, 63)), PPC_BITMASK(48, 51) | PPC_BITMASK(53, 54));
+    // register P9A_XBUS_0_TX1_TXPACKS0_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_0_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442306010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442406010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442506010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(42));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442606010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS1_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_1_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442706010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442806010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(54));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_H_HALF_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442906010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(51, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442A06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS2_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_2_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_F_HALF_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442B06010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE0_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_0_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_E_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442C06010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE1_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_1_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_DG_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442D06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(51, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE2_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_2_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_C_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442E06010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(48) | PPC_BITMASK(50, 53));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE3_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_3_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_B_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004442F06010C3F, ~PPC_BITMASK(48, 54), PPC_BITMASK(48, 52));
+    // register P9A_XBUS_0_TX1_TXPACKS3_SLICE4_TX_BIT_MODE2_E_PL
+    // IOF1_TX_WRAP_TX1_TXPACKS_3_TXPACK_DD_SLICE_4_DD_TX_BIT_REGS_TX_PRBS_SEED_VALUE_16_22_PATTERN_TX_A_16_22
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8004443006010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(54));
+
+
+    // register P9A_XBUS_0_RX1_RX_SPARE_MODE_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PG_SPARE_MODE_1_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8008002006010C3F, PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RX_ID1_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008082006010C3F, ~PPC_BITMASK(48, 53), PPC_BIT(53));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE1_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_CLKDIST_PDWN_OFF
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x8008102006010C3F, ~PPC_BIT(48));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE5_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008302006010C3F, ~PPC_BITMASK(51, 55), PPC_BIT(51) | PPC_BIT(53) | PPC_BIT(55));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE7_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008402006010C3F, ~PPC_BITMASK(60, 63), PPC_BIT(62) | PPC_BIT(60));
+    // register P9A_XBUS_0_RX0_RX_CTL_MODE23_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008C00006010C3F, ~PPC_BITMASK(48, 49), PPC_BIT(49));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE23_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PEAK_TUNE_OFF
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_LTE_EN_ON
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFEHISPD_EN_ON
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DFE12_EN_ON
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008C02006010C3F, ~PPC_BIT(55), PPC_BITMASK(56, 60));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE29_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8008D02006010C3F, ~PPC_BITMASK(48, 63), PPC_BIT(51) | PPC_BIT(57) | PPC_BIT(61));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE27_EO_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RC_ENABLE_CTLE_1ST_LATCH_OFFSET_CAL_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8009702006010C3F, PPC_BIT(48));
+    // register P9A_XBUS_0_RX1_RX_ID2_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009802006010C3F, ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)), PPC_BIT(59));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE1_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PDWN_LITE_DISABLE_ON
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_FENCE_FENCED
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8009902006010C3F, PPC_BITMASK(57, 58));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE2_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009982006010C3F, ~PPC_BITMASK(48, 52), PPC_BIT(52));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE3_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009A02006010C3F, ~PPC_BITMASK(48, 51), PPC_BIT(48) | PPC_BITMASK(50, 51));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE5_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009B02006010C3F, ~PPC_BITMASK(48, 51), PPC_BIT(51));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE6_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009B82006010C3F, ~PPC_BITMASK(44, 56), PPC_BIT(50) | PPC_BIT(54) | PPC_BIT(57) | PPC_BIT(61));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE8_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR1_DURATION_TAP5
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009C82006010C3F, PPC_BITMASK(48, 55) | PPC_BITMASK(61, 63), PPC_BITMASK(51, 54) | PPC_BIT(56) | PPC_BIT(58) | PPC_BIT(61) | PPC_BIT(63));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE9_E_PG
+    // IOF1_RX_RX1_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DYN_RPR_ERR_CNTR2_DURATION_TAP5
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009D02006010C3F, ~PPC_BITMASK(53, 63), PPC_BITMASK(54, 59) | PPC_BIT(61) | PPC_BIT(63));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE11_E_PG
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x8009E02006010C3F, ~PPC_BITMASK(48, 55));
+    // register P9A_XBUS_0_RX1_RX_CTL_MODE12_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8009E82006010C3F, ~PPC_BITMASK(48, 55), PPC_BITMASK(49, 55));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_SPARE_MODE_PG
+    // IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_DESKEW_BUMP_AFTER_AFTER
+    // IOF1_RX_RX1_RXCTL_GLBSM_REGS_RX_PG_GLBSM_SPARE_MODE_2_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x800A802006010C3F, PPC_BIT(50) | PPC_BIT(56));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_CNTL3_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800AE82006010C3F, ~PPC_BITMASK(56, 57), PPC_BIT(56));
+    // register P9A_XBUS_0_RX1_RX_GLBSM_MODE1_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800AF82006010C3F, ~PPC_BITMASK(48, 55), PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53));
+    // register P9A_XBUS_0_RX1_RX_DATASM_SPARE_MODE_PG
+    // IOF1_RX_RX1_RXCTL_DATASM_DATASM_REGS_RX_CTL_DATASM_CLKDIST_PDWN_OFF
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x800B802006010C3F, ~PPC_BIT(60));
+    // register P9A_XBUS_0_TX1_TX_SPARE_MODE_PG
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x800C042006010C3F, ~PPC_BITMASK(56, 57));
+    // register P9A_XBUS_0_TX1_TX_ID1_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800C0C2006010C3F, ~PPC_BITMASK(48, 53), PPC_BIT(53));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_CLKDIST_PDWN_OFF
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_PDWN_LITE_DISABLE_ON
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800C142006010C3F, ~(PPC_BIT(48) | PPC_BITMASK(53, 57)), PPC_BIT(57) | PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE2_EO_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800C1C2006010C3F, ~PPC_BITMASK(56, 62), PPC_BITMASK(52, 55) | PPC_BIT(58) | PPC_BIT(62));
+    // register P9A_XBUS_0_TX1_TX_CTL_CNTLG1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DRV_CLK_PATTERN_GCRMSG_DRV_0S
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x800C242006010C3F, ~PPC_BITMASK(48, 49));
+    // register P9A_XBUS_0_TX1_TX_ID2_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800C842006010C3F, ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)), PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE1_E_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_INTERVAL_TIMEOUT_SEL_TAP5
+    // IOF1_TX_WRAP_TX1_TXCTL_CTL_REGS_TX_CTL_REGS_TX_DYN_RECAL_STATUS_RPT_TIMEOUT_SEL_TAP1
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800C8C2006010C3F, ~PPC_BITMASK(55, 59), PPC_BIT(55) | PPC_BIT(57) | PPC_BIT(59));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE2_E_PG
+    scom_and_for_chiplet(XB_CHIPLET_ID, 0x800CEC2006010C3F, ~PPC_BITMASK(48, 55));
+    // register P9A_XBUS_0_TX1_TX_CTL_MODE3_E_PG
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800CF42006010C3F, ~PPC_BITMASK(48, 55), PPC_BITMASK(49, 55));
+    // register P9A_XBUS_0_TX1_TX_CTLSM_MODE1_EO_PG
+    // IOF1_TX_WRAP_TX1_TXCTL_TX_CTL_SM_REGS_TX_FFE_BOOST_EN_ON
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x800D2C2006010C3F, PPC_BIT(59));
+    // register P9A_XBUS_0_TX_IMPCAL_P_4X_PB
+    scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x800F1C0006010C3F, ~PPC_BITMASK(48, 52), PPC_BITMASK(49, 51));
+}

@@ -2,6 +2,7 @@
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 ifeq ($(CONFIG_CPU_IBM_POWER9),y)
 
 bootblock-y += bootblock.c
@@ -23,6 +24,9 @@ romstage-y += ccs.c
 =======
 ifeq ($(CPU_IBM_POWER9),y)
 >>>>>>> cpu/power9: fix directory structure and timer build fault
+=======
+ifeq ($(SOC_IBM_POWER9),y)
+>>>>>>> src/soc/ibm/power9/Makefile.inc: Rename CPU_IBM_POWER9 to SOC_IBM_POWER9
 
 bootblock-y += bootblock.c
 postcar-y += exit_car.S

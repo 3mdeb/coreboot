@@ -12,10 +12,20 @@
 
 #define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - lsb))
 
-/* TODO: discover how MCAs are numbered (0,1,6,7? 0,1,4,5?) */
-static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom, uint64_t and, uint64_t or)
+/* TODO: discover how MCAs are numbered (0,1,2,3? 0,1,6,7? 0,1,4,5?) */
+/* TODO: consider non-RMW variant */
+static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom,
+                              uint64_t and, uint64_t or)
 {
-	scom_and_or_for_chiplet(mcs, scom + mca * 0x40, and, or);
+	/* Indirect registers have different stride than the direct ones. */
+	unsigned mul = (scom & PPC_BIT(0)) ? 0x400 : 0x40;
+	scom_and_or_for_chiplet(mcs, scom + mca * mul, and, or);
+}
+
+static inline void dp_mca_and_or(chiplet_id_t mcs, int dp, int mca,
+                                 uint64_t scom, uint64_t and, uint64_t or)
+{
+	mca_and_or(mcs, mca, scom + dp * 0x40000000000, and, or);
 }
 
 /*
@@ -40,9 +50,12 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	int mranks = mca->dimm[0].mranks | mca->dimm[1].mranks;
 	int log_ranks = mca->dimm[0].log_ranks | mca->dimm[1].log_ranks;
 	bool is_8H = (log_ranks / mranks) == 8;
+	chiplet_id_t nest = id == MC01_CHIPLET_ID ? N3_CHIPLET_ID : N1_CHIPLET_ID;
 
-	// P9N2_MCS_PORT02_MCPERF0 (?)
-	scom_and_or_for_chiplet(id, 0x05010823, ~PPC_BITMASK(22,27), PPC_BIT(22));
+	/* P9N2_MCS_PORT02_MCPERF0 (?)
+	    [22-27] = 0x20                              // AMO_LIMIT
+	*/
+	scom_and_or_for_chiplet(nest, 0x05010823, ~PPC_BITMASK(22,27), PPC_SHIFT(0x20, 27));
 
 	/* P9N2_MCS_PORT02_MCPERF2 (?)
 	    [0-2]   = 1                                 // PF_DROP_VALUE0
@@ -74,7 +87,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	uint64_t en_ref_blk = log_ranks > 8 ? 0 :
 	                      (n_dimms == 1 && mranks == 4 && log_ranks == 8) ? 0 : 3;
 
-	scom_and_or_for_chiplet(id, 0x05010824,
+	scom_and_or_for_chiplet(nest, 0x05010824,
 	                        /* and */
 	                        ~(PPC_BITMASK(0,11) | PPC_BITMASK(13,18) | PPC_BITMASK(28,31)
 	                          | PPC_BITMASK(28,31) | PPC_BITMASK(50,54) | PPC_BIT(61)),
@@ -89,7 +102,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [4-28]  = 0x19fffff                         // WRTO_AMO_COLLISION_RULES
 	    [29-31] = 1                                 // AMO_SIZE_SELECT, 128B_RW_64B_DATA
 	*/
-	scom_and_or_for_chiplet(id, 0x05010825, ~(PPC_BIT(1) | PPC_BITMASK(4,31)),
+	scom_and_or_for_chiplet(nest, 0x05010825, ~(PPC_BIT(1) | PPC_BITMASK(4,31)),
 	                        PPC_SHIFT(0x19FFFFF, 28) | PPC_SHIFT(1, 31));
 
 	/* P9N2_MCS_PORT02_MCEPSQ (?)
@@ -101,7 +114,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [32-39] = (ATTR_PROC_EPS_READ_CYCLES_T2 + 6) / 4        // REMOTE_NODAL_EPSILON
 	    [40-47] = (ATTR_PROC_EPS_READ_CYCLES_T2 + 6) / 4        // VECTOR_GROUP_EPSILON
 	 */
-	scom_and_or_for_chiplet(id, 0x05010826, ~PPC_BITMASK(0,47),
+	scom_and_or_for_chiplet(nest, 0x05010826, ~PPC_BITMASK(0,47),
 	                        PPC_SHIFT(1, 7) /* FIXME: fill the rest with non-hardcoded values*/
 	                        | PPC_SHIFT(3, 15) | PPC_SHIFT(3, 23) | PPC_SHIFT(3, 31)
 	                        | PPC_SHIFT(18, 39) | PPC_SHIFT(18, 47));
@@ -115,7 +128,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [14-23] = 51                                // BUSY_COUNTER_THRESHOLD1
 	    [24-33] = 64                                // BUSY_COUNTER_THRESHOLD2
 	*/
-	scom_and_or_for_chiplet(id, 0x05010827, ~PPC_BITMASK(0,33),
+	scom_and_or_for_chiplet(nest, 0x05010827, ~PPC_BITMASK(0,33),
 	                        PPC_BIT(0) | PPC_SHIFT(1, 3) | PPC_SHIFT(38, 13)
 	                        | PPC_SHIFT(51, 23) | PPC_SHIFT(64, 33));
 
@@ -126,7 +139,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [44] = 1                                    // DISABLE_WRTO_IG
 	    [45] = 1                                    // AMO_LIMIT_SEL
 	*/
-	scom_and_or_for_chiplet(id, 0x0501082B, ~PPC_BIT(43),
+	scom_and_or_for_chiplet(nest, 0x0501082B, ~PPC_BIT(43),
 	                        PPC_BIT(31) | PPC_BIT(41) | PPC_BIT(44) | PPC_BIT(45));
 
 	/* MC01.PORT0.SRQ.MBA_DSM0Q =
@@ -147,7 +160,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	/* ATTR_MSS_EFF_DPHY_WLO = 1 (from VPD) */
 	uint64_t rdtag_dly = mem_data.speed == 2666 ? 9 :
 	                     mem_data.speed == 2400 ? 8 : 7;
-	mca_and_or(id, mca_i, 0x701090A, ~PPC_BITMASK(0,41),
+	mca_and_or(id, mca_i, 0x0701090A, ~PPC_BITMASK(0,41),
 	           PPC_SHIFT(mca->cl - mem_data.cwl, 5) |
 	           PPC_SHIFT(mca->cl - mem_data.cwl + 5, 11) |
 	           PPC_SHIFT(5, 23) | PPC_SHIFT(24, 29) |
@@ -189,7 +202,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	uint64_t var_dly = mem_data.speed == 2666 ? 11 :
 	                   mem_data.speed == 2400 ? 10 :
 	                   mem_data.speed == 2133 ? 9 : 8;
-	mca_and_or(id, mca_i, 0x701090B, PPC_BIT(63),
+	mca_and_or(id, mca_i, 0x0701090B, PPC_BIT(63),
 	           PPC_SHIFT(var_dly, 3) | PPC_SHIFT(4, 7) | PPC_SHIFT(4, 11) |
 	           PPC_SHIFT(mca->nccd_l, 15) | PPC_SHIFT(var_dly, 19) |
 	           PPC_SHIFT(4, 23) | PPC_SHIFT(4, 27) | PPC_SHIFT(mca->nccd_l, 31) |
@@ -217,7 +230,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 		MSS_FREQ_EQ_2400:           10
 		MSS_FREQ_EQ_2666:           11
 	*/
-	mca_and_or(id, mca_i, 0x701090C, 0,
+	mca_and_or(id, mca_i, 0x0701090C, 0,
 	           PPC_SHIFT(mca->nccd_l, 3) |
 	           PPC_SHIFT(mem_data.cwl + mca->nwtr_l + 4, 9) |
 	           PPC_SHIFT(mca->nfaw, 15) |
@@ -235,14 +248,14 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [6]     MBA_WRQ0Q_CFG_DISABLE_WR_PG_MODE =          1
 	    [55-58] MBA_WRQ0Q_CFG_WRQ_ACT_NUM_WRITES_PENDING =  8
 	*/
-	mca_and_or(id, mca_i, 0x701090D, ~(PPC_BIT(5) | PPC_BIT(6) | PPC_BITMASK(55, 58)),
+	mca_and_or(id, mca_i, 0x0701090D, ~(PPC_BIT(5) | PPC_BIT(6) | PPC_BITMASK(55, 58)),
 	           PPC_BIT(6) | PPC_SHIFT(8, 58));
 
 	/* MC01.PORT0.SRQ.MBA_RRQ0Q =
 	    [6]     MBA_RRQ0Q_CFG_RRQ_FIFO_MODE =               0   // ATTR_MSS_REORDER_QUEUE_SETTING
 	    [57-60] MBA_RRQ0Q_CFG_RRQ_ACT_NUM_READS_PENDING =   8
 	*/
-	mca_and_or(id, mca_i, 0x701090E, ~(PPC_BIT(6) | PPC_BITMASK(57, 60)),
+	mca_and_or(id, mca_i, 0x0701090E, ~(PPC_BIT(6) | PPC_BITMASK(57, 60)),
 	           PPC_SHIFT(8, 60));
 
 	/* MC01.PORT0.SRQ.MBA_FARB0Q =
@@ -251,7 +264,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [38] MBA_FARB0Q_CFG_PARITY_AFTER_CMD =  1
 	    [61-63] MBA_FARB0Q_CFG_OPT_RD_SIZE =    3
 	*/
-	mca_and_or(id, mca_i, 0x7010913, ~(PPC_BIT(17) | PPC_BIT(38) | PPC_BITMASK(61, 63)),
+	mca_and_or(id, mca_i, 0x07010913, ~(PPC_BIT(17) | PPC_BIT(38) | PPC_BITMASK(61, 63)),
 	           PPC_BIT(38) | PPC_SHIFT(3, 63));
 
 	/* MC01.PORT0.SRQ.MBA_FARB1Q =
@@ -270,7 +283,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	      [18-20] MBA_FARB1Q_CFG_SLOT0_S6_CID =   2
 	      [21-23] MBA_FARB1Q_CFG_SLOT0_S7_CID =   6
 	    if (DIMM0 has 4 master ranks)
-	      [12-14] MBA_FARB1Q_CFG_SLOT0_S4_CID =   4     // TODO: test if all slots with 1x4R DIMMs works with that
+	      [12-14] MBA_FARB1Q_CFG_SLOT0_S4_CID =   4     // TODO: test if all slots with 4R DIMMs works with that
 	    [24-26] MBA_FARB1Q_CFG_SLOT1_S0_CID = 0
 	    [27-29] MBA_FARB1Q_CFG_SLOT1_S1_CID = 4
 	    [30-32] MBA_FARB1Q_CFG_SLOT1_S2_CID = 2
@@ -286,7 +299,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	      [42-44] MBA_FARB1Q_CFG_SLOT1_S6_CID =   2
 	      [45-47] MBA_FARB1Q_CFG_SLOT1_S7_CID =   6
 	    if (DIMM1 has 4 master ranks)
-	      [36-38] MBA_FARB1Q_CFG_SLOT1_S4_CID =   4     // TODO: test if all slots with 1x4R DIMMs works with that
+	      [36-38] MBA_FARB1Q_CFG_SLOT1_S4_CID =   4     // TODO: test if all slots with 4R DIMMs works with that
 	*/
 	/* Due to allowable DIMM mixing rules, ranks of both DIMMs are the same */
 	uint64_t cids_even = (0 << 9) | (4 << 6) | (2 << 3) | (6 << 0);
@@ -296,7 +309,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	if (mranks == 4)
 		cids_4_7 = (cids_4_7 & ~(7ull << 9)) | (4 << 9);
 
-	mca_and_or(id, mca_i, 0x7010914, ~PPC_BITMASK(0, 47),
+	mca_and_or(id, mca_i, 0x07010914, ~PPC_BITMASK(0, 47),
 	           PPC_SHIFT(cids_even, 11) | PPC_SHIFT(cids_4_7, 23) |
 	           PPC_SHIFT(cids_even, 35) | PPC_SHIFT(cids_4_7, 47));
 
@@ -347,7 +360,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [60-63] MBA_FARB2Q_CFG_RANK7_WR_ODT = F(ATTR_MSS_VPD_MT_ODT_WR[l_def_PORT_INDEX][1][3])
 	*/
 	#define F(X)	((((X) >> 4) & 0xc) | (((X) >> 2) & 0x3))
-	mca_and_or(id, mca_i, 0x7010915, 0,
+	mca_and_or(id, mca_i, 0x07010915, 0,
 	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[mca_i][0][0]), 3) |
 	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[mca_i][0][1]), 7) |
 	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[mca_i][0][2]), 11) |
@@ -373,7 +386,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [40-49] MBAREF0Q_CFG_REFR_TSV_STACK =             ATTR_EFF_DRAM_TRFC_DLR
 	    [50-60] MBAREF0Q_CFG_REFR_CHECK_INTERVAL =        ((ATTR_EFF_DRAM_TREFI / 8) * 6) / 5
 	*/
-	mca_and_or(id, mca_i, 0x7010932, ~(PPC_BITMASK(5, 18) | PPC_BITMASK(30, 60)),
+	mca_and_or(id, mca_i, 0x07010932, ~(PPC_BITMASK(5, 18) | PPC_BITMASK(30, 60)),
 	           PPC_SHIFT(3, 7) | PPC_SHIFT(mem_data.nrefi / (8 * 2 * log_ranks), 18) |
 	           PPC_SHIFT(mca->nrfc, 39) | PPC_SHIFT(mca->nrfc_dlr, 49) |
 	           PPC_SHIFT(((mem_data.nrefi / 8) * 6) / 5, 60));
@@ -404,7 +417,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	                     mem_data.speed == 2400 ? 8 : 9;
 	uint64_t p_up_dn =   mem_data.speed == 1866 ? 5 :
 	                     mem_data.speed == 2666 ? 7 : 6;
-	mca_and_or(id, mca_i, 0x7010934, ~PPC_BITMASK(6, 21),
+	mca_and_or(id, mca_i, 0x07010934, ~PPC_BITMASK(6, 21),
 	           PPC_SHIFT(pup_avail, 10) | PPC_SHIFT(p_up_dn, 15) |
 	           PPC_SHIFT(p_up_dn, 20) | (mranks == 4 ? PPC_BIT(21) : 0));
 
@@ -432,7 +445,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	                    mem_data.speed == 2400 ? 12 : 14;
 	uint64_t txsdll = mem_data.speed == 1866 ? 597 :
 	                  mem_data.speed == 2666 ? 939 : 768;
-	mca_and_or(id, mca_i, 0x7010935, ~(PPC_BITMASK(12, 37) | PPC_BITMASK(46, 56)),
+	mca_and_or(id, mca_i, 0x07010935, ~(PPC_BITMASK(12, 37) | PPC_BITMASK(46, 56)),
 	           PPC_SHIFT(5, 16) | PPC_SHIFT(tcksr_ex, 21) |
 	           PPC_SHIFT(tcksr_ex, 26) | PPC_SHIFT(txsdll, 37) |
 	           PPC_SHIFT(mem_data.nrefi / (8 * 2 * log_ranks), 56));
@@ -476,7 +489,7 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	                            mn_freq_ratio < 1215 ? 1 :
 	                            mn_freq_ratio < 1300 ? 0 :
 	                            mn_freq_ratio < 1400 ? 1 : 0;
-	mca_and_or(id, mca_i, 0x7010A0A, ~(PPC_BITMASK(16, 22) | PPC_BIT(22)),
+	mca_and_or(id, mca_i, 0x07010A0A, ~(PPC_BITMASK(16, 22) | PPC_BIT(22)),
 	           PPC_SHIFT(val_to_data, 18) | PPC_SHIFT(nest_val_to_data, 21) |
 	           (mn_freq_ratio < 1215 ? 0 : PPC_BIT(22)) | PPC_BIT(40));
 
@@ -484,12 +497,12 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	    [9]     DBGR_ECC_WAT_ACTION_SELECT =  0
 	    [10-11] DBGR_ECC_WAT_SOURCE =         0
 	*/
-	mca_and_or(id, mca_i, 0x7010A0B, ~PPC_BITMASK(9, 11), 0);
+	mca_and_or(id, mca_i, 0x07010A0B, ~PPC_BITMASK(9, 11), 0);
 
 	/* MC01.PORT0.WRITE.WRTCFG =
 	    [9] = 1     // MCP_PORT0_WRITE_NEW_WRITE_64B_MODE   this is marked as RO const 0 for bits 8-63 in docs!
 	*/
-	mca_and_or(id, mca_i, 0x7010A38, ~0ull, PPC_BIT(9));
+	mca_and_or(id, mca_i, 0x07010A38, ~0ull, PPC_BIT(9));
 }
 
 static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
@@ -502,7 +515,7 @@ static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
 	      else:                                                         1
 	    [23-32] MBARPC0Q_CFG_MIN_DOMAIN_REDUCTION_TIME =                959
 	*/
-	mca_and_or(id, mca_i, 0x7010934, ~(PPC_BITMASK(3, 5) | PPC_BITMASK(22, 32)),
+	mca_and_or(id, mca_i, 0x07010934, ~(PPC_BITMASK(3, 5) | PPC_BITMASK(22, 32)),
 	           PPC_SHIFT(959, 32));
 
 	/* Set STR register */
@@ -514,12 +527,12 @@ static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
 	      ATTR_MSS_MRW_POWER_CONTROL_REQUESTED == PD_AND_STR_OFF:       0     // default
 	    [2-11]  MBASTR0Q_CFG_ENTER_STR_TIME =                           1023
 	*/
-	mca_and_or(id, mca_i, 0x7010935, ~(PPC_BIT(0) | PPC_BITMASK(2, 11)),
+	mca_and_or(id, mca_i, 0x07010935, ~(PPC_BIT(0) | PPC_BITMASK(2, 11)),
 	           PPC_SHIFT(1023, 11));
 
 	/* Set N/M throttling control register */
 	/* TODO: these attributes are calculated in 7.4, implement this */
-	/* MC01.PORT1.SRQ.MBA_FARB3Q =
+	/* MC01.PORT0.SRQ.MBA_FARB3Q =
 	    [0-14]  MBA_FARB3Q_CFG_NM_N_PER_SLOT = ATTR_MSS_RUNTIME_MEM_THROTTLED_N_COMMANDS_PER_SLOT[mss::index(MCA)]
 	    [15-30] MBA_FARB3Q_CFG_NM_N_PER_PORT = ATTR_MSS_RUNTIME_MEM_THROTTLED_N_COMMANDS_PER_PORT[mss::index(MCA)]
 	    [31-44] MBA_FARB3Q_CFG_NM_M =          ATTR_MSS_MRW_MEM_M_DRAM_CLOCKS     // default 0x200
@@ -529,20 +542,455 @@ static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
 	    [53]    MBA_FARB3Q_CFG_NM_CHANGE_AFTER_SYNC = 0
 	*/
 	printk(BIOS_EMERG, "Please FIXME: ATTR_MSS_RUNTIME_MEM_THROTTLED_N_COMMANDS_PER_SLOT\n");
-	mca_and_or(id, mca_i, 0x7010956, ~(PPC_BITMASK(0, 50) | PPC_BIT(53)),
+	mca_and_or(id, mca_i, 0x07010916, ~(PPC_BITMASK(0, 50) | PPC_BIT(53)),
 	           /* PPC_SHIFT(nm_n_per_slot, 14) | PPC_SHIFT(nm_n_per_port, 30) | */
 	           PPC_SHIFT(0x200, 44) | PPC_SHIFT(1, 50));
 
 	/* Set safemode throttles */
-	/* MC01.PORT1.SRQ.MBA_FARB4Q =
+	/* MC01.PORT0.SRQ.MBA_FARB4Q =
 	    [27-41] MBA_FARB4Q_EMERGENCY_N = ATTR_MSS_RUNTIME_MEM_THROTTLED_N_COMMANDS_PER_PORT[mss::index(MCA)]  // BUG? var name says per_slot...
 	    [42-55] MBA_FARB4Q_EMERGENCY_M = ATTR_MSS_MRW_MEM_M_DRAM_CLOCKS
 	*/
-	mca_and_or(id, mca_i, 0x7010957, ~PPC_BITMASK(27, 55),
+	mca_and_or(id, mca_i, 0x07010917, ~PPC_BITMASK(27, 55),
 	           /* PPC_SHIFT(nm_n_per_port, 41) | */
 	           PPC_SHIFT(0x200, 55));
 }
 
+/*
+ * Values set in this function are mostly for magic MCA, other (functional) MCAs
+ * are set later. If all of these registers are later written with proper values
+ * for functional MCAs, maybe this can be called just for magic, non-functional
+ * ones to save time.
+ */
+static void p9n_ddrphy_scom(chiplet_id_t id, int mca_i)
+{
+	int dp;
+	/*
+	 * Hostboot sets this to proper value in phy_scominit(), but I don't see
+	 * why. Speed is the same for whole MCBIST anyway.
+	 */
+	uint64_t strength = mem_data.speed == 1866 ? 1 :
+			    mem_data.speed == 2133 ? 2 :
+			    mem_data.speed == 2400 ? 4 : 8;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_DLL_VREG_CONTROL0_P0_{0,1,2,3,4} =
+		  [48-50] RXREG_VREG_COMPCON_DC = 3
+		  [52-59] = 0x74:
+			  [53-55] RXREG_VREG_DRVCON_DC =  0x7
+			  [56-58] RXREG_VREG_REF_SEL_DC = 0x2
+		  [62-63] = 0:
+			  [62] DLL_DRVREN_MODE =      POWER8 mode (thermometer style, enabling all drivers up to the one that is used)
+			  [63] DLL_CAL_CKTS_ACTIVE =  After VREG calibration, some analog circuits are powered down
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000002A0701103F,
+		              ~(PPC_BITMASK(48, 50) | PPC_BITMASK(52, 59) | PPC_BITMASK(62, 63)),
+		              PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
+
+		/* IOM0.DDRPHY_DP16_DLL_VREG_CONTROL1_P0_{0,1,2,3,4} =
+		  [48-50] RXREG_VREG_COMPCON_DC = 3
+		  [52-59] = 0x74:
+			  [53-55] RXREG_VREG_DRVCON_DC =  0x7
+			  [56-58] RXREG_VREG_REF_SEL_DC = 0x2
+		  [62-63] = 0:
+			  [62] DLL_DRVREN_MODE =      POWER8 mode (thermometer style, enabling all drivers up to the one that is used)
+			  [63] DLL_CAL_CKTS_ACTIVE =  After VREG calibration, some analog circuits are powered down
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000002B0701103F,
+		              ~(PPC_BITMASK(48, 50) | PPC_BITMASK(52, 59) | PPC_BITMASK(62, 63)),
+		              PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
+
+		/* IOM0.DDRPHY_DP16_WRCLK_PR_P0_{0,1,2,3,4} =
+		  // For zero delay simulations, or simulations where the delay of the SysClk tree and the WrClk tree are equal,
+		  // set this field to 60h
+		  [49-55] TSYS_WRCLK = 0x60
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000740701103F,
+		              ~PPC_BITMASK(49, 55), PPC_SHIFT(0x60, 55));
+
+		/* IOM0.DDRPHY_DP16_IO_TX_CONFIG0_P0_{0,1,2,3,4} =
+		  [48-51] STRENGTH =                    0x4 // 2400 MT/s
+		  [52]    DD2_RESET_READ_FIX_DISABLE =  0   // Enable the DD2 function to remove the register reset on read feature
+							    // on status registers
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000750701103F,
+		              ~PPC_BITMASK(48, 52), PPC_SHIFT(strength, 51));
+
+		/* IOM0.DDRPHY_DP16_DLL_CONFIG1_P0_{0,1,2,3,4} =
+		  [48-63] = 0x0006:
+			  [48-51] HS_DLLMUX_SEL_0_0_3 = 0
+			  [53-56] HS_DLLMUX_SEL_1_0_3 = 0
+			  [61]    S0INSDLYTAP =         1 // For proper functional operation, this bit must be 0b
+			  [62]    S1INSDLYTAP =         1 // For proper functional operation, this bit must be 0b
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000770701103F,
+		              ~(PPC_BITMASK(48, 51) | PPC_BITMASK(53, 56) | PPC_BITMASK(61, 62)),
+		              PPC_BIT(61) | PPC_BIT(62));
+
+		/* IOM0.DDRPHY_DP16_IO_TX_FET_SLICE_P0_{0,1,2,3,4} =
+		  [48-63] = 0x7f7f:
+			  [59-55] EN_SLICE_N_WR = 0x7f
+			  [57-63] EN_SLICE_P_WR = 0x7f
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000780701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x7F7F, 63));
+	}
+
+	for (dp = 0; dp < 4; dp++) {
+		/* IOM0.DDRPHY_ADR_BIT_ENABLE_P0_ADR{0,1,2,3} =
+		  [48-63] = 0xffff
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800040000701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0xFFFF, 63));
+
+		/* IOM0.DDRPHY_ADR_DIFFPAIR_ENABLE_P0_ADR1 =
+		  [48-63] = 0x5000:
+			  [49] DI_ADR2_ADR3: 1 = Lanes 2 and 3 are a differential clock pair
+			  [51] DI_ADR6_ADR7: 1 = Lanes 6 and 7 are a differential clock pair
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800044010701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x5000, 63));
+
+		/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR1 =
+		  [48-63] = 0x4040:
+			  [49-55] ADR_DELAY2 = 0x40
+			  [57-63] ADR_DELAY3 = 0x40
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800044050701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
+
+		/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR1 =
+		  [48-63] = 0x4040:
+			  [49-55] ADR_DELAY6 = 0x40
+			  [57-63] ADR_DELAY7 = 0x40
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800044070701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
+	}
+
+	for (dp = 0; dp < 2; dp ++) {
+		/* IOM0.DDRPHY_ADR_DLL_VREG_CONFIG_1_P0_ADR32S{0,1} =
+		  [48-63] = 0x0008:
+			  [48-51] HS_DLLMUX_SEL_0_3 = 0
+			  [59-62] STRENGTH =          4 // 2400 MT/s
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800080310701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(strength, 62));
+
+		/* IOM0.DDRPHY_ADR_MCCLK_WRCLK_PR_STATIC_OFFSET_P0_ADR32S{0,1} =
+		  [48-63] = 0x6000
+		      // For zero delay simulations, or simulations where the delay of the
+		      // SysClk tree and the WrClk tree are equal, set this field to 60h
+		      [49-55] TSYS_WRCLK = 0x60
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800080330701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x6000, 63));
+
+		/* IOM0.DDRPHY_ADR_DLL_VREG_CONTROL_P0_ADR32S{0,1} =
+		  [48-50] RXREG_VREG_COMPCON_DC =         3
+		  [52-59] = 0x74:
+			  [53-55] RXREG_VREG_DRVCON_DC =  0x7
+			  [56-58] RXREG_VREG_REF_SEL_DC = 0x2
+		  [63] DLL_CAL_CKTS_ACTIVE =  0   // After VREG calibration, some analog circuits are powered down
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000803d0701103F,
+		              ~PPC_BITMASK(48, 63), PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
+	}
+
+	/* IOM0.DDRPHY_PC_CONFIG0_P0 =             // 0x8000c00c0701103f
+	  [48-63] = 0x0202:
+		  [48-51] PDA_ENABLE_OVERRIDE =     0
+		  [52]    2TCK_PREAMBLE_ENABLE =    0
+		  [53]    PBA_ENABLE =              0
+		  [54]    DDR4_CMD_SIG_REDUCTION =  1
+		  [55]    SYSCLK_2X_MEMINTCLKO =    0
+		  [56]    RANK_OVERRIDE =           0
+		  [57-59] RANK_OVERRIDE_VALUE =     0
+		  [60]    LOW_LATENCY =             0
+		  [61]    DDR4_IPW_LOOP_DIS =       0
+		  [62]    DDR4_VLEVEL_BANK_GROUP =  1
+		  [63]    VPROTH_PSEL_MODE =        0
+	*/
+	mca_and_or(id, mca_i, 0x8000C00C0701103F, ~PPC_BITMASK(48, 63),
+	           PPC_SHIFT(0x0202, 63));
+}
+
+static void p9n_mcbist_scom(chiplet_id_t id)
+{
+	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG0AQ =
+	    [0-47]  WATCFG0AQ_CFG_WAT_EVENT_SEL =  0x400000000000
+	*/
+	scom_and_or_for_chiplet(id, 0x07012380, ~PPC_BITMASK(0, 47),
+	                        PPC_SHIFT(0x400000000000, 47));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG0BQ =
+	    [0-43]  WATCFG0BQ_CFG_WAT_MSKA =  0x3fbfff
+	    [44-60] WATCFG0BQ_CFG_WAT_CNTL =  0x10000
+	*/
+	scom_and_or_for_chiplet(id, 0x07012381, ~PPC_BITMASK(0, 60),
+	                        PPC_SHIFT(0x3fbfff, 43) | PPC_SHIFT(0x10000, 60));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG0DQ =
+	    [0-43]  WATCFG0DQ_CFG_WAT_PATA =  0x80200004000
+	*/
+	scom_and_or_for_chiplet(id, 0x07012383, ~PPC_BITMASK(0, 43),
+	                        PPC_SHIFT(0x80200004000, 43));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG3AQ =
+	    [0-47]  WATCFG3AQ_CFG_WAT_EVENT_SEL = 0x800000000000
+	*/
+	scom_and_or_for_chiplet(id, 0x0701238F, ~PPC_BITMASK(0, 47),
+	                        PPC_SHIFT(0x800000000000, 47));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG3BQ =
+	    [0-43]  WATCFG3BQ_CFG_WAT_MSKA =  0xfffffffffff
+	    [44-60] WATCFG3BQ_CFG_WAT_CNTL =  0x10400
+	*/
+	scom_and_or_for_chiplet(id, 0x07012390, ~PPC_BITMASK(0, 60),
+	                        PPC_SHIFT(0xfffffffffff, 43) | PPC_SHIFT(0x10400, 60));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.MCBCFGQ =
+	    [36]    MCBCFGQ_CFG_LOG_COUNTS_IN_TRACE = 0
+	*/
+	scom_and_or_for_chiplet(id, 0x070123E0, ~PPC_BIT(36), 0);
+
+	/* MC01.MCBIST.MBA_SCOMFIR.DBGCFG0Q =
+	    [0]     DBGCFG0Q_CFG_DBG_ENABLE =         1
+	    [23-33] DBGCFG0Q_CFG_DBG_PICK_MCBIST01 =  0x780
+	*/
+	scom_and_or_for_chiplet(id, 0x070123E8, ~PPC_BITMASK(23, 33),
+	                        PPC_BIT(0) | PPC_SHIFT(0x780, 33));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.DBGCFG1Q =
+	    [0]     DBGCFG1Q_CFG_WAT_ENABLE = 1
+	*/
+	scom_and_or_for_chiplet(id, 0x070123E9, ~0ull, PPC_BIT(0));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.DBGCFG2Q =
+	    [0-19]  DBGCFG2Q_CFG_WAT_LOC_EVENT0_SEL = 0x10000
+	    [20-39] DBGCFG2Q_CFG_WAT_LOC_EVENT1_SEL = 0x08000
+	*/
+	scom_and_or_for_chiplet(id, 0x070123EA, ~PPC_BITMASK(0, 39),
+	                        PPC_SHIFT(0x10000, 19) | PPC_SHIFT(0x08000, 39));
+
+	/* MC01.MCBIST.MBA_SCOMFIR.DBGCFG3Q =
+	    [20-22] DBGCFG3Q_CFG_WAT_GLOB_EVENT0_SEL =      0x4
+	    [23-25] DBGCFG3Q_CFG_WAT_GLOB_EVENT1_SEL =      0x4
+	    [37-40] DBGCFG3Q_CFG_WAT_ACT_SET_SPATTN_PULSE = 0x4
+	*/
+	scom_and_or_for_chiplet(id, 0x070123EB, ~(PPC_BITMASK(20, 25) | PPC_BITMASK(37, 40)),
+	                        PPC_SHIFT(0x4, 22) | PPC_SHIFT(0x4, 25) | PPC_SHIFT(0x4, 40));
+}
+
+static void set_rank_pairs(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	/*
+	 * Assumptions:
+	 * - non-LR DIMMs (platform wiki),
+	 * - no ATTR_EFF_RANK_GROUP_OVERRIDE,
+	 * - mixing rules followed - the same rank configuration for both DIMMs.
+	 */
+
+	static const uint16_t F[] = {0, 0xf000, 0xf0f0, 0xfff0, 0xffff};
+	/* TODO: maybe we should check if dimm[0].mranks == dimm[1].mranks? */
+	uint64_t rp = 0x1537 & F[mca->dimm[0].present ? mca->dimm[0].mranks :
+	                                                mca->dimm[1].mranks];
+
+	/* TODO: can we mix mirrored and non-mirrored 2R DIMMs in one port? */
+
+	/* IOM0.DDRPHY_PC_RANK_PAIR0_P0 =
+	    // rank_countX is the number of master ranks on DIMM X.
+	    [48-63] = 0x1537 & F[rank_count0]:      // F = {0, 0xf000, 0xf0f0, 0xfff0, 0xffff}
+		[48-50] RANK_PAIR0_PRI = 0
+		[51]    RANK_PAIR0_PRI_V = 1: if (rank_count0 >= 1)
+		[52-54] RANK_PAIR0_SEC = 2
+		[55]    RANK_PAIR0_SEC_V = 1: if (rank_count0 >= 3)
+		[56-58] RANK_PAIR1_PRI = 1
+		[59]    RANK_PAIR1_PRI_V = 1: if (rank_count0 >= 2)
+		[60-62] RANK_PAIR1_SEC = 3
+		[63]    RANK_PAIR1_SEC_V = 1: if (rank_count0 == 4)
+	*/
+	mca_and_or(id, mca_i, 0x8000C0020701103F, ~PPC_BITMASK(48, 63),
+	           PPC_SHIFT(rp, 63));
+
+	/* IOM0.DDRPHY_PC_RANK_PAIR1_P0 =
+	    [48-63] = 0x1537 & F[rank_count1]:     // F = {0, 0xf000, 0xf0f0, 0xfff0, 0xffff}
+		[48-50] RANK_PAIR2_PRI = 0
+		[51]    RANK_PAIR2_PRI_V = 1: if (rank_count1 >= 1)
+		[52-54] RANK_PAIR2_SEC = 2
+		[55]    RANK_PAIR2_SEC_V = 1: if (rank_count1 >= 3)
+		[56-58] RANK_PAIR3_PRI = 1
+		[59]    RANK_PAIR3_PRI_V = 1: if (rank_count1 >= 2)
+		[60-62] RANK_PAIR3_SEC = 3
+		[63]    RANK_PAIR3_SEC_V = 1: if (rank_count1 == 4)
+	*/
+	mca_and_or(id, mca_i, 0x8000C0030701103F, ~PPC_BITMASK(48, 63),
+	           PPC_SHIFT(rp, 63));
+
+	/* IOM0.DDRPHY_PC_RANK_PAIR2_P0 =
+	    [48-63] = 0
+	*/
+	mca_and_or(id, mca_i, 0x8000C0300701103F, ~PPC_BITMASK(48, 63), 0);
+
+	/* IOM0.DDRPHY_PC_RANK_PAIR3_P0 =
+	    [48-63] = 0
+	*/
+	mca_and_or(id, mca_i, 0x8000C0310701103F, ~PPC_BITMASK(48, 63), 0);
+
+	/* IOM0.DDRPHY_PC_CSID_CFG_P0 =
+	    [0-63]  0xf000:
+		[48]  CS0_INIT_CAL_VALUE = 1
+		[49]  CS1_INIT_CAL_VALUE = 1
+		[50]  CS2_INIT_CAL_VALUE = 1
+		[51]  CS3_INIT_CAL_VALUE = 1
+	*/
+	mca_and_or(id, mca_i, 0x8000C0330701103F, ~PPC_BITMASK(48, 63),
+	           PPC_SHIFT(0xF000, 63));
+
+	/* IOM0.DDRPHY_PC_MIRROR_CONFIG_P0 =
+	    [all] = 0
+	    // A rank is mirrored if all are true:
+	    //  - the rank is valid (RANK_PAIRn_XXX_V   ==  1)
+	    //  - the rank is odd   (RANK_PAIRn_XXX % 2 ==  1)
+	    //  - the mirror mode attribute is set for the rank's DIMM (SPD[136])
+	    //  - We are not in quad encoded mode (so master ranks <= 2)
+	    [48]    ADDR_MIRROR_RP0_PRI
+		...
+	    [55]    ADDR_MIRROR_RP3_SEC
+	    [58]    ADDR_MIRROR_A3_A4 = 1
+	    [59]    ADDR_MIRROR_A5_A6 = 1
+	    [60]    ADDR_MIRROR_A7_A8 = 1
+	    [61]    ADDR_MIRROR_A11_A13 = 1
+	    [62]    ADDR_MIRROR_BA0_BA1 = 1
+	    [63]    ADDR_MIRROR_BG0_BG1 = 1
+	*/
+	/*
+	 * Assumptions:
+	 * - primary and secondary have the same evenness,
+	 * - RP1 and RP3 have odd ranks,
+	 * - both DIMMs have SPD[136] set or both have it unset, no mixing allowed,
+	 * - when rank is not valid, it doesn't matter if it is mirrored,
+	 * - no quad encoded mode - no data for it in MT VPD anyway.
+	 *
+	 * With all of the above, ADDR_MIRROR_RP{1,3}_{PRI,SEC} = SPD[136].
+	 */
+	uint64_t mirr = mca->dimm[0].present ? mca->dimm[0].spd[136] :
+	                                       mca->dimm[1].spd[136];
+	mca_and_or(id, mca_i, 0x8000C0110701103F, ~PPC_BITMASK(48, 63),
+	           PPC_SHIFT(mirr, 50) | PPC_SHIFT(mirr, 51) | /* RP1 */
+	           PPC_SHIFT(mirr, 54) | PPC_SHIFT(mirr, 55) | /* RP3 */
+	           PPC_BITMASK(58, 63));
+
+	/* IOM0.DDRPHY_PC_RANK_GROUP_EXT_P0 =  // 0x8000C0350701103F
+	    [all] = 0
+	    // Same rules as above
+	    [48]    ADDR_MIRROR_RP0_TER
+		...
+	    [55]    ADDR_MIRROR_RP3_QUA
+	*/
+	/* These are not valid anyway, so don't bother setting anything. */
+}
+
+static void reset_data_bit_enable(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	for (dp = 0; dp < 4; dp++) {
+		/* IOM0.DDRPHY_DP16_DQ_BIT_ENABLE0_P0_{0,1,2,3} =
+		    [all] = 0
+		    [48-63] DATA_BIT_ENABLE_0_15 = 0xffff
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000000701103F, 0, 0xFFFF);
+	}
+
+	/* IOM0.DDRPHY_DP16_DQ_BIT_ENABLE0_P0_4 =
+	    [all] = 0
+	    [48-63] DATA_BIT_ENABLE_0_15 = 0xff00
+	*/
+	dp_mca_and_or(id, 4, mca_i, 0x800000000701103F, 0, 0xFF00);
+
+	/* IOM0.DDRPHY_DP16_DFT_PDA_CONTROL_P0_{0,1,2,3,4} =
+	    // This reg is named MCA_DDRPHY_DP16_DATA_BIT_ENABLE1_P0_n in the code.
+	    // Probably the address changed for DD2 but the documentation did not.
+	    [all] = 0
+	*/
+	for (dp = 0; dp < 5; dp++) {
+		dp_mca_and_or(id, dp, mca_i, 0x800000010701103F, 0, 0);
+	}
+}
+
+/* 5 DP16, 8 MCA */
+/* TODO: after we know how MCAs are numbered we can drop half of x8 table */
+static const uint16_t x4_clk[5] = {0x8640, 0x8640, 0x8640, 0x8640, 0x8400};
+static const uint16_t x8_clk[8][5] = {
+	{0x0CC0, 0xC0C0, 0x0CC0, 0x0F00, 0x0C00}, /* Port 0 */
+	{0xC0C0, 0x0F00, 0x0CC0, 0xC300, 0x0C00}, /* Port 1 */
+	{0xC300, 0xC0C0, 0xC0C0, 0x0F00, 0x0C00}, /* Port 2 */
+	{0x0F00, 0x0F00, 0xC300, 0xC300, 0xC000}, /* Port 3 */
+	{0x0CC0, 0xC0C0, 0x0F00, 0x0F00, 0xC000}, /* Port 4 */
+	{0xC300, 0x0CC0, 0x0CC0, 0xC300, 0xC000}, /* Port 5 */
+	{0x0CC0, 0x0CC0, 0x0CC0, 0xC0C0, 0x0C00}, /* Port 6 */
+	{0x0CC0, 0xC0C0, 0x0F00, 0xC300, 0xC000}, /* Port 7 */
+};
+
+static void reset_clock_enable(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+{
+	/* Assume the same rank configuration for both DIMMs */
+	int dp;
+	int width = mca->dimm[0].present ? mca->dimm[0].width :
+	                                   mca->dimm[1].width;
+	int mranks[2] = {mca->dimm[0].mranks, mca->dimm[1].mranks};
+	 /* Index for x8_clk depends on how MCAs are numbered... */
+	const uint16_t *clk = width == WIDTH_x4 ? x4_clk :
+	                                          x8_clk[mcs_i * MCA_PER_MCS + mca_i];
+
+	/* IOM0.DDRPHY_DP16_WRCLK_EN_RP0_P0_{0,1,2,3,4}
+	    [all] = 0
+	    [48-63] QUADn_CLKxx
+	*/
+	/* IOM0.DDRPHY_DP16_READ_CLOCK_RANK_PAIR0_P0_{0,1,2,3,4}
+	    [all] = 0
+	    [48-63] QUADn_CLKxx
+	*/
+	for (dp = 0; dp < 5; dp++) {
+		/* Note that these correspond to valid rank pairs */
+		if (mranks[0] > 0) {
+			dp_mca_and_or(id, dp, mca_i, 0x800000050701103F, 0, clk[dp]);
+			dp_mca_and_or(id, dp, mca_i, 0x800000040701103F, 0, clk[dp]);
+		}
+
+		if (mranks[0] > 1) {
+			dp_mca_and_or(id, dp, mca_i, 0x800001050701103F, 0, clk[dp]);
+			dp_mca_and_or(id, dp, mca_i, 0x800001040701103F, 0, clk[dp]);
+		}
+
+		if (mranks[1] > 0) {
+			dp_mca_and_or(id, dp, mca_i, 0x800002050701103F, 0, clk[dp]);
+			dp_mca_and_or(id, dp, mca_i, 0x800002040701103F, 0, clk[dp]);
+		}
+
+		if (mranks[1] > 1) {
+			dp_mca_and_or(id, dp, mca_i, 0x800003050701103F, 0, clk[dp]);
+			dp_mca_and_or(id, dp, mca_i, 0x800003040701103F, 0, clk[dp]);
+		}
+	}
+}
+
+static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+{
+	/* Hostboot here sets strength, we did it in p9n_ddrphy_scom(). */
+	set_rank_pairs(id, mca_i, mca);
+
+	reset_data_bit_enable(id, mca_i);
+
+	/* Assume there are no bad bits (disabled DQ/DQS lines) for now */
+	// reset_bad_bits();
+
+	reset_clock_enable(id, mcs_i, mca_i, mca);
+
+	//reset_rd_vref();
+	// ... TBD ...
+}
 /*
  * 13.8 mss_scominit: Perform scom inits to MC and PHY
  *
@@ -563,16 +1011,18 @@ void istep_13_8(void)
 	report_istep(13,8);
 
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		/* We neither started clocks nor dropped fences in 13.6 for non-functional MCS */
+		if (!mem_data.mcs[mcs_i].functional)
+			continue;
+
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 			/*
 			 * 0th MCA is 'magic' - it has a logic PHY block that is not contained
-			 * in other MCAs. The magic MCA must be always initialized, even when it
+			 * in other MCA. The magic MCA must be always initialized, even when it
 			 * doesn't have any DIMM installed.
-			 *
-			 * TODO: is this 0th on CPU or on every MCS?
 			 */
-			if ((mca_i + mcs_i) != 0 && !mca->functional)
+			if (mca_i != 0 && !mca->functional)
 				continue;
 
 			/* Some registers cannot be initialized without data from SPD */
@@ -583,11 +1033,25 @@ void istep_13_8(void)
 			}
 
 			/* The rest can and should be initialized also on magic port */
-			// p9n_ddrphy_scom();
+			p9n_ddrphy_scom(mcs_ids[mcs_i], mca_i);
+		}
+		/* This is for MCBIST, does it need chiplet ID? */
+		p9n_mcbist_scom(mcs_ids[mcs_i]);
+	}
+
+
+	/* This double loop is a part of phy_scominit() in Hostboot, but this is simpler. */
+	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+			/* No magic this time. */
+			if (!mca->functional)
+				continue;
+
+			phy_scominit(mcs_ids[mcs_i], mcs_i, mca_i, mca);
 		}
 	}
-	// p9n_mcbist_scom();
-	// phy_scominit();
+
 	// mss::unmask::after_scominit();
 
 	printk(BIOS_EMERG, "ending istep 13.8\n");

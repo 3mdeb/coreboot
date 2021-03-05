@@ -13,18 +13,35 @@ mcbist_data_t mem_data;
 
 static void dump_mca_data(mca_data_t *mca)
 {
-	printk(BIOS_SPEW, "\tCL =\t%d\n", mca->cl);
-	printk(BIOS_SPEW, "\tCCD_L =\t%d\n", mca->nccd_l);
-	printk(BIOS_SPEW, "\tWTR_S =\t%d\n", mca->nwtr_s);
-	printk(BIOS_SPEW, "\tWTR_L =\t%d\n", mca->nwtr_l);
-	printk(BIOS_SPEW, "\tFAW =\t%d\n", mca->nfaw);
-	printk(BIOS_SPEW, "\tRCD =\t%d\n", mca->nrcd);
-	printk(BIOS_SPEW, "\tRP =\t%d\n", mca->nrp);
-	printk(BIOS_SPEW, "\tRAS =\t%d\n", mca->nras);
-	printk(BIOS_SPEW, "\tWR =\t%d\n", mca->nwr);
-	printk(BIOS_SPEW, "\tRRD_S =\t%d\n", mca->nrrd_s);
-	printk(BIOS_SPEW, "\tRRD_L =\t%d\n", mca->nrrd_l);
-	printk(BIOS_SPEW, "\tRFC =\t%d\n", mca->nrfc);
+	printk(BIOS_SPEW, "\tCL =      %d\n", mca->cl);
+	printk(BIOS_SPEW, "\tCCD_L =   %d\n", mca->nccd_l);
+	printk(BIOS_SPEW, "\tWTR_S =   %d\n", mca->nwtr_s);
+	printk(BIOS_SPEW, "\tWTR_L =   %d\n", mca->nwtr_l);
+	printk(BIOS_SPEW, "\tFAW =     %d\n", mca->nfaw);
+	printk(BIOS_SPEW, "\tRCD =     %d\n", mca->nrcd);
+	printk(BIOS_SPEW, "\tRP =      %d\n", mca->nrp);
+	printk(BIOS_SPEW, "\tRAS =     %d\n", mca->nras);
+	printk(BIOS_SPEW, "\tWR =      %d\n", mca->nwr);
+	printk(BIOS_SPEW, "\tRRD_S =   %d\n", mca->nrrd_s);
+	printk(BIOS_SPEW, "\tRRD_L =   %d\n", mca->nrrd_l);
+	printk(BIOS_SPEW, "\tRFC =     %d\n", mca->nrfc);
+	printk(BIOS_SPEW, "\tRFC_DLR = %d\n", mca->nrfc_dlr);
+
+	int i;
+	for (i = 0; i < 2; i++) {
+		if (mca->dimm[i].present) {
+			printk(BIOS_SPEW, "\tDIMM%d: %dRx%d ", i, mca->dimm[i].mranks,
+			       (mca->dimm[i].width + 1) * 4);
+
+			if (mca->dimm[i].log_ranks != mca->dimm[i].mranks)
+				printk(BIOS_SPEW, "%dH 3DS ", mca->dimm[i].log_ranks / mca->dimm[i].mranks);
+
+			printk(BIOS_SPEW, "%dGB\n", (1 << (mca->dimm[i].density - 2)) *
+			       mca->dimm[i].log_ranks * (2 - mca->dimm[i].width));
+		}
+		else
+			printk(BIOS_SPEW, "\tDIMM%d: not installed\n", i);
+	}
 }
 
 static inline bool is_proper_dimm(spd_raw_data spd, int slot)
@@ -157,8 +174,10 @@ static void prepare_dimm_data(void)
 			 * TODO: add fields that are lacking to either of those files or
 			 * add a file specific to DDR4 SPD.
 			 */
+			dimm->width = blk.spd_array[i][12] & 7;
 			dimm->mranks = ((blk.spd_array[i][12] >> 3) & 0x7) + 1;
 			dimm->log_ranks = dimm->mranks * (((blk.spd_array[i][6] >> 4) & 0x7) + 1);
+			dimm->density = blk.spd_array[i][4] & 0xF;
 
 			if (blk.spd_array[i][18] > tckmin)
 				tckmin = blk.spd_array[i][18];

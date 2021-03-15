@@ -44,6 +44,7 @@ static void dump_mca_data(mca_data_t *mca)
 	}
 }
 
+/* TODO: add checks for same ranks configuration for both DIMMs under one MCA */
 static inline bool is_proper_dimm(spd_raw_data spd, int slot)
 {
 	dimm_attr attr;
@@ -62,35 +63,6 @@ static inline bool is_proper_dimm(spd_raw_data spd, int slot)
 	}
 
 	return true;
-}
-
-/*
- * All time conversion functions assume that both MCS have the same frequency.
- * Change it if proven otherwise by adding a second argument - memory speed or
- * MCS index.
- */
-static inline uint64_t ps_to_nck(uint64_t ps)
-{
-	/*
-	 * Speed is in MT/s, we need to divide it by 2 to get MHz.
-	 * tCK(avg) should be rounded down to the next valid speed bin, which
-	 * corresponds to value obtained by using standardized MT/s values.
-	 */
-	uint64_t tck_in_ps = 1000000 / (mem_data.speed / 2);
-
-	/* Algorithm taken from JEDEC Standard No. 21-C */
-	return ((ps * 1000 / tck_in_ps) + 974) / 1000;
-}
-
-static inline uint64_t mtb_ftb_to_nck(uint64_t mtb, int8_t ftb)
-{
-	/* ftb is signed (always byte?) */
-	return ps_to_nck(mtb * 125 + ftb);
-}
-
-static inline uint64_t ns_to_nck(uint64_t ns)
-{
-	return ps_to_nck(ns * 1000);
 }
 
 static void mark_nonfunctional(int mcs, int mca)
@@ -346,6 +318,9 @@ void main(void)
 	istep_13_6();
 	report_istep(13,7);	// no-op
 	istep_13_8();
+
+	/* Test if SCOM still works. Maybe should check also indirect access? */
+	printk(BIOS_DEBUG, "0xF000F = %llx\n", read_scom(0xf000f));
 
 	run_ramstage();
 }

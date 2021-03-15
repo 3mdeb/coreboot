@@ -87,6 +87,38 @@ typedef struct {
 
 extern mcbist_data_t mem_data;
 
+/*
+ * All time conversion functions assume that both MCSs have the same frequency.
+ * Change it if proven otherwise by adding a second argument - memory speed or
+ * MCS index.
+ *
+ * These functions should not be used before setting mem_data.speed to a valid
+ * non-0 value.
+ */
+static inline uint64_t ps_to_nck(uint64_t ps)
+{
+	/*
+	 * Speed is in MT/s, we need to divide it by 2 to get MHz.
+	 * tCK(avg) should be rounded down to the next valid speed bin, which
+	 * corresponds to value obtained by using standardized MT/s values.
+	 */
+	uint64_t tck_in_ps = 1000000 / (mem_data.speed / 2);
+
+	/* Algorithm taken from JEDEC Standard No. 21-C */
+	return ((ps * 1000 / tck_in_ps) + 974) / 1000;
+}
+
+static inline uint64_t mtb_ftb_to_nck(uint64_t mtb, int8_t ftb)
+{
+	/* ftb is signed (always byte?) */
+	return ps_to_nck(mtb * 125 + ftb);
+}
+
+static inline uint64_t ns_to_nck(uint64_t ns)
+{
+	return ps_to_nck(ns * 1000);
+}
+
 void istep_13_2(void);
 void istep_13_3(void);
 void istep_13_4(void);

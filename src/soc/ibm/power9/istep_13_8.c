@@ -560,7 +560,7 @@ static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
  * Values set in this function are mostly for magic MCA, other (functional) MCAs
  * are set later. If all of these registers are later written with proper values
  * for functional MCAs, maybe this can be called just for magic, non-functional
- * ones to save time.
+ * ones to save time, but for now do it in a way the Hostboot does it.
  */
 static void p9n_ddrphy_scom(chiplet_id_t id, int mca_i)
 {
@@ -920,6 +920,13 @@ static void reset_data_bit_enable(chiplet_id_t id, int mca_i)
 }
 
 /* 5 DP16, 8 MCA */
+/*
+ * These tables specify which clock/strobes pins (16-23) of DP16 are used to
+ * capture outgoing/incoming data on which data pins (0-16). Those will
+ * eventually arrive to DIMM as DQS and DQ, respectively. The mapping must be
+ * the same for write and read, but for some reason HW has two separate sets of
+ * registers.
+ */
 /* TODO: after we know how MCAs are numbered we can drop half of x8 table */
 static const uint16_t x4_clk[5] = {0x8640, 0x8640, 0x8640, 0x8640, 0x8400};
 static const uint16_t x8_clk[8][5] = {
@@ -976,6 +983,400 @@ static void reset_clock_enable(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t
 	}
 }
 
+/* This comes from VPD */
+static const uint32_t ATTR_MSS_VPD_MT_VREF_MC_RD[4] = {
+	0x00011cc7,	// 1R in DIMM0 and no DIMM1
+	0x00013d6d,	// 1R in both DIMMs
+	0x00011c48,	// 2R in DIMM0 and no DIMM1
+	0x00014f20,	// 2R in both DIMMs
+};
+
+static void reset_rd_vref(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	int dp;
+	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
+	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
+	if (mca->dimm[0].present && mca->dimm[1].present)
+		vpd_idx++;
+
+	/*       RD_VREF_DVDD * (100000 - ATTR_MSS_VPD_MT_VREF_MC_RD) / RD_VREF_DAC_STEP
+	vref_bf =     12      * (100000 - ATTR_MSS_VPD_MT_VREF_MC_RD) / 6500
+	IOM0.DDRPHY_DP16_RD_VREF_DAC_{0-7}_P0_{0-3},
+	IOM0.DDRPHY_DP16_RD_VREF_DAC_{0-3}_P0_4 =     // only half of last DP16 is used
+	      [49-55] BIT0_VREF_DAC = vref_bf
+	      [57-63] BIT1_VREF_DAC = vref_bf
+	*/
+	for (dp = 0; dp < 5; dp++) {
+		uint64_t vref_bf = 12 * (100000 - ATTR_MSS_VPD_MT_VREF_MC_RD[vpd_idx]) / 6500;
+
+		/* SCOM addresses are not regular for DAC, so no inner loop. */
+		dp_mca_and_or(id, dp, mca_i, 0x800000160701103F,  // DAC_0
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x8000001F0701103F,  // DAC_1
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C00701103F,  // DAC_2
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C10701103F,  // DAC_3
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		if (dp == 4) break;
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C20701103F,  // DAC_4
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C30701103F,  // DAC_5
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C40701103F,  // DAC_6
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+
+		dp_mca_and_or(id, dp, mca_i, 0x800000C50701103F,  // DAC_7
+		              ~(PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63)),
+		              PPC_SHIFT(vref_bf, 55) | PPC_SHIFT(vref_bf, 63));
+	}
+
+	/* IOM0.DDRPHY_DP16_RD_VREF_CAL_EN_P0_{0-4}
+	      [48-63] VREF_CAL_EN = 0xffff          // enable = 0xffff, disable = 0x0000
+	*/
+	for (dp = 0; dp < 5; dp++) {
+		/* Is it safe to set this before VREF_DAC? If yes, may use one loop for both */
+		dp_mca_and_or(id, dp, mca_i, 0x800000760701103F, 0, PPC_BITMASK(48, 63));
+	}
+}
+
+static void pc_reset(chiplet_id_t id, int mca_i)
+{
+	/* These are from VPD */
+	uint64_t ATTR_MSS_EFF_DPHY_WLO = mem_data.speed == 1866 ? 1 : 2;
+	uint64_t ATTR_MSS_EFF_DPHY_RLO = mem_data.speed == 1866 ? 4 :
+	                                 mem_data.speed == 2133 ? 5 :
+	                                 mem_data.speed == 2400 ? 6 : 7;
+
+	/* IOM0.DDRPHY_PC_CONFIG0_P0 has been reset in p9n_ddrphy_scom() */
+
+	/* IOM0.DDRPHY_PC_CONFIG1_P0 =
+	      [48-51] WRITE_LATENCY_OFFSET =  ATTR_MSS_EFF_DPHY_WLO
+	      [52-55] READ_LATENCY_OFFSET =   ATTR_MSS_EFF_DPHY_RLO
+			+1: if 2N mode (ATTR_MSS_VPD_MR_MC_2N_MODE_AUTOSET, ATTR_MSS_MRW_DRAM_2N_MODE)  // Gear-down mode in JEDEC
+	      // Assume no LRDIMM
+	      [59-61] MEMORY_TYPE =           0x5     // 0x7 for LRDIMM
+	      [62]    DDR4_LATENCY_SW =       1
+	*/
+	mca_and_or(id, mca_i, 0x8000C00D0701103F,
+	           ~(PPC_BITMASK(48, 55) | PPC_BITMASK(59, 62)),
+	           PPC_SHIFT(ATTR_MSS_EFF_DPHY_WLO, 51) | PPC_SHIFT(ATTR_MSS_EFF_DPHY_RLO, 55) |
+	           PPC_SHIFT(0x5, 61) | PPC_BIT(62));
+
+	/* IOM0.DDRPHY_PC_ERROR_STATUS0_P0 =
+	      [all]   0
+	*/
+	mca_and_or(id, mca_i, 0x8000C0120701103F, 0, 0);
+
+	/* IOM0.DDRPHY_PC_INIT_CAL_ERROR_P0 =
+	      [all]   0
+	*/
+	mca_and_or(id, mca_i, 0x8000C0180701103F, 0, 0);
+}
+
+static void wc_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	/* IOM0.DDRPHY_WC_CONFIG0_P0 =
+	      [all]   0
+	      // BUG? Mismatch between comment (-,-), code (+,+) and docs (-,+) for operations inside 'max'
+	      [48-55] TWLO_TWLOE =        12 + max((twldqsen - tmod), (twlo + twlow))
+				   + longest DQS delay in clocks (rounded up) + longest DQ delay in clocks (rounded up)
+	      [56]    WL_ONE_DQS_PULSE =  1
+	      [57-62] FW_WR_RD =          0x20      // "# dd0 = 17 clocks, now 32 from SWyatt"
+	      [63]    CUSTOM_INIT_WRITE = 1         // set to a 1 to get proper values for RD VREF
+	*/
+	/*
+	 * tMOD = max(24 nCK, 15 ns) = 24 nCK for all supported speed bins
+	 * tWLDQSEN = 25 nCK
+	 * tWLO = 0 - 9.5 ns, Hostboot uses ATTR_MSS_EFF_DPHY_WLO
+	 * tWLOE = 0 - 2 ns, Hostboot uses 2 ns
+	 * Longest DQ and DQS delays are both equal 1 nCK.
+	 */
+	uint64_t tWLO = mem_data.speed == 1866 ? 1 : 2;
+	uint64_t tWLOE = ns_to_nck(2);
+	/*
+	 * Use the version from the code, it may be longer than necessary but it
+	 * works. Note that MAX() always expands to 25 + 24 = 49, which means that
+	 * we can just write 'tWLO_tWLOE = 63'. Leaving full version below, it will
+	 * be easier to fix.
+	 */
+	uint64_t tWLO_tWLOE = 12 + MAX((25 + 24), (tWLO + tWLOE)) + 1 + 1;
+	mca_and_or(id, mca_i, 0x8000CC000701103F, 0,
+	           PPC_SHIFT(tWLO_tWLOE, 55) | PPC_BIT(56) |
+	           PPC_SHIFT(0x20, 62) | PPC_BIT(63));
+
+	/* IOM0.DDRPHY_WC_CONFIG1_P0 =
+	      [all]   0
+	      [48-51] BIG_STEP =          7
+	      [52-54] SMALL_STEP =        0
+	      [55-60] WR_PRE_DLY =        0x2a (42)
+	*/
+	mca_and_or(id, mca_i, 0x8000CC010701103F, 0,
+	           PPC_SHIFT(7, 51) | PPC_SHIFT(0x2A, 60));
+
+	/* IOM0.DDRPHY_WC_CONFIG2_P0 =
+	      [all]   0
+	      [48-51] NUM_VALID_SAMPLES = 5
+	      [52-57] FW_RD_WR =          max(tWTR_S + 11, AL + tRTP + 3)
+	      [58-61] IPW_WR_WR =         5     // results in 24 clock cycles
+	*/
+	/* There is no Additive Latency. */
+	mca_and_or(id, mca_i, 0x8000CC020701103F, 0,
+	           PPC_SHIFT(5, 51) | PPC_SHIFT(5, 61) |
+	           PPC_SHIFT(MAX(mca->nwtr_s + 11, mem_data.nrtp + 3), 57));
+
+	/* IOM0.DDRPHY_WC_CONFIG3_P0 =
+	      [all]   0
+	      [55-60] MRS_CMD_DQ_OFF =    0x3f
+	*/
+	mca_and_or(id, mca_i, 0x8000CC050701103F, 0, PPC_SHIFT(0x3F, 60));
+
+	/* IOM0.DDRPHY_WC_RTT_WR_SWAP_ENABLE_P0    // 0x8000CC060701103F
+	      [48]    WL_ENABLE_RTT_SWAP =            0
+	      [49]    WR_CTR_ENABLE_RTT_SWAP =        0
+	      [50-59] WR_CTR_VREF_COUNTER_RESET_VAL = 150ns in clock cycles  // JESD79-4C Table 67
+	*/
+	mca_and_or(id, mca_i, 0x8000CC060701103F, ~PPC_BITMASK(48, 59),
+	           PPC_SHIFT(ns_to_nck(150), 59));
+}
+
+static void rc_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	/* IOM0.DDRPHY_RC_CONFIG0_P0
+	      [all]   0
+	      [48-51] GLOBAL_PHY_OFFSET =
+			  MSS_FREQ_EQ_1866: 12
+			  MSS_FREQ_EQ_2133: 12
+			  MSS_FREQ_EQ_2400: 13
+			  MSS_FREQ_EQ_2666: 13
+	      [62]    PERFORM_RDCLK_ALIGN = 1
+	*/
+	uint64_t global_phy_offset = mem_data.speed < 2400 ? 12 : 13;
+	mca_and_or(id, mca_i, 0x8000C8000701103F, 0,
+	           PPC_SHIFT(global_phy_offset, 51) | PPC_BIT(62));
+
+	/* IOM0.DDRPHY_RC_CONFIG1_P0
+	      [all]   0
+	*/
+	mca_and_or(id, mca_i, 0x8000C8010701103F, 0, 0);
+
+	/* IOM0.DDRPHY_RC_CONFIG2_P0
+	      [all]   0
+	      [48-52] CONSEC_PASS = 8
+	      [57-58] 3                   // not documented, BURST_WINDOW?
+	*/
+	mca_and_or(id, mca_i, 0x8000C8020701103F, 0,
+	           PPC_SHIFT(8, 52) | PPC_SHIFT(3, 58));
+
+	/* IOM0.DDRPHY_RC_CONFIG3_P0
+	      [all]   0
+	      [51-54] COARSE_CAL_STEP_SIZE = 4  // 5/128
+	*/
+	mca_and_or(id, mca_i, 0x8000C8070701103F, 0, PPC_SHIFT(4, 54));
+
+	/* IOM0.DDRPHY_RC_RDVREF_CONFIG0_P0 =
+	      [all]   0
+	      [48-63] WAIT_TIME =
+			  0xffff          // as slow as possible, or use calculation from vref_guess_time(), or:
+			  MSS_FREQ_EQ_1866: 0x0804
+			  MSS_FREQ_EQ_2133: 0x092a
+			  MSS_FREQ_EQ_2400: 0x0a50
+			  MSS_FREQ_EQ_2666: 0x0b74    // use this value for all freqs maybe?
+	*/
+	uint64_t wait_time = mem_data.speed == 1866 ? 0x0804 :
+	                     mem_data.speed == 2133 ? 0x092A :
+	                     mem_data.speed == 2400 ? 0x0A50 : 0x0B74;
+	mca_and_or(id, mca_i, 0x8000C8090701103F, 0, PPC_SHIFT(wait_time, 63));
+
+	/* IOM0.DDRPHY_RC_RDVREF_CONFIG1_P0 =
+	      [all]   0
+	      [48-55] CMD_PRECEDE_TIME =  (AL + CL + 15)
+	      [56-59] MPR_LOCATION =      4     // "From R. King."
+	*/
+	mca_and_or(id, mca_i, 0x8000C80A0701103F, 0,
+	           PPC_SHIFT(mca->cl + 15, 55) | PPC_SHIFT(4, 59));
+}
+
+static inline int log2_up(uint32_t x)
+{
+	int lz;
+	asm("cntlzd %0, %1" : "=r"(lz) : "r"((x << 1) - 1));
+	return 63 - lz;
+}
+
+/*
+ * Warning: this is not a 1:1 copy from VPD.
+ *
+ * VPD uses uint8_t [2][2][4] table, indexed as [MCA][DIMM][RANK]. It tries to
+ * be generic, but for RDIMMs only 2 ranks are supported. This format also
+ * allows for different settings across MCAs, but in Talos they are identical.
+ *
+ * Tables below are uint8_t [4][2][2], indexed as [rank config.][MCA][RANK].
+ *
+ * There are 4 rank configurations, see comments in ATTR_MSS_VPD_MT_VREF_MC_RD.
+ */
+static const uint8_t ATTR_MSS_VPD_MT_ODT_RD[4][2][2] = {
+	{ {0x00, 0x00}, {0x00, 0x00} },	// 1R in DIMM0 and no DIMM1
+	{ {0x08, 0x00}, {0x80, 0x00} },	// 1R in both DIMMs
+	{ {0x00, 0x00}, {0x00, 0x00} },	// 2R in DIMM0 and no DIMM1
+	{ {0x40, 0x80}, {0x04, 0x08} },	// 2R in both DIMMs
+};
+
+static const uint8_t ATTR_MSS_VPD_MT_ODT_WR[4][2][2] = {
+	{ {0x80, 0x00}, {0x00, 0x00} },	// 1R in DIMM0 and no DIMM1
+	{ {0x88, 0x00}, {0x88, 0x00} },	// 1R in both DIMMs
+	{ {0x40, 0x80}, {0x00, 0x00} },	// 2R in DIMM0 and no DIMM1
+	{ {0xC0, 0xC0}, {0x0C, 0x0C} },	// 2R in both DIMMs
+};
+
+static void seq_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
+	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
+	if (mca->dimm[0].present && mca->dimm[1].present)
+		vpd_idx++;
+
+
+	/* IOM0.DDRPHY_SEQ_CONFIG0_P0 =
+	      [all]   0
+	      [49]    TWO_CYCLE_ADDR_EN =
+			  2N mode:                1
+			  else:                   0
+	      [54]    DELAYED_PAR = 1
+	      [62]    PAR_A17_MASK =
+			  16Gb x4 configuration:  0
+			  else:                   1
+	*/
+	uint64_t par_a17_mask = PPC_BIT(62);
+	if ((mca->dimm[0].width == WIDTH_x4 && mca->dimm[0].density == DENSITY_16Gb) ||
+	    (mca->dimm[1].width == WIDTH_x4 && mca->dimm[1].density == DENSITY_16Gb))
+		par_a17_mask = 0;
+
+	mca_and_or(id, mca_i, 0x8000C4020701103F, 0,
+	           PPC_BIT(54) | PPC_SHIFT(par_a17_mask, 62));
+
+	/* All log2 values in timing registers are rounded up. */
+	/* IOM0.DDRPHY_SEQ_MEM_TIMING_PARAM0_P0 =
+	      [all]   0
+	      [48-51] TMOD_CYCLES = 5           // log2(max(tMRD, tMOD)) = log2(24), JEDEC tables 169 and 170 and section 13.5
+	      [52-55] TRCD_CYCLES = log2(tRCD)
+	      [56-59] TRP_CYCLES =  log2(tRP)
+	      [60-63] TRFC_CYCLES = log2(tRFC)
+	*/
+	mca_and_or(id, mca_i, 0x8000C4120701103F, 0,
+	           PPC_SHIFT(5, 51) | PPC_SHIFT(log2_up(mca->nrcd), 55) |
+	           PPC_SHIFT(log2_up(mca->nrp), 59) | PPC_SHIFT(log2_up(mca->nrfc), 63));
+
+	/* IOM0.DDRPHY_SEQ_MEM_TIMING_PARAM1_P0 =
+	      [all]   0
+	      [48-51] TZQINIT_CYCLES =  10      // log2(1024), JEDEC tables 169 and 170
+	      [52-55] TZQCS_CYCLES =    7       // log2(128), JEDEC tables 169 and 170
+	      [56-59] TWLDQSEN_CYCLES = 5       // log2(25) rounded up, JEDEC tables 169 and 170
+	      [60-63] TWRMRD_CYCLES =   6       // log2(40) rounded up, JEDEC tables 169 and 170
+	*/
+	mca_and_or(id, mca_i, 0x8000C4130701103F, 0,
+	           PPC_SHIFT(10, 51) | PPC_SHIFT(7, 55) |
+	           PPC_SHIFT(5, 59) | PPC_SHIFT(6, 63));
+
+	/* IOM0.DDRPHY_SEQ_MEM_TIMING_PARAM2_P0 =
+	      [all]   0
+	      [48-51] TODTLON_OFF_CYCLES =  log2(CWL + AL + PL - 2)
+	      [52-63] =                     0x777     // "Reset value of SEQ_TIMING2 is lucky 7's"
+	*/
+	/* AL and PL are disabled (0) */
+	mca_and_or(id, mca_i, 0x8000C4140701103F, 0,
+	           PPC_SHIFT(log2_up(mem_data.cwl - 2), 51) | PPC_SHIFT(0x777, 63));
+
+	/* IOM0.DDRPHY_SEQ_RD_WR_DATA0_P0 =
+	      [all]   0
+	      [48-63] RD_RW_DATA_REG0 = 0xaa00
+	*/
+	mca_and_or(id, mca_i, 0x8000C4000701103F, 0, PPC_SHIFT(0xAA00, 63));
+
+	/* IOM0.DDRPHY_SEQ_RD_WR_DATA1_P0 =
+	      [all]   0
+	      [48-63] RD_RW_DATA_REG1 = 0x00aa
+	*/
+	mca_and_or(id, mca_i, 0x8000C4010701103F, 0, PPC_SHIFT(0x00AA, 63));
+
+	/*
+	 * For all registers below, assume RDIMM (max 2 ranks).
+	 *
+	 * Remember that VPD data layout is different, code will be slightly
+	 * different than the comments.
+	 */
+#define F(x)	(((x >> 4) & 0xC) | ((x >> 2) & 0x3))
+
+	/* IOM0.DDRPHY_SEQ_ODT_RD_CONFIG0_P0 =
+	      F(X) = (((X >> 4) & 0xc) | ((X >> 2) & 0x3))    // Bits 0,1,4,5 of X, see also MC01.PORT0.SRQ.MBA_FARB2Q
+	      [all]   0
+	      [48-51] ODT_RD_VALUES0 = F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][0][0])
+	      [56-59] ODT_RD_VALUES1 = F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][0][1])
+	*/
+	mca_and_or(id, mca_i, 0x8000C40E0701103F, 0,
+	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][0][0]), 51) |
+	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][0][1]), 59));
+
+	/* IOM0.DDRPHY_SEQ_ODT_RD_CONFIG1_P0 =
+	      F(X) = (((X >> 4) & 0xc) | ((X >> 2) & 0x3))    // Bits 0,1,4,5 of X, see also MC01.PORT0.SRQ.MBA_FARB2Q
+	      [all]   0
+	      [48-51] ODT_RD_VALUES0 =
+			count_dimm(MCA) == 2: F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][1][0])
+			count_dimm(MCA) != 2: F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][0][2])
+	      [56-59] ODT_RD_VALUES1 =
+			count_dimm(MCA) == 2: F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][1][1])
+			count_dimm(MCA) != 2: F(ATTR_MSS_VPD_MT_ODT_RD[index(MCA)][0][3])
+	*/
+	/* 2 DIMMs -> odd vpd_idx */
+	uint64_t val = 0;
+	if (vpd_idx % 2)
+		val = PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][0]), 51) |
+		      PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][1]), 59);
+
+	mca_and_or(id, mca_i, 0x8000C40F0701103F, 0, val);
+
+
+	/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
+	      F(X) = (((X >> 4) & 0xc) | ((X >> 2) & 0x3))    // Bits 0,1,4,5 of X, see also MC01.PORT0.SRQ.MBA_FARB2Q
+	      [all]   0
+	      [48-51] ODT_WR_VALUES0 = F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][0])
+	      [56-59] ODT_WR_VALUES1 = F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][1])
+	*/
+	mca_and_or(id, mca_i, 0x8000C40A0701103F, 0,
+	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][0]), 51) |
+	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][1]), 59));
+
+	/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =     // 0x8000C40B0701103F
+	      F(X) = (((X >> 4) & 0xc) | ((X >> 2) & 0x3))    // Bits 0,1,4,5 of X, see also MC01.PORT0.SRQ.MBA_FARB2Q
+	      [all]   0
+	      [48-51] ODT_WR_VALUES2 =
+			count_dimm(MCA) == 2: F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][1][0])
+			count_dimm(MCA) != 2: F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][2])
+	      [56-59] ODT_WR_VALUES3 =
+			count_dimm(MCA) == 2: F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][1][1])
+			count_dimm(MCA) != 2: F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][3])
+	*/
+	val = 0;
+	if (vpd_idx % 2)
+		val = PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][1][0]), 51) |
+		      PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][1][1]), 59);
+#undef F
+}
+
 static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 {
 	/* Hostboot here sets strength, we did it in p9n_ddrphy_scom(). */
@@ -988,9 +1389,18 @@ static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 
 	reset_clock_enable(id, mcs_i, mca_i, mca);
 
-	//reset_rd_vref();
+	reset_rd_vref(id, mca_i, mca);
+
+	pc_reset(id, mca_i);
+
+	wc_reset(id, mca_i, mca);
+
+	rc_reset(id, mca_i, mca);
+
+	seq_reset(id, mca_i, mca);
 	// ... TBD ...
 }
+
 /*
  * 13.8 mss_scominit: Perform scom inits to MC and PHY
  *

@@ -121,9 +121,6 @@ static void prepare_dimm_data(void)
 	 * and choose the highest value. For the range supported by the platform we
 	 * can check MTB only.
 	 *
-	 * TODO1: maximum for 2 DIMMs on one port (channel) is 2400 MT/s, this loop
-	 * doesn't check for that.
-	 *
 	 * TODO2: check if we can have different frequencies across MCSs.
 	 */
 	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
@@ -131,6 +128,11 @@ static void prepare_dimm_data(void)
 			mcs = i / DIMMS_PER_MCS;
 			mca = (i % DIMMS_PER_MCS) / MCA_PER_MCS;
 			int dimm_idx = i % 2;	// (i % DIMMS_PER_MCS) % MCA_PER_MCS
+
+
+			/* Maximum for 2 DIMMs on one port (channel, MCA) is 2400 MT/s */
+			if (tckmin < 0x07 && mem_data.mcs[mcs].mca[mca].functional)
+				tckmin = 0x07;
 
 			mem_data.mcs[mcs].functional = true;
 			mem_data.mcs[mcs].mca[mca].functional = true;

@@ -1225,7 +1225,7 @@ static inline int log2_up(uint32_t x)
  * be generic, but for RDIMMs only 2 ranks are supported. This format also
  * allows for different settings across MCAs, but in Talos they are identical.
  *
- * Tables below are uint8_t [4][2][2], indexed as [rank config.][MCA][RANK].
+ * Tables below are uint8_t [4][2][2], indexed as [rank config.][DIMM][RANK].
  *
  * There are 4 rank configurations, see comments in ATTR_MSS_VPD_MT_VREF_MC_RD.
  */
@@ -1377,6 +1377,1696 @@ static void seq_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
 #undef F
 }
 
+static void reset_ac_boost_cntl(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	/* IOM0.DDRPHY_DP16_ACBOOST_CTL_BYTE{0,1}_P0_{0,1,2,3,4} =
+	    // For all of the AC Boost attributes, they're laid out in the uint32_t as such:
+	    // Bit 0-2   = DP16 Block 0 (DQ Bits 0-7)       BYTE0_P0_0
+	    // Bit 3-5   = DP16 Block 0 (DQ Bits 8-15)      BYTE1_P0_0
+	    // Bit 6-8   = DP16 Block 1 (DQ Bits 0-7)       BYTE0_P0_1
+	    // Bit 9-11  = DP16 Block 1 (DQ Bits 8-15)      BYTE1_P0_1
+	    // Bit 12-14 = DP16 Block 2 (DQ Bits 0-7)       BYTE0_P0_2
+	    // Bit 15-17 = DP16 Block 2 (DQ Bits 8-15)      BYTE1_P0_2
+	    // Bit 18-20 = DP16 Block 3 (DQ Bits 0-7)       BYTE0_P0_3
+	    // Bit 21-23 = DP16 Block 3 (DQ Bits 8-15)      BYTE1_P0_3
+	    // Bit 24-26 = DP16 Block 4 (DQ Bits 0-7)       BYTE0_P0_4
+	    // Bit 27-29 = DP16 Block 4 (DQ Bits 8-15)      BYTE1_P0_4
+	    [all]   0?    // function does read prev values from SCOM but then overwrites all non-const-0 fields. Why bother?
+	    [48-50] S{0,1}ACENSLICENDRV_DC = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_ACBOOST_WR_DOWN
+	    [51-53] S{0,1}ACENSLICENDRV_DC = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_ACBOOST_WR_UP
+	    [54-56] S{0,1}ACENSLICENDRV_DC = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_ACBOOST_RD_UP
+	*/
+	/*
+	 * Both ATTR_MSS_VPD_MT_MC_DQ_ACBOOST_WR_* have a value of 0x24924924
+	 * for all rank configurations (two copies for two MCA indices to be exact),
+	 * meaning that all 3b fields are 0b001. ATTR_MSS_VPD_MT_MC_DQ_ACBOOST_RD_UP
+	 * equals 0. Last DP16 doesn't require special handling, all DQ bits are
+	 * configured.
+	 *
+	 * Write these fields explicitly instead of shifting and masking for better
+	 * readability.
+	 */
+	for (dp = 0; dp < 5; dp++) {
+		dp_mca_and_or(id, dp, mca_i, 0x800000220701103F, ~PPC_BITMASK(48, 56),
+		              PPC_SHIFT(1, 50) | PPC_SHIFT(1, 53));
+		dp_mca_and_or(id, dp, mca_i, 0x800000230701103F, ~PPC_BITMASK(48, 56),
+		              PPC_SHIFT(1, 50) | PPC_SHIFT(1, 53));
+	}
+}
+
+static void reset_ctle_cntl(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	/* IOM0.DDRPHY_DP16_CTLE_CTL_BYTE{0,1}_P0_{0,1,2,3,4} =        // 0x8000002{0,1}0701103F, +0x0400_0000_0000
+	    // For the capacitance CTLE attributes, they're laid out in the uint64_t as such. The resitance
+	    // attributes are the same, but 3 bits long. Notice that DP Block X Nibble 0 is DQ0:3,
+	    // Nibble 1 is DQ4:7, Nibble 2 is DQ8:11 and 3 is DQ12:15.
+	    // Bit 0-1   = DP16 Block 0 Nibble 0     Bit 16-17 = DP16 Block 2 Nibble 0     Bit 32-33 = DP16 Block 4 Nibble 0
+	    // Bit 2-3   = DP16 Block 0 Nibble 1     Bit 18-19 = DP16 Block 2 Nibble 1     Bit 34-35 = DP16 Block 4 Nibble 1
+	    // Bit 4-5   = DP16 Block 0 Nibble 2     Bit 20-21 = DP16 Block 2 Nibble 2     Bit 36-37 = DP16 Block 4 Nibble 2
+	    // Bit 6-7   = DP16 Block 0 Nibble 3     Bit 22-23 = DP16 Block 2 Nibble 3     Bit 38-39 = DP16 Block 4 Nibble 3
+	    // Bit 8-9   = DP16 Block 1 Nibble 0     Bit 24-25 = DP16 Block 3 Nibble 0
+	    // Bit 10-11 = DP16 Block 1 Nibble 1     Bit 26-27 = DP16 Block 3 Nibble 1
+	    // Bit 12-13 = DP16 Block 1 Nibble 2     Bit 28-29 = DP16 Block 3 Nibble 2
+	    // Bit 14-15 = DP16 Block 1 Nibble 3     Bit 30-31 = DP16 Block 3 Nibble 3
+	    [48-49] NIB_{0,2}_DQSEL_CAP = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_CTLE_CAP
+	    [53-55] NIB_{0,2}_DQSEL_RES = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_CTLE_RES
+	    [56-57] NIB_{1,3}_DQSEL_CAP = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_CTLE_CAP
+	    [61-63] NIB_{1,3}_DQSEL_RES = appropriate bits from ATTR_MSS_VPD_MT_MC_DQ_CTLE_RES
+	*/
+	/*
+	 * For all rank configurations and both MCAs, ATTR_MSS_VPD_MT_MC_DQ_CTLE_CAP
+	 * is 0x5555555555000000 (so every 2b field is 0b01) and *_RES equals
+	 * 0xb6db6db6db6db6d0 (every 3b field is 0b101 = 5).
+	 */
+	for (dp = 0; dp < 5; dp++) {
+		dp_mca_and_or(id, dp, mca_i, 0x800000200701103F,
+		              ~(PPC_BITMASK(48, 49) | PPC_BITMASK(53, 57) | PPC_BITMASK(61, 63)),
+		              PPC_SHIFT(1, 49) | PPC_SHIFT(5, 55) |
+		              PPC_SHIFT(1, 57) | PPC_SHIFT(5, 63));
+		dp_mca_and_or(id, dp, mca_i, 0x800000210701103F,
+		              ~(PPC_BITMASK(48, 49) | PPC_BITMASK(53, 57) | PPC_BITMASK(61, 63)),
+		              PPC_SHIFT(1, 49) | PPC_SHIFT(5, 55) |
+		              PPC_SHIFT(1, 57) | PPC_SHIFT(5, 63));
+	}
+}
+
+/*
+ * 43 tables for 43 signals. These probably are platform specific so in the
+ * final version we should read this from VPD partition. Hardcoding it will make
+ * one less possible fault point - compiler will warn about unused variables.
+ *
+ * Also, VPD layout may change. Right npw Talos uses first version of layout,
+ * but there is a newer version with one additional field __in the middle__ of
+ * the structure.
+ */
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN0[][MCA_PER_MCS] = {
+	{ 0x1b, 0x1d },	// J0 - PROC 0 MCS 0, 1 DIMM, 1866 MT/s
+	{ 0x24, 0x15 },	// J1 - PROC 0 MCS 1, 1 DIMM, 1866 MT/s
+	{ 0x22, 0x18 },	// J2 - PROC 1 MCS 0, 1 DIMM, 1866 MT/s
+	{ 0x1f, 0x14 },	// J3 - PROC 1 MCS 1, 1 DIMM, 1866 MT/s
+	{ 0x15, 0x17 },	// J4 - PROC 0 MCS 0, 2 DIMMs, 1866 MT/s
+	{ 0x1d, 0x10 },	// J5
+	{ 0x1c, 0x12 },	// J6
+	{ 0x1a, 0x0e },	// J7 - PROC 1 MCS 1, 2 DIMMs, 1866 MT/s
+	{ 0x1b, 0x1d },	// J8 - PROC 0 MCS 0, 1 DIMM, 2133 MT/s
+	{ 0x24, 0x15 },	// J9
+	{ 0x22, 0x18 },	// JA
+	{ 0x1f, 0x14 },	// JB - PROC 1 MCS 1, 1 DIMM, 2133 MT/s
+	{ 0x15, 0x17 },	// JC - PROC 0 MCS 0, 2 DIMMs, 2133 MT/s
+	{ 0x1d, 0x10 },	// JD
+	{ 0x1c, 0x12 },	// JE
+	{ 0x1a, 0x0e },	// JF - PROC 1 MCS 1, 2 DIMMs, 2133 MT/s
+	{ 0x1b, 0x1d },	// JG - PROC 0 MCS 0, 1 DIMM, 2400 MT/s
+	{ 0x24, 0x15 },	// JH
+	{ 0x22, 0x18 },	// JI
+	{ 0x1f, 0x14 },	// JJ - PROC 1 MCS 1, 1 DIMM, 2400 MT/s
+	{ 0x18, 0x19 },	// JK - PROC 0 MCS 0, 2 DIMMs, 2400 MT/s
+	{ 0x21, 0x12 },	// JL
+	{ 0x1f, 0x14 },	// JM
+	{ 0x1c, 0x11 },	// JN - PROC 1 MCS 1, 2 DIMMs, 2400 MT/s
+	{ 0x1f, 0x20 },	// JO - PROC 0 MCS 0, 1 DIMM, 2666 MT/s
+	{ 0x2a, 0x19 },	// JP
+	{ 0x26, 0x1a },	// JQ
+	{ 0x23, 0x18 },	// JR - PROC 1 MCS 1, 1 DIMM, 2666 MT/s
+	// 2 DIMMs, 2666 MT/s is not supported. This is ensured by prepare_dimm_data()
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_WEN_A14[][MCA_PER_MCS] = {
+	{ 0x14, 0x18 },	// J0
+	{ 0x11, 0x0e },	// J1
+	{ 0x1b, 0x13 },	// J2
+	{ 0x10, 0x0b },	// J3
+	{ 0x12, 0x15 },	// J4
+	{ 0x0f, 0x0c },	// J5
+	{ 0x18, 0x11 },	// J6
+	{ 0x0f, 0x09 },	// J7
+	{ 0x14, 0x18 },	// J8
+	{ 0x11, 0x0e },	// J9
+	{ 0x1b, 0x13 },	// JA
+	{ 0x10, 0x0b },	// JB
+	{ 0x12, 0x15 },	// JC
+	{ 0x0f, 0x0c },	// JD
+	{ 0x18, 0x11 },	// JE
+	{ 0x0f, 0x09 },	// JF
+	{ 0x14, 0x18 },	// JG
+	{ 0x11, 0x0e },	// JH
+	{ 0x1b, 0x13 },	// JI
+	{ 0x10, 0x0b },	// JJ
+	{ 0x14, 0x17 },	// JK
+	{ 0x11, 0x0e },	// JL
+	{ 0x1b, 0x13 },	// JM
+	{ 0x11, 0x0b },	// JN
+	{ 0x17, 0x19 },	// JO
+	{ 0x14, 0x10 },	// JP
+	{ 0x1e, 0x15 },	// JQ
+	{ 0x12, 0x0c },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT1[][MCA_PER_MCS] = {
+	{ 0x1e, 0x18 },	// J0
+	{ 0x1f, 0x12 },	// J1
+	{ 0x1f, 0x19 },	// J2
+	{ 0x1e, 0x18 },	// J3
+	{ 0x0f, 0x11 },	// J4
+	{ 0x16, 0x08 },	// J5
+	{ 0x0e, 0x16 },	// J6
+	{ 0x10, 0x0e },	// J7
+	{ 0x1e, 0x18 },	// J8
+	{ 0x1f, 0x12 },	// J9
+	{ 0x1f, 0x19 },	// JA
+	{ 0x1e, 0x18 },	// JB
+	{ 0x0f, 0x11 },	// JC
+	{ 0x16, 0x08 },	// JD
+	{ 0x0e, 0x16 },	// JE
+	{ 0x10, 0x0e },	// JF
+	{ 0x1e, 0x18 },	// JG
+	{ 0x1f, 0x12 },	// JH
+	{ 0x1f, 0x19 },	// JI
+	{ 0x1e, 0x18 },	// JJ
+	{ 0x10, 0x12 },	// JK
+	{ 0x17, 0x08 },	// JL
+	{ 0x0f, 0x18 },	// JM
+	{ 0x11, 0x0f },	// JN
+	{ 0x23, 0x1b },	// JO
+	{ 0x25, 0x15 },	// JP
+	{ 0x23, 0x1c },	// JQ
+	{ 0x22, 0x1c },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C0[][MCA_PER_MCS] = {
+	{ 0x11, 0x12 },	// J0
+	{ 0x11, 0x08 },	// J1
+	{ 0x13, 0x15 },	// J2
+	{ 0x0e, 0x0d },	// J3
+	{ 0x0f, 0x11 },	// J4
+	{ 0x0f, 0x07 },	// J5
+	{ 0x11, 0x12 },	// J6
+	{ 0x0d, 0x0b },	// J7
+	{ 0x11, 0x12 },	// J8
+	{ 0x11, 0x08 },	// J9
+	{ 0x13, 0x15 },	// JA
+	{ 0x0e, 0x0d },	// JB
+	{ 0x0f, 0x11 },	// JC
+	{ 0x0f, 0x07 },	// JD
+	{ 0x11, 0x12 },	// JE
+	{ 0x0d, 0x0b },	// JF
+	{ 0x11, 0x12 },	// JG
+	{ 0x11, 0x08 },	// JH
+	{ 0x13, 0x15 },	// JI
+	{ 0x0e, 0x0d },	// JJ
+	{ 0x11, 0x12 },	// JK
+	{ 0x11, 0x07 },	// JL
+	{ 0x13, 0x15 },	// JM
+	{ 0x0f, 0x0d },	// JN
+	{ 0x13, 0x13 },	// JO
+	{ 0x14, 0x08 },	// JP
+	{ 0x15, 0x17 },	// JQ
+	{ 0x10, 0x0e },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA1[][MCA_PER_MCS] = {
+	{ 0x14, 0x13 },	// J0
+	{ 0x12, 0x0a },	// J1
+	{ 0x19, 0x0f },	// J2
+	{ 0x19, 0x0d },	// J3
+	{ 0x12, 0x11 },	// J4
+	{ 0x10, 0x09 },	// J5
+	{ 0x16, 0x0d },	// J6
+	{ 0x17, 0x0b },	// J7
+	{ 0x14, 0x13 },	// J8
+	{ 0x12, 0x0a },	// J9
+	{ 0x19, 0x0f },	// JA
+	{ 0x19, 0x0d },	// JB
+	{ 0x12, 0x11 },	// JC
+	{ 0x10, 0x09 },	// JD
+	{ 0x16, 0x0d },	// JE
+	{ 0x17, 0x0b },	// JF
+	{ 0x14, 0x13 },	// JG
+	{ 0x12, 0x0a },	// JH
+	{ 0x19, 0x0f },	// JI
+	{ 0x19, 0x0d },	// JJ
+	{ 0x14, 0x12 },	// JK
+	{ 0x12, 0x0a },	// JL
+	{ 0x19, 0x0f },	// JM
+	{ 0x19, 0x0d },	// JN
+	{ 0x17, 0x14 },	// JO
+	{ 0x15, 0x0b },	// JP
+	{ 0x1b, 0x10 },	// JQ
+	{ 0x1c, 0x0f },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A10[][MCA_PER_MCS] = {
+	{ 0x14, 0x15 },	// J0
+	{ 0x15, 0x10 },	// J1
+	{ 0x19, 0x12 },	// J2
+	{ 0x1a, 0x0e },	// J3
+	{ 0x11, 0x13 },	// J4
+	{ 0x13, 0x0e },	// J5
+	{ 0x16, 0x0f },	// J6
+	{ 0x17, 0x0c },	// J7
+	{ 0x14, 0x15 },	// J8
+	{ 0x15, 0x10 },	// J9
+	{ 0x19, 0x12 },	// JA
+	{ 0x1a, 0x0e },	// JB
+	{ 0x11, 0x13 },	// JC
+	{ 0x13, 0x0e },	// JD
+	{ 0x16, 0x0f },	// JE
+	{ 0x17, 0x0c },	// JF
+	{ 0x14, 0x15 },	// JG
+	{ 0x15, 0x10 },	// JH
+	{ 0x19, 0x12 },	// JI
+	{ 0x1a, 0x0e },	// JJ
+	{ 0x14, 0x14 },	// JK
+	{ 0x16, 0x10 },	// JL
+	{ 0x19, 0x11 },	// JM
+	{ 0x1a, 0x0e },	// JN
+	{ 0x16, 0x16 },	// JO
+	{ 0x19, 0x12 },	// JP
+	{ 0x1c, 0x13 },	// JQ
+	{ 0x1c, 0x10 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT1[][MCA_PER_MCS] = {
+	{ 0x1e, 0x18 },	// J0
+	{ 0x1f, 0x12 },	// J1
+	{ 0x1f, 0x19 },	// J2
+	{ 0x1e, 0x18 },	// J3
+	{ 0x18, 0x14 },	// J4
+	{ 0x19, 0x0d },	// J5
+	{ 0x19, 0x13 },	// J6
+	{ 0x18, 0x12 },	// J7
+	{ 0x1e, 0x18 },	// J8
+	{ 0x1f, 0x12 },	// J9
+	{ 0x1f, 0x19 },	// JA
+	{ 0x1e, 0x18 },	// JB
+	{ 0x18, 0x14 },	// JC
+	{ 0x19, 0x0d },	// JD
+	{ 0x19, 0x13 },	// JE
+	{ 0x18, 0x12 },	// JF
+	{ 0x1e, 0x18 },	// JG
+	{ 0x1f, 0x12 },	// JH
+	{ 0x1f, 0x19 },	// JI
+	{ 0x1e, 0x18 },	// JJ
+	{ 0x1b, 0x14 },	// JK
+	{ 0x1c, 0x0f },	// JL
+	{ 0x1c, 0x16 },	// JM
+	{ 0x1a, 0x15 },	// JN
+	{ 0x23, 0x1b },	// JO
+	{ 0x25, 0x15 },	// JP
+	{ 0x23, 0x1c },	// JQ
+	{ 0x22, 0x1c },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA0[][MCA_PER_MCS] = {
+	{ 0x11, 0x13 },	// J0
+	{ 0x14, 0x0d },	// J1
+	{ 0x17, 0x13 },	// J2
+	{ 0x1a, 0x0a },	// J3
+	{ 0x0f, 0x11 },	// J4
+	{ 0x11, 0x0b },	// J5
+	{ 0x15, 0x11 },	// J6
+	{ 0x17, 0x09 },	// J7
+	{ 0x11, 0x13 },	// J8
+	{ 0x14, 0x0d },	// J9
+	{ 0x17, 0x13 },	// JA
+	{ 0x1a, 0x0a },	// JB
+	{ 0x0f, 0x11 },	// JC
+	{ 0x11, 0x0b },	// JD
+	{ 0x15, 0x11 },	// JE
+	{ 0x17, 0x09 },	// JF
+	{ 0x11, 0x13 },	// JG
+	{ 0x14, 0x0d },	// JH
+	{ 0x17, 0x13 },	// JI
+	{ 0x1a, 0x0a },	// JJ
+	{ 0x12, 0x13 },	// JK
+	{ 0x14, 0x0d },	// JL
+	{ 0x18, 0x13 },	// JM
+	{ 0x1a, 0x0a },	// JN
+	{ 0x14, 0x14 },	// JO
+	{ 0x17, 0x0e },	// JP
+	{ 0x1a, 0x15 },	// JQ
+	{ 0x1c, 0x0b },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A00[][MCA_PER_MCS] = {
+	{ 0x18, 0x16 },	// J0
+	{ 0x17, 0x11 },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x18, 0x14 },	// J3
+	{ 0x15, 0x14 },	// J4
+	{ 0x15, 0x0f },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x16, 0x12 },	// J7
+	{ 0x18, 0x16 },	// J8
+	{ 0x17, 0x11 },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x18, 0x14 },	// JB
+	{ 0x15, 0x14 },	// JC
+	{ 0x15, 0x0f },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x16, 0x12 },	// JF
+	{ 0x18, 0x16 },	// JG
+	{ 0x17, 0x11 },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x18, 0x14 },	// JJ
+	{ 0x18, 0x16 },	// JK
+	{ 0x18, 0x11 },	// JL
+	{ 0x18, 0x12 },	// JM
+	{ 0x19, 0x14 },	// JN
+	{ 0x1c, 0x17 },	// JO
+	{ 0x1b, 0x13 },	// JP
+	{ 0x1a, 0x13 },	// JQ
+	{ 0x1b, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT0[][MCA_PER_MCS] = {
+	{ 0x1d, 0x1d },	// J0
+	{ 0x20, 0x0f },	// J1
+	{ 0x20, 0x1a },	// J2
+	{ 0x20, 0x17 },	// J3
+	{ 0x14, 0x13 },	// J4
+	{ 0x17, 0x0f },	// J5
+	{ 0x16, 0x16 },	// J6
+	{ 0x19, 0x14 },	// J7
+	{ 0x1d, 0x1d },	// J8
+	{ 0x20, 0x0f },	// J9
+	{ 0x20, 0x1a },	// JA
+	{ 0x20, 0x17 },	// JB
+	{ 0x14, 0x13 },	// JC
+	{ 0x17, 0x0f },	// JD
+	{ 0x16, 0x16 },	// JE
+	{ 0x19, 0x14 },	// JF
+	{ 0x1d, 0x1d },	// JG
+	{ 0x20, 0x0f },	// JH
+	{ 0x20, 0x1a },	// JI
+	{ 0x20, 0x17 },	// JJ
+	{ 0x16, 0x14 },	// JK
+	{ 0x19, 0x10 },	// JL
+	{ 0x17, 0x19 },	// JM
+	{ 0x1c, 0x16 },	// JN
+	{ 0x21, 0x20 },	// JO
+	{ 0x25, 0x12 },	// JP
+	{ 0x25, 0x1d },	// JQ
+	{ 0x24, 0x1b },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT0[][MCA_PER_MCS] = {
+	{ 0x1d, 0x1d },	// J0
+	{ 0x20, 0x0f },	// J1
+	{ 0x20, 0x1a },	// J2
+	{ 0x20, 0x17 },	// J3
+	{ 0x17, 0x17 },	// J4
+	{ 0x19, 0x0a },	// J5
+	{ 0x1a, 0x13 },	// J6
+	{ 0x1a, 0x11 },	// J7
+	{ 0x1d, 0x1d },	// J8
+	{ 0x20, 0x0f },	// J9
+	{ 0x20, 0x1a },	// JA
+	{ 0x20, 0x17 },	// JB
+	{ 0x17, 0x17 },	// JC
+	{ 0x19, 0x0a },	// JD
+	{ 0x1a, 0x13 },	// JE
+	{ 0x1a, 0x11 },	// JF
+	{ 0x1d, 0x1d },	// JG
+	{ 0x20, 0x0f },	// JH
+	{ 0x20, 0x1a },	// JI
+	{ 0x20, 0x17 },	// JJ
+	{ 0x1a, 0x19 },	// JK
+	{ 0x1d, 0x0c },	// JL
+	{ 0x1d, 0x16 },	// JM
+	{ 0x1c, 0x14 },	// JN
+	{ 0x21, 0x20 },	// JO
+	{ 0x25, 0x12 },	// JP
+	{ 0x25, 0x1d },	// JQ
+	{ 0x24, 0x1b },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_CASN_A15[][MCA_PER_MCS] = {
+	{ 0x17, 0x12 },	// J0
+	{ 0x17, 0x15 },	// J1
+	{ 0x1b, 0x12 },	// J2
+	{ 0x1c, 0x13 },	// J3
+	{ 0x14, 0x11 },	// J4
+	{ 0x14, 0x12 },	// J5
+	{ 0x18, 0x10 },	// J6
+	{ 0x1a, 0x11 },	// J7
+	{ 0x17, 0x12 },	// J8
+	{ 0x17, 0x15 },	// J9
+	{ 0x1b, 0x12 },	// JA
+	{ 0x1c, 0x13 },	// JB
+	{ 0x14, 0x11 },	// JC
+	{ 0x14, 0x12 },	// JD
+	{ 0x18, 0x10 },	// JE
+	{ 0x1a, 0x11 },	// JF
+	{ 0x17, 0x12 },	// JG
+	{ 0x17, 0x15 },	// JH
+	{ 0x1b, 0x12 },	// JI
+	{ 0x1c, 0x13 },	// JJ
+	{ 0x17, 0x12 },	// JK
+	{ 0x17, 0x15 },	// JL
+	{ 0x1b, 0x12 },	// JM
+	{ 0x1c, 0x13 },	// JN
+	{ 0x1a, 0x13 },	// JO
+	{ 0x1a, 0x17 },	// JP
+	{ 0x1e, 0x14 },	// JQ
+	{ 0x1f, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A13[][MCA_PER_MCS] = {
+	{ 0x13, 0x13 },	// J0
+	{ 0x18, 0x0a },	// J1
+	{ 0x1b, 0x15 },	// J2
+	{ 0x19, 0x0b },	// J3
+	{ 0x11, 0x11 },	// J4
+	{ 0x15, 0x08 },	// J5
+	{ 0x18, 0x13 },	// J6
+	{ 0x17, 0x0a },	// J7
+	{ 0x13, 0x13 },	// J8
+	{ 0x18, 0x0a },	// J9
+	{ 0x1b, 0x15 },	// JA
+	{ 0x19, 0x0b },	// JB
+	{ 0x11, 0x11 },	// JC
+	{ 0x15, 0x08 },	// JD
+	{ 0x18, 0x13 },	// JE
+	{ 0x17, 0x0a },	// JF
+	{ 0x13, 0x13 },	// JG
+	{ 0x18, 0x0a },	// JH
+	{ 0x1b, 0x15 },	// JI
+	{ 0x19, 0x0b },	// JJ
+	{ 0x13, 0x12 },	// JK
+	{ 0x18, 0x0a },	// JL
+	{ 0x1b, 0x15 },	// JM
+	{ 0x19, 0x0b },	// JN
+	{ 0x16, 0x14 },	// JO
+	{ 0x1b, 0x0b },	// JP
+	{ 0x1e, 0x17 },	// JQ
+	{ 0x1c, 0x0d },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN1[][MCA_PER_MCS] = {
+	{ 0x1d, 0x19 },	// J0
+	{ 0x18, 0x1b },	// J1
+	{ 0x23, 0x17 },	// J2
+	{ 0x1a, 0x19 },	// J3
+	{ 0x16, 0x14 },	// J4
+	{ 0x12, 0x15 },	// J5
+	{ 0x1d, 0x11 },	// J6
+	{ 0x15, 0x13 },	// J7
+	{ 0x1d, 0x19 },	// J8
+	{ 0x18, 0x1b },	// J9
+	{ 0x23, 0x17 },	// JA
+	{ 0x1a, 0x19 },	// JB
+	{ 0x16, 0x14 },	// JC
+	{ 0x12, 0x15 },	// JD
+	{ 0x1d, 0x11 },	// JE
+	{ 0x15, 0x13 },	// JF
+	{ 0x1d, 0x19 },	// JG
+	{ 0x18, 0x1b },	// JH
+	{ 0x23, 0x17 },	// JI
+	{ 0x1a, 0x19 },	// JJ
+	{ 0x1a, 0x15 },	// JK
+	{ 0x15, 0x18 },	// JL
+	{ 0x20, 0x14 },	// JM
+	{ 0x17, 0x17 },	// JN
+	{ 0x21, 0x1c },	// JO
+	{ 0x1d, 0x1f },	// JP
+	{ 0x28, 0x1a },	// JQ
+	{ 0x1e, 0x1e },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKN[][MCA_PER_MCS] = {
+	{ 0x65, 0x61 },	// J0
+	{ 0x64, 0x5a },	// J1
+	{ 0x66, 0x5b },	// J2
+	{ 0x62, 0x59 },	// J3
+	{ 0x5e, 0x5a },	// J4
+	{ 0x5d, 0x54 },	// J5
+	{ 0x5e, 0x54 },	// J6
+	{ 0x5b, 0x52 },	// J7
+	{ 0x65, 0x61 },	// J8
+	{ 0x64, 0x5a },	// J9
+	{ 0x66, 0x5b },	// JA
+	{ 0x62, 0x59 },	// JB
+	{ 0x5e, 0x5a },	// JC
+	{ 0x5d, 0x54 },	// JD
+	{ 0x5e, 0x54 },	// JE
+	{ 0x5b, 0x52 },	// JF
+	{ 0x65, 0x61 },	// JG
+	{ 0x64, 0x5a },	// JH
+	{ 0x66, 0x5b },	// JI
+	{ 0x62, 0x59 },	// JJ
+	{ 0x63, 0x5d },	// JK
+	{ 0x61, 0x57 },	// JL
+	{ 0x63, 0x58 },	// JM
+	{ 0x5f, 0x56 },	// JN
+	{ 0x6c, 0x66 },	// JO
+	{ 0x6a, 0x60 },	// JP
+	{ 0x6c, 0x5f },	// JQ
+	{ 0x66, 0x5f },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKP[][MCA_PER_MCS] = {
+	{ 0x65, 0x61 },	// J0
+	{ 0x64, 0x5a },	// J1
+	{ 0x66, 0x5b },	// J2
+	{ 0x62, 0x59 },	// J3
+	{ 0x5e, 0x5a },	// J4
+	{ 0x5d, 0x54 },	// J5
+	{ 0x5e, 0x54 },	// J6
+	{ 0x5b, 0x52 },	// J7
+	{ 0x65, 0x61 },	// J8
+	{ 0x64, 0x5a },	// J9
+	{ 0x66, 0x5b },	// JA
+	{ 0x62, 0x59 },	// JB
+	{ 0x5e, 0x5a },	// JC
+	{ 0x5d, 0x54 },	// JD
+	{ 0x5e, 0x54 },	// JE
+	{ 0x5b, 0x52 },	// JF
+	{ 0x65, 0x61 },	// JG
+	{ 0x64, 0x5a },	// JH
+	{ 0x66, 0x5b },	// JI
+	{ 0x62, 0x59 },	// JJ
+	{ 0x63, 0x5d },	// JK
+	{ 0x61, 0x57 },	// JL
+	{ 0x63, 0x58 },	// JM
+	{ 0x5f, 0x56 },	// JN
+	{ 0x6c, 0x66 },	// JO
+	{ 0x6a, 0x60 },	// JP
+	{ 0x6c, 0x5f },	// JQ
+	{ 0x66, 0x5f },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A17[][MCA_PER_MCS] = {
+	{ 0x18, 0x12 },	// J0
+	{ 0x17, 0x14 },	// J1
+	{ 0x17, 0x14 },	// J2
+	{ 0x1a, 0x13 },	// J3
+	{ 0x15, 0x10 },	// J4
+	{ 0x15, 0x11 },	// J5
+	{ 0x15, 0x11 },	// J6
+	{ 0x18, 0x11 },	// J7
+	{ 0x18, 0x12 },	// J8
+	{ 0x17, 0x14 },	// J9
+	{ 0x17, 0x14 },	// JA
+	{ 0x1a, 0x13 },	// JB
+	{ 0x15, 0x10 },	// JC
+	{ 0x15, 0x11 },	// JD
+	{ 0x15, 0x11 },	// JE
+	{ 0x18, 0x11 },	// JF
+	{ 0x18, 0x12 },	// JG
+	{ 0x17, 0x14 },	// JH
+	{ 0x17, 0x14 },	// JI
+	{ 0x1a, 0x13 },	// JJ
+	{ 0x18, 0x12 },	// JK
+	{ 0x18, 0x14 },	// JL
+	{ 0x18, 0x14 },	// JM
+	{ 0x1a, 0x13 },	// JN
+	{ 0x1b, 0x13 },	// JO
+	{ 0x1b, 0x16 },	// JP
+	{ 0x1a, 0x15 },	// JQ
+	{ 0x1d, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C1[][MCA_PER_MCS] = {
+	{ 0x15, 0x11 },	// J0
+	{ 0x17, 0x13 },	// J1
+	{ 0x17, 0x13 },	// J2
+	{ 0x17, 0x10 },	// J3
+	{ 0x13, 0x10 },	// J4
+	{ 0x15, 0x11 },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x15, 0x0e },	// J7
+	{ 0x15, 0x11 },	// J8
+	{ 0x17, 0x13 },	// J9
+	{ 0x17, 0x13 },	// JA
+	{ 0x17, 0x10 },	// JB
+	{ 0x13, 0x10 },	// JC
+	{ 0x15, 0x11 },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x15, 0x0e },	// JF
+	{ 0x15, 0x11 },	// JG
+	{ 0x17, 0x13 },	// JH
+	{ 0x17, 0x13 },	// JI
+	{ 0x17, 0x10 },	// JJ
+	{ 0x16, 0x11 },	// JK
+	{ 0x18, 0x13 },	// JL
+	{ 0x18, 0x13 },	// JM
+	{ 0x17, 0x10 },	// JN
+	{ 0x19, 0x12 },	// JO
+	{ 0x1b, 0x15 },	// JP
+	{ 0x1a, 0x14 },	// JQ
+	{ 0x1a, 0x13 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKN[][MCA_PER_MCS] = {
+	{ 0x65, 0x61 },	// J0
+	{ 0x64, 0x5a },	// J1
+	{ 0x66, 0x5b },	// J2
+	{ 0x62, 0x59 },	// J3
+	{ 0x57, 0x5a },	// J4
+	{ 0x57, 0x53 },	// J5
+	{ 0x5a, 0x55 },	// J6
+	{ 0x5b, 0x55 },	// J7
+	{ 0x65, 0x61 },	// J8
+	{ 0x64, 0x5a },	// J9
+	{ 0x66, 0x5b },	// JA
+	{ 0x62, 0x59 },	// JB
+	{ 0x57, 0x5a },	// JC
+	{ 0x57, 0x53 },	// JD
+	{ 0x5a, 0x55 },	// JE
+	{ 0x5b, 0x55 },	// JF
+	{ 0x65, 0x61 },	// JG
+	{ 0x64, 0x5a },	// JH
+	{ 0x66, 0x5b },	// JI
+	{ 0x62, 0x59 },	// JJ
+	{ 0x59, 0x5c },	// JK
+	{ 0x58, 0x55 },	// JL
+	{ 0x5c, 0x57 },	// JM
+	{ 0x5d, 0x57 },	// JN
+	{ 0x6c, 0x66 },	// JO
+	{ 0x6a, 0x60 },	// JP
+	{ 0x6c, 0x5f },	// JQ
+	{ 0x66, 0x5f },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKP[][MCA_PER_MCS] = {
+	{ 0x65, 0x61 },	// J0
+	{ 0x64, 0x5a },	// J1
+	{ 0x66, 0x5b },	// J2
+	{ 0x62, 0x59 },	// J3
+	{ 0x57, 0x5a },	// J4
+	{ 0x57, 0x53 },	// J5
+	{ 0x5a, 0x55 },	// J6
+	{ 0x5b, 0x55 },	// J7
+	{ 0x65, 0x61 },	// J8
+	{ 0x64, 0x5a },	// J9
+	{ 0x66, 0x5b },	// JA
+	{ 0x62, 0x59 },	// JB
+	{ 0x57, 0x5a },	// JC
+	{ 0x57, 0x53 },	// JD
+	{ 0x5a, 0x55 },	// JE
+	{ 0x5b, 0x55 },	// JF
+	{ 0x65, 0x61 },	// JG
+	{ 0x64, 0x5a },	// JH
+	{ 0x66, 0x5b },	// JI
+	{ 0x62, 0x59 },	// JJ
+	{ 0x59, 0x5c },	// JK
+	{ 0x58, 0x55 },	// JL
+	{ 0x5c, 0x57 },	// JM
+	{ 0x5d, 0x57 },	// JN
+	{ 0x6c, 0x66 },	// JO
+	{ 0x6a, 0x60 },	// JP
+	{ 0x6c, 0x5f },	// JQ
+	{ 0x66, 0x5f },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C2[][MCA_PER_MCS] = {
+	{ 0x17, 0x1a },	// J0
+	{ 0x18, 0x13 },	// J1
+	{ 0x19, 0x14 },	// J2
+	{ 0x17, 0x13 },	// J3
+	{ 0x15, 0x17 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x16, 0x11 },	// J6
+	{ 0x15, 0x11 },	// J7
+	{ 0x17, 0x1a },	// J8
+	{ 0x18, 0x13 },	// J9
+	{ 0x19, 0x14 },	// JA
+	{ 0x17, 0x13 },	// JB
+	{ 0x15, 0x17 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x16, 0x11 },	// JE
+	{ 0x15, 0x11 },	// JF
+	{ 0x17, 0x1a },	// JG
+	{ 0x18, 0x13 },	// JH
+	{ 0x19, 0x14 },	// JI
+	{ 0x17, 0x13 },	// JJ
+	{ 0x17, 0x19 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x19, 0x14 },	// JM
+	{ 0x18, 0x13 },	// JN
+	{ 0x1a, 0x1b },	// JO
+	{ 0x1c, 0x16 },	// JP
+	{ 0x1c, 0x16 },	// JQ
+	{ 0x1a, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN1[][MCA_PER_MCS] = {
+	{ 0x1d, 0x19 },	// J0
+	{ 0x18, 0x1b },	// J1
+	{ 0x23, 0x17 },	// J2
+	{ 0x1a, 0x19 },	// J3
+	{ 0x14, 0x13 },	// J4
+	{ 0x14, 0x15 },	// J5
+	{ 0x19, 0x17 },	// J6
+	{ 0x13, 0x16 },	// J7
+	{ 0x1d, 0x19 },	// J8
+	{ 0x18, 0x1b },	// J9
+	{ 0x23, 0x17 },	// JA
+	{ 0x1a, 0x19 },	// JB
+	{ 0x14, 0x13 },	// JC
+	{ 0x14, 0x15 },	// JD
+	{ 0x19, 0x17 },	// JE
+	{ 0x13, 0x16 },	// JF
+	{ 0x1d, 0x19 },	// JG
+	{ 0x18, 0x1b },	// JH
+	{ 0x23, 0x17 },	// JI
+	{ 0x1a, 0x19 },	// JJ
+	{ 0x16, 0x14 },	// JK
+	{ 0x16, 0x17 },	// JL
+	{ 0x1b, 0x19 },	// JM
+	{ 0x15, 0x18 },	// JN
+	{ 0x21, 0x1c },	// JO
+	{ 0x1d, 0x1f },	// JP
+	{ 0x28, 0x1a },	// JQ
+	{ 0x1e, 0x1e },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A02[][MCA_PER_MCS] = {
+	{ 0x19, 0x14 },	// J0
+	{ 0x19, 0x13 },	// J1
+	{ 0x1b, 0x12 },	// J2
+	{ 0x1a, 0x13 },	// J3
+	{ 0x17, 0x12 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x18, 0x10 },	// J6
+	{ 0x18, 0x10 },	// J7
+	{ 0x19, 0x14 },	// J8
+	{ 0x19, 0x13 },	// J9
+	{ 0x1b, 0x12 },	// JA
+	{ 0x1a, 0x13 },	// JB
+	{ 0x17, 0x12 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x18, 0x10 },	// JE
+	{ 0x18, 0x10 },	// JF
+	{ 0x19, 0x14 },	// JG
+	{ 0x19, 0x13 },	// JH
+	{ 0x1b, 0x12 },	// JI
+	{ 0x1a, 0x13 },	// JJ
+	{ 0x1a, 0x13 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x1b, 0x12 },	// JM
+	{ 0x1b, 0x13 },	// JN
+	{ 0x1d, 0x15 },	// JO
+	{ 0x1c, 0x15 },	// JP
+	{ 0x1e, 0x14 },	// JQ
+	{ 0x1d, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_PAR[][MCA_PER_MCS] = {
+	{ 0x15, 0x16 },	// J0
+	{ 0x15, 0x0d },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x18, 0x12 },	// J3
+	{ 0x13, 0x14 },	// J4
+	{ 0x13, 0x0c },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x16, 0x10 },	// J7
+	{ 0x15, 0x16 },	// J8
+	{ 0x15, 0x0d },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x18, 0x12 },	// JB
+	{ 0x13, 0x14 },	// JC
+	{ 0x13, 0x0c },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x16, 0x10 },	// JF
+	{ 0x15, 0x16 },	// JG
+	{ 0x15, 0x0d },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x18, 0x12 },	// JJ
+	{ 0x15, 0x15 },	// JK
+	{ 0x15, 0x0d },	// JL
+	{ 0x17, 0x12 },	// JM
+	{ 0x18, 0x12 },	// JN
+	{ 0x18, 0x17 },	// JO
+	{ 0x18, 0x0f },	// JP
+	{ 0x1a, 0x13 },	// JQ
+	{ 0x1b, 0x14 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN0[][MCA_PER_MCS] = {
+	{ 0x1b, 0x1d },	// J0
+	{ 0x24, 0x15 },	// J1
+	{ 0x22, 0x18 },	// J2
+	{ 0x1f, 0x14 },	// J3
+	{ 0x14, 0x1c },	// J4
+	{ 0x17, 0x13 },	// J5
+	{ 0x19, 0x15 },	// J6
+	{ 0x13, 0x14 },	// J7
+	{ 0x1b, 0x1d },	// J8
+	{ 0x24, 0x15 },	// J9
+	{ 0x22, 0x18 },	// JA
+	{ 0x1f, 0x14 },	// JB
+	{ 0x14, 0x1c },	// JC
+	{ 0x17, 0x13 },	// JD
+	{ 0x19, 0x15 },	// JE
+	{ 0x13, 0x14 },	// JF
+	{ 0x1b, 0x1d },	// JG
+	{ 0x24, 0x15 },	// JH
+	{ 0x22, 0x18 },	// JI
+	{ 0x1f, 0x14 },	// JJ
+	{ 0x16, 0x1d },	// JK
+	{ 0x19, 0x15 },	// JL
+	{ 0x1b, 0x17 },	// JM
+	{ 0x14, 0x16 },	// JN
+	{ 0x1f, 0x20 },	// JO
+	{ 0x2a, 0x19 },	// JP
+	{ 0x26, 0x1a },	// JQ
+	{ 0x23, 0x18 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_RASN_A16[][MCA_PER_MCS] = {
+	{ 0x17, 0x14 },	// J0
+	{ 0x13, 0x12 },	// J1
+	{ 0x17, 0x14 },	// J2
+	{ 0x1a, 0x13 },	// J3
+	{ 0x14, 0x12 },	// J4
+	{ 0x11, 0x10 },	// J5
+	{ 0x15, 0x11 },	// J6
+	{ 0x18, 0x11 },	// J7
+	{ 0x17, 0x14 },	// J8
+	{ 0x13, 0x12 },	// J9
+	{ 0x17, 0x14 },	// JA
+	{ 0x1a, 0x13 },	// JB
+	{ 0x14, 0x12 },	// JC
+	{ 0x11, 0x10 },	// JD
+	{ 0x15, 0x11 },	// JE
+	{ 0x18, 0x11 },	// JF
+	{ 0x17, 0x14 },	// JG
+	{ 0x13, 0x12 },	// JH
+	{ 0x17, 0x14 },	// JI
+	{ 0x1a, 0x13 },	// JJ
+	{ 0x17, 0x14 },	// JK
+	{ 0x14, 0x12 },	// JL
+	{ 0x17, 0x13 },	// JM
+	{ 0x1a, 0x13 },	// JN
+	{ 0x1a, 0x15 },	// JO
+	{ 0x16, 0x14 },	// JP
+	{ 0x1a, 0x15 },	// JQ
+	{ 0x1d, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A08[][MCA_PER_MCS] = {
+	{ 0x14, 0x14 },	// J0
+	{ 0x1a, 0x10 },	// J1
+	{ 0x19, 0x0f },	// J2
+	{ 0x1c, 0x13 },	// J3
+	{ 0x12, 0x12 },	// J4
+	{ 0x17, 0x0e },	// J5
+	{ 0x16, 0x0d },	// J6
+	{ 0x19, 0x11 },	// J7
+	{ 0x14, 0x14 },	// J8
+	{ 0x1a, 0x10 },	// J9
+	{ 0x19, 0x0f },	// JA
+	{ 0x1c, 0x13 },	// JB
+	{ 0x12, 0x12 },	// JC
+	{ 0x17, 0x0e },	// JD
+	{ 0x16, 0x0d },	// JE
+	{ 0x19, 0x11 },	// JF
+	{ 0x14, 0x14 },	// JG
+	{ 0x1a, 0x10 },	// JH
+	{ 0x19, 0x0f },	// JI
+	{ 0x1c, 0x13 },	// JJ
+	{ 0x14, 0x13 },	// JK
+	{ 0x1b, 0x10 },	// JL
+	{ 0x19, 0x0e },	// JM
+	{ 0x1c, 0x13 },	// JN
+	{ 0x17, 0x15 },	// JO
+	{ 0x1e, 0x12 },	// JP
+	{ 0x1c, 0x10 },	// JQ
+	{ 0x1f, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A05[][MCA_PER_MCS] = {
+	{ 0x18, 0x12 },	// J0
+	{ 0x17, 0x0f },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x1b, 0x10 },	// J3
+	{ 0x15, 0x10 },	// J4
+	{ 0x15, 0x0d },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x19, 0x0f },	// J7
+	{ 0x18, 0x12 },	// J8
+	{ 0x17, 0x0f },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x1b, 0x10 },	// JB
+	{ 0x15, 0x10 },	// JC
+	{ 0x15, 0x0d },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x19, 0x0f },	// JF
+	{ 0x18, 0x12 },	// JG
+	{ 0x17, 0x0f },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x1b, 0x10 },	// JJ
+	{ 0x18, 0x11 },	// JK
+	{ 0x18, 0x0f },	// JL
+	{ 0x18, 0x12 },	// JM
+	{ 0x1c, 0x10 },	// JN
+	{ 0x1b, 0x13 },	// JO
+	{ 0x1b, 0x11 },	// JP
+	{ 0x1a, 0x14 },	// JQ
+	{ 0x1e, 0x13 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A03[][MCA_PER_MCS] = {
+	{ 0x18, 0x19 },	// J0
+	{ 0x19, 0x13 },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x1a, 0x12 },	// J3
+	{ 0x15, 0x17 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x18, 0x10 },	// J7
+	{ 0x18, 0x19 },	// J8
+	{ 0x19, 0x13 },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x1a, 0x12 },	// JB
+	{ 0x15, 0x17 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x18, 0x10 },	// JF
+	{ 0x18, 0x19 },	// JG
+	{ 0x19, 0x13 },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x1a, 0x12 },	// JJ
+	{ 0x18, 0x19 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x17, 0x12 },	// JM
+	{ 0x1a, 0x12 },	// JN
+	{ 0x1b, 0x1b },	// JO
+	{ 0x1c, 0x15 },	// JP
+	{ 0x1a, 0x13 },	// JQ
+	{ 0x1d, 0x15 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A01[][MCA_PER_MCS] = {
+	{ 0x17, 0x15 },	// J0
+	{ 0x18, 0x13 },	// J1
+	{ 0x1a, 0x12 },	// J2
+	{ 0x18, 0x13 },	// J3
+	{ 0x15, 0x13 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x17, 0x10 },	// J6
+	{ 0x16, 0x11 },	// J7
+	{ 0x17, 0x15 },	// J8
+	{ 0x18, 0x13 },	// J9
+	{ 0x1a, 0x12 },	// JA
+	{ 0x18, 0x13 },	// JB
+	{ 0x15, 0x13 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x17, 0x10 },	// JE
+	{ 0x16, 0x11 },	// JF
+	{ 0x17, 0x15 },	// JG
+	{ 0x18, 0x13 },	// JH
+	{ 0x1a, 0x12 },	// JI
+	{ 0x18, 0x13 },	// JJ
+	{ 0x18, 0x14 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x1a, 0x12 },	// JM
+	{ 0x19, 0x13 },	// JN
+	{ 0x1b, 0x16 },	// JO
+	{ 0x1c, 0x15 },	// JP
+	{ 0x1d, 0x14 },	// JQ
+	{ 0x1b, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A04[][MCA_PER_MCS] = {
+	{ 0x13, 0x11 },	// J0
+	{ 0x19, 0x11 },	// J1
+	{ 0x17, 0x0e },	// J2
+	{ 0x1a, 0x11 },	// J3
+	{ 0x11, 0x10 },	// J4
+	{ 0x16, 0x0f },	// J5
+	{ 0x15, 0x0c },	// J6
+	{ 0x18, 0x0f },	// J7
+	{ 0x13, 0x11 },	// J8
+	{ 0x19, 0x11 },	// J9
+	{ 0x17, 0x0e },	// JA
+	{ 0x1a, 0x11 },	// JB
+	{ 0x11, 0x10 },	// JC
+	{ 0x16, 0x0f },	// JD
+	{ 0x15, 0x0c },	// JE
+	{ 0x18, 0x0f },	// JF
+	{ 0x13, 0x11 },	// JG
+	{ 0x19, 0x11 },	// JH
+	{ 0x17, 0x0e },	// JI
+	{ 0x1a, 0x11 },	// JJ
+	{ 0x13, 0x11 },	// JK
+	{ 0x19, 0x11 },	// JL
+	{ 0x17, 0x0e },	// JM
+	{ 0x1a, 0x11 },	// JN
+	{ 0x15, 0x12 },	// JO
+	{ 0x1c, 0x13 },	// JP
+	{ 0x1a, 0x0f },	// JQ
+	{ 0x1d, 0x13 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A07[][MCA_PER_MCS] = {
+	{ 0x13, 0x13 },	// J0
+	{ 0x19, 0x13 },	// J1
+	{ 0x18, 0x11 },	// J2
+	{ 0x1b, 0x13 },	// J3
+	{ 0x11, 0x12 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x16, 0x0f },	// J6
+	{ 0x18, 0x11 },	// J7
+	{ 0x13, 0x13 },	// J8
+	{ 0x19, 0x13 },	// J9
+	{ 0x18, 0x11 },	// JA
+	{ 0x1b, 0x13 },	// JB
+	{ 0x11, 0x12 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x16, 0x0f },	// JE
+	{ 0x18, 0x11 },	// JF
+	{ 0x13, 0x13 },	// JG
+	{ 0x19, 0x13 },	// JH
+	{ 0x18, 0x11 },	// JI
+	{ 0x1b, 0x13 },	// JJ
+	{ 0x13, 0x13 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x19, 0x11 },	// JM
+	{ 0x1b, 0x13 },	// JN
+	{ 0x16, 0x14 },	// JO
+	{ 0x1c, 0x15 },	// JP
+	{ 0x1b, 0x13 },	// JQ
+	{ 0x1d, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A09[][MCA_PER_MCS] = {
+	{ 0x14, 0x19 },	// J0
+	{ 0x17, 0x13 },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x1a, 0x13 },	// J3
+	{ 0x11, 0x17 },	// J4
+	{ 0x15, 0x11 },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x17, 0x11 },	// J7
+	{ 0x14, 0x19 },	// J8
+	{ 0x17, 0x13 },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x1a, 0x13 },	// JB
+	{ 0x11, 0x17 },	// JC
+	{ 0x15, 0x11 },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x17, 0x11 },	// JF
+	{ 0x14, 0x19 },	// JG
+	{ 0x17, 0x13 },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x1a, 0x13 },	// JJ
+	{ 0x14, 0x18 },	// JK
+	{ 0x17, 0x13 },	// JL
+	{ 0x17, 0x12 },	// JM
+	{ 0x1a, 0x13 },	// JN
+	{ 0x16, 0x1a },	// JO
+	{ 0x1a, 0x15 },	// JP
+	{ 0x1a, 0x14 },	// JQ
+	{ 0x1c, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A06[][MCA_PER_MCS] = {
+	{ 0x14, 0x16 },	// J0
+	{ 0x19, 0x13 },	// J1
+	{ 0x16, 0x12 },	// J2
+	{ 0x19, 0x13 },	// J3
+	{ 0x12, 0x14 },	// J4
+	{ 0x16, 0x11 },	// J5
+	{ 0x14, 0x10 },	// J6
+	{ 0x17, 0x11 },	// J7
+	{ 0x14, 0x16 },	// J8
+	{ 0x19, 0x13 },	// J9
+	{ 0x16, 0x12 },	// JA
+	{ 0x19, 0x13 },	// JB
+	{ 0x12, 0x14 },	// JC
+	{ 0x16, 0x11 },	// JD
+	{ 0x14, 0x10 },	// JE
+	{ 0x17, 0x11 },	// JF
+	{ 0x14, 0x16 },	// JG
+	{ 0x19, 0x13 },	// JH
+	{ 0x16, 0x12 },	// JI
+	{ 0x19, 0x13 },	// JJ
+	{ 0x15, 0x15 },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x16, 0x12 },	// JM
+	{ 0x19, 0x13 },	// JN
+	{ 0x17, 0x17 },	// JO
+	{ 0x1d, 0x15 },	// JP
+	{ 0x19, 0x14 },	// JQ
+	{ 0x1c, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE1[][MCA_PER_MCS] = {
+	{ 0x17, 0x14 },	// J0
+	{ 0x1d, 0x0e },	// J1
+	{ 0x1a, 0x0d },	// J2
+	{ 0x1b, 0x0d },	// J3
+	{ 0x12, 0x0f },	// J4
+	{ 0x16, 0x0a },	// J5
+	{ 0x14, 0x08 },	// J6
+	{ 0x16, 0x08 },	// J7
+	{ 0x17, 0x14 },	// J8
+	{ 0x1d, 0x0e },	// J9
+	{ 0x1a, 0x0d },	// JA
+	{ 0x1b, 0x0d },	// JB
+	{ 0x12, 0x0f },	// JC
+	{ 0x16, 0x0a },	// JD
+	{ 0x14, 0x08 },	// JE
+	{ 0x16, 0x08 },	// JF
+	{ 0x17, 0x14 },	// JG
+	{ 0x1d, 0x0e },	// JH
+	{ 0x1a, 0x0d },	// JI
+	{ 0x1b, 0x0d },	// JJ
+	{ 0x15, 0x10 },	// JK
+	{ 0x19, 0x0b },	// JL
+	{ 0x17, 0x0a },	// JM
+	{ 0x18, 0x0a },	// JN
+	{ 0x1b, 0x16 },	// JO
+	{ 0x21, 0x11 },	// JP
+	{ 0x1e, 0x0f },	// JQ
+	{ 0x1f, 0x11 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A12[][MCA_PER_MCS] = {
+	{ 0x15, 0x19 },	// J0
+	{ 0x17, 0x0f },	// J1
+	{ 0x17, 0x12 },	// J2
+	{ 0x18, 0x12 },	// J3
+	{ 0x13, 0x17 },	// J4
+	{ 0x15, 0x0d },	// J5
+	{ 0x15, 0x10 },	// J6
+	{ 0x16, 0x10 },	// J7
+	{ 0x15, 0x19 },	// J8
+	{ 0x17, 0x0f },	// J9
+	{ 0x17, 0x12 },	// JA
+	{ 0x18, 0x12 },	// JB
+	{ 0x13, 0x17 },	// JC
+	{ 0x15, 0x0d },	// JD
+	{ 0x15, 0x10 },	// JE
+	{ 0x16, 0x10 },	// JF
+	{ 0x15, 0x19 },	// JG
+	{ 0x17, 0x0f },	// JH
+	{ 0x17, 0x12 },	// JI
+	{ 0x18, 0x12 },	// JJ
+	{ 0x16, 0x19 },	// JK
+	{ 0x17, 0x0f },	// JL
+	{ 0x18, 0x12 },	// JM
+	{ 0x18, 0x12 },	// JN
+	{ 0x18, 0x1b },	// JO
+	{ 0x1a, 0x11 },	// JP
+	{ 0x1a, 0x13 },	// JQ
+	{ 0x1a, 0x14 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ACTN[][MCA_PER_MCS] = {
+	{ 0x16, 0x19 },	// J0
+	{ 0x17, 0x12 },	// J1
+	{ 0x18, 0x14 },	// J2
+	{ 0x1a, 0x10 },	// J3
+	{ 0x13, 0x17 },	// J4
+	{ 0x14, 0x10 },	// J5
+	{ 0x15, 0x11 },	// J6
+	{ 0x18, 0x0e },	// J7
+	{ 0x16, 0x19 },	// J8
+	{ 0x17, 0x12 },	// J9
+	{ 0x18, 0x14 },	// JA
+	{ 0x1a, 0x10 },	// JB
+	{ 0x13, 0x17 },	// JC
+	{ 0x14, 0x10 },	// JD
+	{ 0x15, 0x11 },	// JE
+	{ 0x18, 0x0e },	// JF
+	{ 0x16, 0x19 },	// JG
+	{ 0x17, 0x12 },	// JH
+	{ 0x18, 0x14 },	// JI
+	{ 0x1a, 0x10 },	// JJ
+	{ 0x16, 0x19 },	// JK
+	{ 0x17, 0x12 },	// JL
+	{ 0x18, 0x13 },	// JM
+	{ 0x1b, 0x10 },	// JN
+	{ 0x19, 0x1b },	// JO
+	{ 0x1a, 0x14 },	// JP
+	{ 0x1a, 0x15 },	// JQ
+	{ 0x1d, 0x12 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A11[][MCA_PER_MCS] = {
+	{ 0x11, 0x11 },	// J0
+	{ 0x18, 0x13 },	// J1
+	{ 0x17, 0x11 },	// J2
+	{ 0x19, 0x13 },	// J3
+	{ 0x0f, 0x10 },	// J4
+	{ 0x15, 0x11 },	// J5
+	{ 0x14, 0x0f },	// J6
+	{ 0x17, 0x11 },	// J7
+	{ 0x11, 0x11 },	// J8
+	{ 0x18, 0x13 },	// J9
+	{ 0x17, 0x11 },	// JA
+	{ 0x19, 0x13 },	// JB
+	{ 0x0f, 0x10 },	// JC
+	{ 0x15, 0x11 },	// JD
+	{ 0x14, 0x0f },	// JE
+	{ 0x17, 0x11 },	// JF
+	{ 0x11, 0x11 },	// JG
+	{ 0x18, 0x13 },	// JH
+	{ 0x17, 0x11 },	// JI
+	{ 0x19, 0x13 },	// JJ
+	{ 0x11, 0x11 },	// JK
+	{ 0x18, 0x13 },	// JL
+	{ 0x17, 0x11 },	// JM
+	{ 0x19, 0x13 },	// JN
+	{ 0x13, 0x12 },	// JO
+	{ 0x1b, 0x16 },	// JP
+	{ 0x19, 0x12 },	// JQ
+	{ 0x1b, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG0[][MCA_PER_MCS] = {
+	{ 0x14, 0x12 },	// J0
+	{ 0x1a, 0x11 },	// J1
+	{ 0x17, 0x13 },	// J2
+	{ 0x1a, 0x0f },	// J3
+	{ 0x12, 0x10 },	// J4
+	{ 0x17, 0x0f },	// J5
+	{ 0x15, 0x11 },	// J6
+	{ 0x17, 0x0e },	// J7
+	{ 0x14, 0x12 },	// J8
+	{ 0x1a, 0x11 },	// J9
+	{ 0x17, 0x13 },	// JA
+	{ 0x1a, 0x0f },	// JB
+	{ 0x12, 0x10 },	// JC
+	{ 0x17, 0x0f },	// JD
+	{ 0x15, 0x11 },	// JE
+	{ 0x17, 0x0e },	// JF
+	{ 0x14, 0x12 },	// JG
+	{ 0x1a, 0x11 },	// JH
+	{ 0x17, 0x13 },	// JI
+	{ 0x1a, 0x0f },	// JJ
+	{ 0x14, 0x11 },	// JK
+	{ 0x1a, 0x11 },	// JL
+	{ 0x17, 0x13 },	// JM
+	{ 0x1a, 0x0f },	// JN
+	{ 0x17, 0x13 },	// JO
+	{ 0x1d, 0x14 },	// JP
+	{ 0x1a, 0x15 },	// JQ
+	{ 0x1c, 0x11 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE0[][MCA_PER_MCS] = {
+	{ 0x1c, 0x20 },	// J0
+	{ 0x19, 0x14 },	// J1
+	{ 0x21, 0x19 },	// J2
+	{ 0x1c, 0x13 },	// J3
+	{ 0x16, 0x1a },	// J4
+	{ 0x14, 0x0f },	// J5
+	{ 0x1a, 0x13 },	// J6
+	{ 0x17, 0x0d },	// J7
+	{ 0x1c, 0x20 },	// J8
+	{ 0x19, 0x14 },	// J9
+	{ 0x21, 0x19 },	// JA
+	{ 0x1c, 0x13 },	// JB
+	{ 0x16, 0x1a },	// JC
+	{ 0x14, 0x0f },	// JD
+	{ 0x1a, 0x13 },	// JE
+	{ 0x17, 0x0d },	// JF
+	{ 0x1c, 0x20 },	// JG
+	{ 0x19, 0x14 },	// JH
+	{ 0x21, 0x19 },	// JI
+	{ 0x1c, 0x13 },	// JJ
+	{ 0x19, 0x1c },	// JK
+	{ 0x16, 0x11 },	// JL
+	{ 0x1e, 0x16 },	// JM
+	{ 0x19, 0x10 },	// JN
+	{ 0x21, 0x23 },	// JO
+	{ 0x1e, 0x18 },	// JP
+	{ 0x25, 0x1c },	// JQ
+	{ 0x20, 0x16 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE1[][MCA_PER_MCS] = {
+	{ 0x17, 0x14 },	// J0
+	{ 0x1d, 0x0e },	// J1
+	{ 0x1a, 0x0d },	// J2
+	{ 0x1b, 0x0d },	// J3
+	{ 0x10, 0x17 },	// J4
+	{ 0x18, 0x10 },	// J5
+	{ 0x16, 0x10 },	// J6
+	{ 0x1b, 0x11 },	// J7
+	{ 0x17, 0x14 },	// J8
+	{ 0x1d, 0x0e },	// J9
+	{ 0x1a, 0x0d },	// JA
+	{ 0x1b, 0x0d },	// JB
+	{ 0x10, 0x17 },	// JC
+	{ 0x18, 0x10 },	// JD
+	{ 0x16, 0x10 },	// JE
+	{ 0x1b, 0x11 },	// JF
+	{ 0x17, 0x14 },	// JG
+	{ 0x1d, 0x0e },	// JH
+	{ 0x1a, 0x0d },	// JI
+	{ 0x1b, 0x0d },	// JJ
+	{ 0x12, 0x18 },	// JK
+	{ 0x1a, 0x11 },	// JL
+	{ 0x18, 0x12 },	// JM
+	{ 0x1d, 0x12 },	// JN
+	{ 0x1b, 0x16 },	// JO
+	{ 0x21, 0x11 },	// JP
+	{ 0x1e, 0x0f },	// JQ
+	{ 0x1f, 0x11 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG1[][MCA_PER_MCS] = {
+	{ 0x14, 0x13 },	// J0
+	{ 0x18, 0x13 },	// J1
+	{ 0x18, 0x11 },	// J2
+	{ 0x1a, 0x11 },	// J3
+	{ 0x11, 0x11 },	// J4
+	{ 0x15, 0x11 },	// J5
+	{ 0x15, 0x0f },	// J6
+	{ 0x18, 0x0f },	// J7
+	{ 0x14, 0x13 },	// J8
+	{ 0x18, 0x13 },	// J9
+	{ 0x18, 0x11 },	// JA
+	{ 0x1a, 0x11 },	// JB
+	{ 0x11, 0x11 },	// JC
+	{ 0x15, 0x11 },	// JD
+	{ 0x15, 0x0f },	// JE
+	{ 0x18, 0x0f },	// JF
+	{ 0x14, 0x13 },	// JG
+	{ 0x18, 0x13 },	// JH
+	{ 0x18, 0x11 },	// JI
+	{ 0x1a, 0x11 },	// JJ
+	{ 0x14, 0x13 },	// JK
+	{ 0x18, 0x13 },	// JL
+	{ 0x18, 0x11 },	// JM
+	{ 0x1a, 0x11 },	// JN
+	{ 0x16, 0x14 },	// JO
+	{ 0x1b, 0x15 },	// JP
+	{ 0x1a, 0x12 },	// JQ
+	{ 0x1d, 0x14 },	// JR
+};
+
+static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE0[][MCA_PER_MCS] = {
+	{ 0x1c, 0x20 },	// J0
+	{ 0x19, 0x14 },	// J1
+	{ 0x21, 0x19 },	// J2
+	{ 0x1c, 0x13 },	// J3
+	{ 0x12, 0x0f },	// J4
+	{ 0x17, 0x12 },	// J5
+	{ 0x17, 0x0a },	// J6
+	{ 0x19, 0x13 },	// J7
+	{ 0x1c, 0x20 },	// J8
+	{ 0x19, 0x14 },	// J9
+	{ 0x21, 0x19 },	// JA
+	{ 0x1c, 0x13 },	// JB
+	{ 0x12, 0x0f },	// JC
+	{ 0x17, 0x12 },	// JD
+	{ 0x17, 0x0a },	// JE
+	{ 0x19, 0x13 },	// JF
+	{ 0x1c, 0x20 },	// JG
+	{ 0x19, 0x14 },	// JH
+	{ 0x21, 0x19 },	// JI
+	{ 0x1c, 0x13 },	// JJ
+	{ 0x13, 0x0f },	// JK
+	{ 0x19, 0x13 },	// JL
+	{ 0x19, 0x0b },	// JM
+	{ 0x1b, 0x15 },	// JN
+	{ 0x21, 0x23 },	// JO
+	{ 0x1e, 0x18 },	// JP
+	{ 0x25, 0x1c },	// JQ
+	{ 0x20, 0x16 },	// JR
+};
+
+static void reset_delay(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+{
+	/* See comments in ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN0 for layout */
+	int speed_idx = mem_data.speed == 1866 ? 0 :
+	                mem_data.speed == 2133 ? 8 :
+	                mem_data.speed == 2400 ? 16 : 24;
+	int dimm_idx = (mca->dimm[0].present && mca->dimm[1].present) ? 4 : 0;
+	/* TODO: second CPU not supported */
+	int vpd_idx = speed_idx + dimm_idx + mcs_i;
+
+	/*
+	 * From documentation:
+	 * "If the reset value is not sufficient for the given system, these
+	 * registers must be set via the programming interface."
+	 *
+	 * Unsure if this is the case. Hostboot sets it, so lets do it too.
+	 */
+	/* IOM0.DDRPHY_ADR_DELAY0_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY0 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN0
+	    [57-63] ADR_DELAY1 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_WEN_A14
+	*/
+	mca_and_or(id, mca_i, 0x800040040701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN0[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_WEN_A14[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY2 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT1
+	    [57-63] ADR_DELAY3 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C0
+	*/
+	mca_and_or(id, mca_i, 0x800040050701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT1[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C0[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY2_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY4 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA1
+	    [57-63] ADR_DELAY5 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A10
+	*/
+	mca_and_or(id, mca_i, 0x800040060701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA1[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A10[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY6 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT1
+	    [57-63] ADR_DELAY7 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA0
+	*/
+	mca_and_or(id, mca_i, 0x800040070701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT1[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BA0[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY4_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY8 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A00
+	    [57-63] ADR_DELAY9 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT0
+	*/
+	mca_and_or(id, mca_i, 0x800040080701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A00[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_ODT0[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY5_P0_ADR0 =
+	    [all]   0
+	    [49-55] ADR_DELAY10 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT0
+	    [57-63] ADR_DELAY11 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_CASN_A15
+	*/
+	mca_and_or(id, mca_i, 0x800040090701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_ODT0[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_CASN_A15[vpd_idx][mca_i], 63));
+
+
+	/* IOM0.DDRPHY_ADR_DELAY0_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY0 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A13
+	    [57-63] ADR_DELAY1 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN1
+	*/
+	mca_and_or(id, mca_i, 0x800044040701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A13[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN1[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY2 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKN
+	    [57-63] ADR_DELAY3 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKP
+	*/
+	mca_and_or(id, mca_i, 0x800044050701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKN[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_D0_CLKP[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY2_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY4 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A17
+	    [57-63] ADR_DELAY5 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C1
+	*/
+	mca_and_or(id, mca_i, 0x800044060701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A17[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C1[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY6 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKN
+	    [57-63] ADR_DELAY7 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKP
+	*/
+	mca_and_or(id, mca_i, 0x800044070701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKN[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_D1_CLKP[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY4_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY8 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C2
+	    [57-63] ADR_DELAY9 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN1
+	*/
+	mca_and_or(id, mca_i, 0x800044080701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_C2[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN1[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY5_P0_ADR1 =
+	    [all]   0
+	    [49-55] ADR_DELAY10 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A02
+	    [57-63] ADR_DELAY11 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_PAR
+	*/
+	mca_and_or(id, mca_i, 0x800044090701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A02[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_PAR[vpd_idx][mca_i], 63));
+
+
+	/* IOM0.DDRPHY_ADR_DELAY0_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY0 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN0
+	    [57-63] ADR_DELAY1 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_RASN_A16
+	*/
+	mca_and_or(id, mca_i, 0x800048040701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CSN0[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ADDR_RASN_A16[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY2 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A08
+	    [57-63] ADR_DELAY3 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A05
+	*/
+	mca_and_or(id, mca_i, 0x800048050701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A08[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A05[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY2_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY4 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A03
+	    [57-63] ADR_DELAY5 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A01
+	*/
+	mca_and_or(id, mca_i, 0x800048060701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A03[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A01[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY6 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A04
+	    [57-63] ADR_DELAY7 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A07
+	*/
+	mca_and_or(id, mca_i, 0x800048070701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A04[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A07[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY4_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY8 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A09
+	    [57-63] ADR_DELAY9 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A06
+	*/
+	mca_and_or(id, mca_i, 0x800048080701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A09[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A06[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY5_P0_ADR2 =
+	    [all]   0
+	    [49-55] ADR_DELAY10 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE1
+	    [57-63] ADR_DELAY11 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A12
+	*/
+	mca_and_or(id, mca_i, 0x800048090701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE1[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A12[vpd_idx][mca_i], 63));
+
+
+	/* IOM0.DDRPHY_ADR_DELAY0_P0_ADR3 =
+	    [all]   0
+	    [49-55] ADR_DELAY0 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ACTN
+	    [57-63] ADR_DELAY1 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A11
+	*/
+	mca_and_or(id, mca_i, 0x80004C040701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CMD_ACTN[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_A11[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR3 =
+	    [all]   0
+	    [49-55] ADR_DELAY2 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG0
+	    [57-63] ADR_DELAY3 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE0
+	*/
+	mca_and_or(id, mca_i, 0x80004C050701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG0[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CKE0[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY2_P0_ADR3 =
+	    [all]   0
+	    [49-55] ADR_DELAY4 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE1
+	    [57-63] ADR_DELAY5 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG1
+	*/
+	mca_and_or(id, mca_i, 0x80004C060701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE1[vpd_idx][mca_i], 55) |
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_ADDR_BG1[vpd_idx][mca_i], 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR3 =
+	    [all]   0
+	    [49-55] ADR_DELAY6 = ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE0
+	*/
+	mca_and_or(id, mca_i, 0x80004C070701103F, 0,
+	           PPC_SHIFT(ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE0[vpd_idx][mca_i], 55));
+
+}
+
+/* FIXME: these can be updated by MVPD in istep 7.5. Values below (from MEMD)
+ * are different than in documentation. */
+static const uint8_t ATTR_MSS_VPD_MR_TSYS_ADR[] = { 0x79, 0x7B, 0x7D, 0x7F };
+
+static void reset_tsys_adr(chiplet_id_t id, int mca_i)
+{
+	int i = mem_data.speed == 1866 ? 0 :
+	        mem_data.speed == 2133 ? 1 :
+	        mem_data.speed == 2400 ? 2 : 3;
+
+	/* IOM0.DDRPHY_ADR_MCCLK_WRCLK_PR_STATIC_OFFSET_P0_ADR32S{0,1} =
+	    [all]   0
+	    [49-55] TSYS_WRCLK = ATTR_MSS_VPD_MR_TSYS_ADR
+		  // From regs spec:
+		  // Set to ‘19’h for 2666 MT/s.
+		  // Set to ‘17’h for 2400 MT/s.
+		  // Set to ‘14’h for 2133 MT/s.
+		  // Set to ‘12’h for 1866 MT/s.
+	*/
+	/* Has the same stride as DP16. */
+	dp_mca_and_or(id, 0, mca_i, 0x800080330701103F, 0,
+	              PPC_SHIFT(ATTR_MSS_VPD_MR_TSYS_ADR[i], 55));
+	dp_mca_and_or(id, 1, mca_i, 0x800080330701103F, 0,
+	              PPC_SHIFT(ATTR_MSS_VPD_MR_TSYS_ADR[i], 55));
+}
+
+/* FIXME: these can be updated by MVPD in istep 7.5. Values below (from MEMD)
+ * are different than in documentation. */
+static const uint8_t ATTR_MSS_VPD_MR_TSYS_DATA[] = { 0x74, 0x77, 0x79, 0x7C };
+
+static void reset_tsys_data(chiplet_id_t id, int mca_i)
+{
+	int i = mem_data.speed == 1866 ? 0 :
+	        mem_data.speed == 2133 ? 1 :
+	        mem_data.speed == 2400 ? 2 : 3;
+	int dp;
+
+	/* IOM0.DDRPHY_DP16_WRCLK_PR_P0_{0,1,2,3,4} =
+	    [all]   0
+	    [49-55] TSYS_WRCLK = ATTR_MSS_VPD_MR_TSYS_DATA
+		  // From regs spec:
+		  // Set to ‘12’h for 2666 MT/s.
+		  // Set to ‘10’h for 2400 MT/s.
+		  // Set to ‘0F’h for 2133 MT/s.
+		  // Set to ‘0D’h for 1866 MT/s.
+	*/
+	for (dp = 0; dp < 5; dp++) {
+		dp_mca_and_or(id, dp, mca_i, 0x800000740701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MR_TSYS_DATA[i], 55));
+	}
+}
+
 static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 {
 	/* Hostboot here sets strength, we did it in p9n_ddrphy_scom(). */
@@ -1398,6 +3088,18 @@ static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 	rc_reset(id, mca_i, mca);
 
 	seq_reset(id, mca_i, mca);
+
+	reset_ac_boost_cntl(id, mca_i);
+
+	reset_ctle_cntl(id, mca_i);
+
+	reset_delay(id, mcs_i, mca_i, mca);
+
+	reset_tsys_adr(id, mca_i);
+
+	reset_tsys_data(id, mca_i);
+
+	// reset_io_impedances();
 	// ... TBD ...
 }
 

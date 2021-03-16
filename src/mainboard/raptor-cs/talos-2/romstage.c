@@ -311,7 +311,7 @@ void main(void)
 
 	prepare_dimm_data();
 
-	/* One of these steps mess up SCOM, temporarily commented out until fixed */
+	/* One of these steps messes up SCOM, temporarily commented out until fixed */
 	/*
 	istep_8_9();
 	istep_8_10();
@@ -328,6 +328,13 @@ void main(void)
 
 	/* Test if SCOM still works. Maybe should check also indirect access? */
 	printk(BIOS_DEBUG, "0xF000F = %llx\n", read_scom(0xf000f));
+
+	/*
+	 * Halt to give a chance to inspect FIRs, otherwise checkstops from
+	 * ramstage may cover up the failure in romstage.
+	 */
+	if (read_scom(0xf000f) != 0x223d104900008040)
+		die("SCOM stopped working, check FIRs, halting now\n");
 
 	run_ramstage();
 }

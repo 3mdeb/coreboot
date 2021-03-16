@@ -324,5 +324,12 @@ void main(void)
 	/* Test if SCOM still works. Maybe should check also indirect access? */
 	printk(BIOS_DEBUG, "0xF000F = %llx\n", read_scom(0xf000f));
 
+	/*
+	 * Halt to give a chance to inspect FIRs, otherwise checkstops from
+	 * ramstage may cover up the failure in romstage.
+	 */
+	if (read_scom(0xf000f) != 0x223d104900008040)
+		die("SCOM stopped working, check FIRs, halting now\n");
+
 	run_ramstage();
 }

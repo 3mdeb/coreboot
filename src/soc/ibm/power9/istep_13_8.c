@@ -3067,6 +3067,281 @@ static void reset_tsys_data(chiplet_id_t id, int mca_i)
 	}
 }
 
+static void reset_io_impedances(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_IO_TX_FET_SLICE_P0_{0,1,2,3,4} =
+		    [all]   0
+		    // 0 - Hi-Z, otherwise impedance = 240/<num of set bits> Ohms
+		    [49-55] EN_SLICE_N_WR = ATTR_MSS_VPD_MT_MC_DRV_IMP_DQ_DQS[{0,1,2,3,4}]
+		    [57-63] EN_SLICE_P_WR = ATTR_MSS_VPD_MT_MC_DRV_IMP_DQ_DQS[{0,1,2,3,4}]
+		*/
+		/*
+		 * For all rank configurations and MCAs, ATTR_MSS_VPD_MT_MC_DRV_IMP_DQ_DQS
+		 * is 34 Ohms. 240/34 = 7 bits set. According to documentation this is the
+		 * default value, but set it just to be safe.
+		 */
+		dp_mca_and_or(id, dp, mca_i, 0x800000780701103F, 0,
+		              PPC_BITMASK(49, 55) | PPC_BITMASK(57, 63));
+
+		/* IOM0.DDRPHY_DP16_IO_TX_PFET_TERM_P0_{0,1,2,3,4} =
+		    [all]   0
+		    // 0 - Hi-Z, otherwise impedance = 240/<num of set bits> Ohms
+		    [49-55] EN_SLICE_N_WR = ATTR_MSS_VPD_MT_MC_RCV_IMP_DQ_DQS[{0,1,2,3,4}]
+		*/
+		/* 60 Ohms for all configurations, 240/60 = 4 bits set. */
+		dp_mca_and_or(id, dp, mca_i, 0x8000007B0701103F, 0,
+		              PPC_BITMASK(52, 55));
+	}
+
+	/* IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR1 =    // yes, ADR1
+	    // These are RMW one at a time. I don't see why not all at once, or at least in pairs (P and N of the same clocks)
+	    if (ATTR_MSS_VPD_MT_MC_DRV_IMP_CLK == ENUM_ATTR_MSS_VPD_MT_MC_DRV_IMP_CLK_OHM30):
+	      [54,52,62,60] SLICE_SELn = 1    // CLK00 P, CLK00 N, CLK01 P, CLK01 N
+	    else
+	      [54,52,62,60] = 0
+	*/
+	/* 30 Ohms for all configurations. */
+	mca_and_or(id, mca_i, 0x800044200701103F, ~0,
+	           PPC_BIT(54) | PPC_BIT(52) | PPC_BIT(62) | PPC_BIT(60));
+
+	/*
+	 * Following are reordered to minimalize number of register reads/writes
+	------------------------------------------------------------------------
+	val = (ATTR_MSS_VPD_MT_MC_DRV_IMP_CMD_ADDR == ENUM_ATTR_MSS_VPD_MT_MC_DRV_IMP_CMD_ADDR_OHM30) ? 1 : 0
+	// val = 30 for all VPD configurations
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR0 =
+	    [50,56,58,62] =           val       // ADDR14/WEN, BA1, ADDR10, BA0
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR0 =
+	    [48,54] =                 val       // ADDR0, ADDR15/CAS
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR1 =        // same as CLK, however it uses different VPD
+	    [48,56] =                 val       // ADDR13, ADDR17/RAS
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR1 =
+	    [52]    =                 val       // ADDR2
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR2 =
+	    [50,52,54,56,58,60,62] =  val       // ADDR16/RAS, ADDR8, ADDR5, ADDR3, ADDR1, ADDR4, ADDR7
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR2 =
+	    [48,50,54] =              val       // ADDR9, ADDR6, ADDR12
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR3 =
+	    [48,50,52,58] =           val       // ACT_N, ADDR11, BG0, BG1
+	*/
+	mca_and_or(id, mca_i, 0x800040200701103F, ~0,
+	           PPC_BIT(50) | PPC_BIT(56) | PPC_BIT(58) | PPC_BIT(62));
+	mca_and_or(id, mca_i, 0x800040210701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(54));
+	mca_and_or(id, mca_i, 0x800044200701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(56));
+	mca_and_or(id, mca_i, 0x800044210701103F, ~0,
+	           PPC_BIT(52));
+	mca_and_or(id, mca_i, 0x800048200701103F, ~0,
+	           PPC_BIT(50) | PPC_BIT(52) | PPC_BIT(54) | PPC_BIT(56) |
+	           PPC_BIT(58) | PPC_BIT(60) | PPC_BIT(62));
+	mca_and_or(id, mca_i, 0x800048210701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(50) | PPC_BIT(54));
+	mca_and_or(id, mca_i, 0x80004C200701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(50) | PPC_BIT(52) | PPC_BIT(58));
+
+	/*
+	 * Following are reordered to minimalize number of register reads/writes
+	------------------------------------------------------------------------
+	val = (ATTR_MSS_VPD_MT_MC_DRV_IMP_CNTL == ENUM_ATTR_MSS_VPD_MT_MC_DRV_IMP_CNTL_OHM30) ? 1 : 0
+	// val = 30 for all VPD sets
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR0 =        // same as CMD/ADDR, however it uses different VPD
+	    [52,60] =                 val       // ODT3, ODT1
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR0 =        // same as CMD/ADDR, however it uses different VPD
+	    [50,52] =                 val       // ODT2, ODT0
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR1 =        // same as CMD/ADDR, however it uses different VPD
+	    [54] =                    val       // PARITY
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR2 =        // same as CMD/ADDR, however it uses different VPD
+	    [52] =                    val       // CKE1
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR3 =        // same as CMD/ADDR, however it uses different VPD
+	    [54,56,60,62] =           val       // CKE0, CKE3, CKE2, RESET_N
+	*/
+	mca_and_or(id, mca_i, 0x800040200701103F, ~0,
+	           PPC_BIT(52) | PPC_BIT(60));
+	mca_and_or(id, mca_i, 0x800040210701103F, ~0,
+	           PPC_BIT(50) | PPC_BIT(52));
+	mca_and_or(id, mca_i, 0x800044210701103F, ~0,
+	           PPC_BIT(54));
+	mca_and_or(id, mca_i, 0x800048210701103F, ~0,
+	           PPC_BIT(52));
+	mca_and_or(id, mca_i, 0x80004C200701103F, ~0,
+	           PPC_BIT(54) | PPC_BIT(56) | PPC_BIT(60) | PPC_BIT(62));
+
+	/*
+	 * Following are reordered to minimalize number of register reads/writes
+	------------------------------------------------------------------------
+	val = (ATTR_MSS_VPD_MT_MC_DRV_IMP_CSCID == ENUM_ATTR_MSS_VPD_MT_MC_DRV_IMP_CSCID_OHM30) ? 1 : 0
+	// val = 30 for all VPD sets
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR0 =        // same as CMD/ADDR and CNTL, however it uses different VPD
+	    [48,54] =                 val       // CS0, CID0
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR1 =        // same as CLK and CMD/ADDR, however it uses different VPD
+	    [50,58] =                 val       // CS1, CID1
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP1_P0_ADR1 =        // same as CMD/ADDR and CNTL, however it uses different VPD
+	    [48,50] =                 val       // CS3, CID2
+	IOM0.DDRPHY_ADR_IO_FET_SLICE_EN_MAP0_P0_ADR2 =        // same as CMD/ADDR, however it uses different VPD
+	    [48] =                    val       // CS2
+	*/
+	mca_and_or(id, mca_i, 0x800040200701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(54));
+	mca_and_or(id, mca_i, 0x800044200701103F, ~0,
+	           PPC_BIT(50) | PPC_BIT(58));
+	mca_and_or(id, mca_i, 0x800044210701103F, ~0,
+	           PPC_BIT(48) | PPC_BIT(50));
+	mca_and_or(id, mca_i, 0x800048200701103F, ~0,
+	           PPC_BIT(48));
+
+	/*
+	 * IO impedance regs summary:            lanes 9-15 have different possible settings (results in 15/30 vs 40/30 Ohm)
+	 * MAP0_ADR0: all set                       MAP1_ADR0: lanes 12-15 not set
+	 * MAP0_ADR1: all set                       MAP1_ADR1: lanes 12-15 not set
+	 * MAP0_ADR2: all set                       MAP1_ADR2: lanes 12-15 not set
+	 * MAP0_ADR3: all set                       MAP1_ADR3: not used
+	 * This mapping is consistent with ADR_DELAYx_P0_ADRy settings.
+	 */
+}
+
+static const uint8_t ATTR_MSS_VPD_MT_VREF_DRAM_WR[] = {0x0E, 0x18, 0x1E, 0x22};
+
+static void reset_wr_vref_registers(chiplet_id_t id, int mca_i, mca_data_t *mca)
+{
+	int dp;
+	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
+	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
+	if (mca->dimm[0].present && mca->dimm[1].present)
+		vpd_idx++;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_WR_VREF_CONFIG0_P0_{0,1,2,3,4} =
+		    [all]   0
+		    [48]    WR_CTR_1D_MODE_SWITCH =       0     // 1 for <DD2
+		    [49]    WR_CTR_RUN_FULL_1D =          1
+		    [50-52] WR_CTR_2D_SMALL_STEP_VAL =    0     // implicit +1
+		    [53-56] WR_CTR_2D_BIG_STEP_VAL =      1     // implicit +1
+		    [57-59] WR_CTR_NUM_BITS_TO_SKIP =     0     // skip nothing
+		    [60-62] WR_CTR_NUM_NO_INC_VREF_COMP = 7
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000006C0701103F, 0,
+		              PPC_BIT(49) | PPC_SHIFT(1, 56) | PPC_SHIFT(7, 62));
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_CONFIG1_P0_{0,1,2,3,4} =
+		    [all]   0
+		    [48]    WR_CTR_VREF_RANGE_SELECT =      0       // range 1 by default (60-92.5%)
+		    [49-55] WR_CTR_VREF_RANGE_CROSSOVER =   0x18    // JEDEC table 34
+		    [56-62] WR_CTR_VREF_SINGLE_RANGE_MAX =  0x32    // JEDEC table 34
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000EC0701103F, 0,
+		              PPC_SHIFT(0x18, 55) | PPC_SHIFT(0x32, 62));
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_STATUS0_P0_{0,1,2,3,4} =
+		    [all]   0
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000002E0701103F, 0, 0);
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_STATUS1_P0_{0,1,2,3,4} =
+		    [all]   0
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000002F0701103F, 0, 0);
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR_MASK{0,1}_P0_{0,1,2,3,4} =
+		    [all]   0
+		    [48-63] 0xffff
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000FA0701103F, 0, PPC_BITMASK(48, 63));
+		dp_mca_and_or(id, dp, mca_i, 0x800000FB0701103F, 0, PPC_BITMASK(48, 63));
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR{0,1}_P0_{0,1,2,3,4} =
+		    [all]   0
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000AE0701103F, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, 0x800000AE0701103F, 0, 0);
+
+		/* Assume RDIMM
+		 * Assume unpopulated DIMMs/ranks are not calibrated so their settings doesn't matter (more reg accesses, much simpler code)
+		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR0_P0_{0,1,2,3,4} =   // 0x8000005{E,F}0701103F, +0x0400_0000_0000
+		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR1_P0_{0,1,2,3,4} =   // 0x8000015{E,F}0701103F, +0x0400_0000_0000
+		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR2_P0_{0,1,2,3,4} =   // 0x8000025{E,F}0701103F, +0x0400_0000_0000
+		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR3_P0_{0,1,2,3,4} =   // 0x8000035{E,F}0701103F, +0x0400_0000_0000
+		    [all]   0
+		    [49]    WR_VREF_RANGE_DRAM{0,2} = ATTR_MSS_VPD_MT_VREF_DRAM_WR & 0x40
+		    [50-55] WR_VREF_VALUE_DRAM{0,2} = ATTR_MSS_VPD_MT_VREF_DRAM_WR & 0x3f
+		    [57]    WR_VREF_RANGE_DRAM{1,3} = ATTR_MSS_VPD_MT_VREF_DRAM_WR & 0x40
+		    [58-63] WR_VREF_VALUE_DRAM{1,3} = ATTR_MSS_VPD_MT_VREF_DRAM_WR & 0x3f
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000005E0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000005F0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000015E0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000015F0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000025E0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000025F0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000035E0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+		dp_mca_and_or(id, dp, mca_i, 0x8000035F0701103F, 0,
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 55) |
+		              PPC_SHIFT(ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx], 63));
+	}
+}
+
+static void reset_drift_limits(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_DRIFT_LIMITS_P0_{0,1,2,3,4} =
+		    [48-49] DD2_BLUE_EXTEND_RANGE = 1         // always ONE_TO_FOUR due to red waterfall workaround
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x8000000A0701103F, ~PPC_BITMASK(48, 49),
+		              PPC_SHIFT(1, 49));
+	}
+}
+
+static void rd_dia_config5(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_RD_DIA_CONFIG5_P0_{0,1,2,3,4} =
+		    // "this isn't an EC feature workaround, it's a incorrect documentation workaround"
+		    [all]   0
+		    [49]    DYN_MCTERM_CNTL_EN =      1
+		    [52]    PER_CAL_UPDATE_DISABLE =  1     // "This bit must be set to 0 for normal operation"
+		    [59]    PERCAL_PWR_DIS =          1
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000120701103F, 0,
+		              PPC_BIT(49) | PPC_BIT(52) | PPC_BIT(59));
+	}
+}
+
+static void dqsclk_offset(chiplet_id_t id, int mca_i)
+{
+	int dp;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_DQSCLK_OFFSET_P0_{0,1,2,3,4} =
+		    // "this isn't an EC feature workaround, it's a incorrect documentation workaround"
+		    [all]   0
+		    [49-55] DQS_OFFSET = 0x08       // Config provided by S. Wyatt 9/13
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000370701103F, 0,
+		              PPC_SHIFT(0x08, 55));
+	}
+}
+
 static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 {
 	/* Hostboot here sets strength, we did it in p9n_ddrphy_scom(). */
@@ -3078,29 +3353,47 @@ static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
 	// reset_bad_bits();
 
 	reset_clock_enable(id, mcs_i, mca_i, mca);
-
 	reset_rd_vref(id, mca_i, mca);
 
 	pc_reset(id, mca_i);
-
 	wc_reset(id, mca_i, mca);
-
 	rc_reset(id, mca_i, mca);
-
 	seq_reset(id, mca_i, mca);
 
 	reset_ac_boost_cntl(id, mca_i);
-
 	reset_ctle_cntl(id, mca_i);
-
 	reset_delay(id, mcs_i, mca_i, mca);
-
 	reset_tsys_adr(id, mca_i);
-
 	reset_tsys_data(id, mca_i);
+	reset_io_impedances(id, mca_i);
+	reset_wr_vref_registers(id, mca_i, mca);
+	reset_drift_limits(id, mca_i);
 
-	// reset_io_impedances();
-	// ... TBD ...
+	/* Workarounds */
+
+	/* Doesn't apply to DD2 */
+	// dqs_polarity();
+
+	rd_dia_config5(id, mca_i);
+	dqsclk_offset(id, mca_i);
+
+	/* Doesn't apply to DD2 */
+	// odt_config();
+}
+
+static void fir_unmask(chiplet_id_t id, int mca_i)
+{
+	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG =      // maybe use SCOM1 (AND) 0x07011001?
+	  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0   // calibration errors
+	  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // DLL errors
+	*/
+	scom_and_or_for_chiplet(id, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
+
+	/* MC01.PORT0.SRQ.MBACALFIRQ =         // maybe use SCOM1 (AND) 0x07010901?
+	  [4]   MBACALFIRQ_RCD_PARITY_ERROR = 0
+	  [8]   MBACALFIRQ_DDR_MBA_EVENT_N =  0
+	*/
+	mca_and_or(id, mca_i, 0x07010900, ~(PPC_BIT(4) | PPC_BIT(8)), 0);
 }
 
 /*
@@ -3151,20 +3444,25 @@ void istep_13_8(void)
 		p9n_mcbist_scom(mcs_ids[mcs_i]);
 	}
 
-
 	/* This double loop is a part of phy_scominit() in Hostboot, but this is simpler. */
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		if (!mem_data.mcs[mcs_i].functional)
+			continue;
+
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
-			/* No magic this time. */
-			if (!mca->functional)
-				continue;
+			/* No magic for phy_scmoinit(). */
+			if (mca->functional)
+				phy_scominit(mcs_ids[mcs_i], mcs_i, mca_i, mca);
 
-			phy_scominit(mcs_ids[mcs_i], mcs_i, mca_i, mca);
+			/*
+			 * TODO: test this with DIMMs on both MCS. Maybe this has to be done
+			 * in a separate loop, after all phy_scominit()'s are done.
+			 */
+			if (mca_i == 0 || mca->functional)
+				fir_unmask(mcs_ids[mcs_i], mca_i);
 		}
 	}
-
-	// mss::unmask::after_scominit();
 
 	printk(BIOS_EMERG, "ending istep 13.8\n");
 }

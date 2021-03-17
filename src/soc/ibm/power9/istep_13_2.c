@@ -2,8 +2,6 @@
 
 #include <cpu/power/istep_13.h>
 #include <console/console.h>
-#include <cpu/power/scom.h>
-#include <cpu/power/scom_registers.h>
 #include <timer.h>
 
 /*

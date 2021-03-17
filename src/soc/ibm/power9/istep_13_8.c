@@ -2,31 +2,9 @@
 
 #include <cpu/power/istep_13.h>
 #include <console/console.h>
-#include <cpu/power/scom.h>
-#include <cpu/power/scom_registers.h>
-#include <delay.h>
-#include <timer.h>
 
 #define ATTR_PG			0xE000000000000000ull
 #define FREQ_PB_MHZ		1866
-
-#define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - lsb))
-
-/* TODO: discover how MCAs are numbered (0,1,2,3? 0,1,6,7? 0,1,4,5?) */
-/* TODO: consider non-RMW variant */
-static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom,
-                              uint64_t and, uint64_t or)
-{
-	/* Indirect registers have different stride than the direct ones. */
-	unsigned mul = (scom & PPC_BIT(0)) ? 0x400 : 0x40;
-	scom_and_or_for_chiplet(mcs, scom + mca * mul, and, or);
-}
-
-static inline void dp_mca_and_or(chiplet_id_t mcs, int dp, int mca,
-                                 uint64_t scom, uint64_t and, uint64_t or)
-{
-	mca_and_or(mcs, mca, scom + dp * 0x40000000000, and, or);
-}
 
 /*
  * This function was generated from initfiles. Some of the registers used here

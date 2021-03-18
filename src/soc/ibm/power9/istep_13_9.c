@@ -6,7 +6,7 @@
 
 static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
 {
-	uint64_t status = mca_read(id, 0, 0x8000C0000701103F);
+	uint64_t status = mca_read(id, mca_i, 0x8000C0000701103F);
 	/*
 	if (IOM0.DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0
 			[48]  DP_DLL_CAL_GOOD ==        1
@@ -159,14 +159,16 @@ static void check_during_phy_reset(chiplet_id_t id, int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7
 		*/
-		val = mca_read(id, mca_i, 0x07011000);
+		/* FIXME: how is PHY numbering related to MCA numbering? mca_i/2? */
+		// val = mca_read(id, mca_i, 0x07011000);
+		val = mca_read(id, 0, 0x07011000);
 		if (val & PPC_BITMASK(54, 61)) {
 			/* No idea how severe that error is... */
 			printk(BIOS_ERR, "Error detected in IOM_PHY%d_DDRPHY_FIR_REG: %#llx\n",
-				   mca_i, val);
+				   /* mca_i */ 0, val);
 		}
 
-		mca_and_or(id, mca_i, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
+		mca_and_or(id, /* mca_i */ 0, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
 	}
 }
 
@@ -257,13 +259,17 @@ static void fir_unmask(chiplet_id_t id, int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 0   // recoverable_error (0,1,0)
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 0   // recoverable_error (0,1,0)
 		*/
-		mca_and_or(id, mca_i, 0x07011006,
+		/* FIXME: how is PHY numbering related to MCA numbering? mca_i/2? */
+		//mca_and_or(id, mca_i, 0x07011006,
+		mca_and_or(id, 0, 0x07011006,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
-		mca_and_or(id, mca_i, 0x07011007,
+		//mca_and_or(id, mca_i, 0x07011007,
+		mca_and_or(id, 0, 0x07011007,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61));
-		mca_and_or(id, mca_i, 0x07011003,
+		//mca_and_or(id, mca_i, 0x07011003,
+		mca_and_or(id, 0, 0x07011003,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
 	}
@@ -608,7 +614,18 @@ void istep_13_9(void)
 
 		/* Check for LOCK in {DP16,ADR}_SYSCLK_PR_VALUE */
 		/* 50*10ns, but we don't have such precision. */
-		time = wait_us(1, test_bb_lock(mcs_ids[mcs_i], mcs_i));
+		/*
+		 * FIXME: Hostboot uses the timeout mentioned above for each of
+		 * the registers separately. It also checks them separately,
+		 * meaning that they don't have to be locked at the same time.
+		 * I am not sure if this is why the call below times out or if
+		 * there is another reason. Can these locks be lost or should
+		 * they hold until reset?
+		 *
+		 * Increasing the timeout helps (maybe that's just luck), but
+		 * this probably isn't a proper way to do this.
+		 */
+		time = wait_ms(1000, test_bb_lock(mcs_ids[mcs_i], mcs_i));
 		if (!time)
 			die("BB lock timeout\n");
 

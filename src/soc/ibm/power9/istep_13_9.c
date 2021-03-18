@@ -2,11 +2,11 @@
 
 #include <cpu/power/istep_13.h>
 #include <console/console.h>
-#include <cpu/power/scom.h>
+#include <timer.h>
 
 static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
 {
-	uint64_t status = mca_read(mcs_ids[mcs_i], 0, 0x8000C0000701103F);
+	uint64_t status = mca_read(id, 0, 0x8000C0000701103F);
 	/*
 	if (IOM0.DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0
 			[48]  DP_DLL_CAL_GOOD ==        1
@@ -21,7 +21,7 @@ static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
 			[52]  ADR_DLL_CAL_ERROR ==      1 |
 			[53]  ADR_DLL_CAL_ERROR_FINE == 1) break and do the workaround
 	*/
-	if (status & PPC_BITMASK(48, 53) == PPC_BIT(48) | PPC_BIT(51)) {
+	if ((status & PPC_BITMASK(48, 53)) == (PPC_BIT(48) | PPC_BIT(51))) {
 		/* DLL calibration finished without errors */
 		return 1;
 	}
@@ -34,6 +34,44 @@ static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
 
 	/* Not done yet */
 	return 0;
+}
+
+static int test_bb_lock(chiplet_id_t id, int mcs_i)
+{
+	uint64_t res = PPC_BIT(48) | PPC_BIT(56);
+	int mca_i, dp;
+
+	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+		if (!mem_data.mcs[mcs_i].mca[mca_i].functional)
+			continue;
+
+		/*
+		IOM0.DDRPHY_ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S{0,1}
+			  [56]  BB_LOCK     &
+		IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_{0,1,2,3}
+			  [48]  BB_LOCK0    &
+			  [56]  BB_LOCK1    &
+		IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_4
+			  [48]  BB_LOCK0          // last DP16 uses only first half
+		if all bits listed above are set: success
+		*/
+
+		/* ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S{0,1}, bit 48 doesn't matter */
+		res &= dp_mca_read(id, 0, mca_i, 0x800080340701103F) | PPC_BIT(48);
+		res &= dp_mca_read(id, 1, mca_i, 0x800080340701103F) | PPC_BIT(48);
+
+		/* IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_{0,1,2,3} */
+		for (dp = 0; dp < 4; dp++) {
+			res &= dp_mca_read(id, dp, mca_i, 0x800000730701103F);
+		}
+
+		/* IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_4, bit 56 doesn't matter */
+		res &= dp_mca_read(id, dp, mca_i, 0x800000730701103F) | PPC_BIT(56);
+
+		/* Do we want early return here? */
+	}
+
+	return res == (PPC_BIT(48) | PPC_BIT(56));
 }
 
 static void fix_bad_voltage_settings(void)
@@ -81,6 +119,156 @@ static void fix_bad_voltage_settings(void)
 */
 }
 
+static void check_during_phy_reset(chiplet_id_t id, int mcs_i)
+{
+	/*
+	 * Mostly FFDC, which to my current knowledge is just the error logging. If
+	 * it does anything else, this whole function needs rechecking.
+	 */
+	int mca_i;
+	uint64_t val;
+
+	/* If any of these bits is set, report error. Clear them unconditionally. */
+	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+		if (mca_i != 0 && !mem_data.mcs[mcs_i].mca[mca_i].functional)
+			continue;
+
+		/* MC01.PORT0.SRQ.MBACALFIRQ
+			  [0]   MBACALFIRQ_MBA_RECOVERABLE_ERROR
+			  [1]   MBACALFIRQ_MBA_NONRECOVERABLE_ERROR
+			  [10]  MBACALFIRQ_SM_1HOT_ERR
+		*/
+		val = mca_read(id, mca_i, 0x07010900);
+		if (val & (PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(10))) {
+			/* No idea how severe that error is... */
+			printk(BIOS_ERR, "Error detected in PORT%d.SRQ.MBACALFIRQ: %#llx\n",
+			       mca_i, val);
+		}
+
+		/* TODO: this really asks for non-RMW version. */
+		mca_and_or(id, mca_i, 0x07010900,
+		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(10)), 0);
+
+		/* IOM0.IOM_PHY0_DDRPHY_FIR_REG
+			  [54]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_0
+			  [55]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_1
+			  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2
+			  [57]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_3
+			  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4
+			  [59]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_5
+			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6
+			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7
+		*/
+		val = mca_read(id, mca_i, 0x07011000);
+		if (val & PPC_BITMASK(54, 61)) {
+			/* No idea how severe that error is... */
+			printk(BIOS_ERR, "Error detected in IOM_PHY%d_DDRPHY_FIR_REG: %#llx\n",
+				   mca_i, val);
+		}
+
+		mca_and_or(id, mca_i, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
+	}
+}
+
+static void fir_unmask(chiplet_id_t id, int mcs_i)
+{
+	int mca_i;
+
+	/*
+	 * MASK must be always written last, otherwise we may get unintended
+	 * actions. No need for explicit barrier here, SCOM functions do eieio.
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRACT0
+		[2]   MCBISTFIRQ_INTERNAL_FSM_ERROR =       0
+		[13]  MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE =  0
+		[14]  MCBISTFIRQ_SCOM_FATAL_REG_PE =        0
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRACT1
+		[2]   MCBISTFIRQ_INTERNAL_FSM_ERROR =       0
+		[13]  MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE =  1
+		[14]  MCBISTFIRQ_SCOM_FATAL_REG_PE =        0
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRMASK
+		[2]   MCBISTFIRQ_INTERNAL_FSM_ERROR =       0   // checkstop (0,0,0)
+		[13]  MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE =  0   // recoverable_error (0,1,0)
+		[14]  MCBISTFIRQ_SCOM_FATAL_REG_PE =        0   // checkstop (0,0,0)
+	*/
+	scom_and_or_for_chiplet(id, 0x07012306,
+	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
+	                        0);
+	scom_and_or_for_chiplet(id, 0x07012307,
+	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
+	                        PPC_BIT(13));
+	scom_and_or_for_chiplet(id, 0x07012303,
+	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
+	                        0);
+
+	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+		if (!mem_data.mcs[mcs_i].mca[mca_i].functional)
+			continue;
+
+		/*
+		MC01.PORT0.SRQ.MBACALFIR_ACTION0
+			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    0
+			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0
+			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         0
+			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0
+		MC01.PORT0.SRQ.MBACALFIR_ACTION1
+			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    1
+			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0
+			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         1
+			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0
+		MC01.PORT0.SRQ.MBACALFIR_MASK
+			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    0   // recoverable_error (0,1,0)
+			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0   // checkstop (0,0,0)
+			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         0   // recoverable_error (0,1,0)
+			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0   // checkstop (0,0,0)
+		*/
+		mca_and_or(id, mca_i, 0x07010906,
+		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
+		           0);
+		mca_and_or(id, mca_i, 0x07010907,
+		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
+		           PPC_BIT(0) | PPC_BIT(4));
+		mca_and_or(id, mca_i, 0x07010903,
+		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
+		           0);
+
+		/*
+		IOM0.IOM_PHY0_DDRPHY_FIR_ACTION0_REG
+			  [54]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_0 = 0
+			  [55]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_1 = 0
+			  [57]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_3 = 0   // no ERROR_2!
+			  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0
+			  [59]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_5 = 0
+			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 0
+			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 0
+		IOM0.IOM_PHY0_DDRPHY_FIR_ACTION1_REG
+			  [54]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_0 = 1
+			  [55]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_1 = 1
+			  [57]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_3 = 1
+			  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 1
+			  [59]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_5 = 1
+			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 1
+			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 1
+		IOM0.IOM_PHY0_DDRPHY_FIR_MASK_REG
+			  [54]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_0 = 0   // recoverable_error (0,1,0)
+			  [55]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_1 = 0   // recoverable_error (0,1,0)
+			  [57]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_3 = 0   // recoverable_error (0,1,0)
+			  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // recoverable_error (0,1,0)
+			  [59]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_5 = 0   // recoverable_error (0,1,0)
+			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 0   // recoverable_error (0,1,0)
+			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 0   // recoverable_error (0,1,0)
+		*/
+		mca_and_or(id, mca_i, 0x07011006,
+		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
+		           0);
+		mca_and_or(id, mca_i, 0x07011007,
+		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
+		           PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61));
+		mca_and_or(id, mca_i, 0x07011003,
+		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
+		           0);
+	}
+}
+
 /*
  * Can't protect with do..while, this macro is supposed to exit 'for' loop in
  * which it is invoked. As a side effect, it is used without semicolon.
@@ -88,7 +276,7 @@ static void fix_bad_voltage_settings(void)
  * "I want to break free" - Freddie Mercury
  */
 #define TEST_VREF(dp, scom) \
-if (dp_mca_read(mcs_ids[mcs_i], dp, mca_i, scom) & PPC_BITMASK(56, 62) == \
+if ((dp_mca_read(mcs_ids[mcs_i], dp, mca_i, scom) & PPC_BITMASK(56, 62)) == \
              PPC_SHIFT(1,62)) { \
 	need_dll_workaround = true; \
 	break; \
@@ -377,7 +565,169 @@ void istep_13_9(void)
 			fix_bad_voltage_settings();
 
 		/* Start bang-bang-lock */
-		// TBD...
+		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
+			if (!mca->functional)
+				continue;
+
+			/* Take dphy_nclk/SysClk alignment circuits out of reset and put into
+			 * continuous update mode
+			IOM0.DDRPHY_ADR_SYSCLK_CNTL_PR_P0_ADR32S{0,1} =
+			IOM0.DDRPHY_DP16_SYSCLK_PR0_P0_{0,1,2,3,4} =
+			IOM0.DDRPHY_DP16_SYSCLK_PR1_P0_{0,1,2,3} =
+					[all]   0
+					[48-63] 0x8024      // From the DDR PHY workbook
+			*/
+			/* Has the same stride as DP16 */
+			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
+			              0x800080320701103F, /* ADR_SYSCLK_CNTRL_PR_P0_ADR32S0 */
+			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
+			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
+			              0x800080320701103F,
+			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
+
+			for (dp = 0; dp < 4; dp++) {
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
+				              0x800000070701103F, /* DP16_SYSCLK_PR0_P0_<dp> */
+				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
+				              0x8000007F0701103F, /* DP16_SYSCLK_PR1_P0_<dp> */
+				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
+			}
+			dp_mca_and_or(mcs_ids[mcs_i], 4, mca_i,
+						  0x800000070701103F, /* DP16_SYSCLK_PR0_P0_4 */
+						  ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
+		}
+
+		/*
+		 * Wait at least 5932 dphy_nclk clock cycles to allow the dphy_nclk/SysClk
+		 * alignment circuit to perform initial alignment.
+		 */
+		delay_nck(5932);
+
+		/* Check for LOCK in {DP16,ADR}_SYSCLK_PR_VALUE */
+		/* 50*10ns, but we don't have such precision. */
+		time = wait_us(1, test_bb_lock(mcs_ids[mcs_i], mcs_i));
+		if (!time)
+			die("BB lock timeout\n");
+
+		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
+			if (!mca->functional)
+				continue;
+
+			/* De-assert the SYSCLK_RESET
+			IOM0.DDRPHY_PC_RESETS_P0 =
+				  [49]  SYSCLK_RESET = 0
+			*/
+			mca_and_or(mcs_ids[mcs_i], mca_i, 0x8000C00E0701103F, ~PPC_BIT(49), 0);
+
+			/* Reset the windage registers */
+			/*
+			 * According to the PHY team, resetting the read delay offset must be
+			 * done after SYSCLK_RESET.
+			 *
+			 * ATTR_MSS_VPD_MT_WINDAGE_RD_CTR holds (signed) value of offset in
+			 * picoseconds. It must be converted to phase rotator ticks. There are
+			 * 128 ticks per clock, and clock period depends on memory frequency.
+			 *
+			 * Result is rounded away from zero, so we have to add _or subtract_
+			 * half of tick.
+			 *
+			 * In some cases we can skip this (40 register writes per port), from
+			 * documentation:
+			 *
+			 * "This register must not be set to a nonzero value unless detailed
+			 * timing analysis shows that, for a particular configuration, the
+			 * read-centering algorithm places the sampling point off from the eye
+			 * center."
+			 *
+			 * ATTR_MSS_VPD_MT_WINDAGE_RD_CTR is outside of defined values for VPD
+			 * for Talos, it is by default set to 0. Skipping this for now, but it
+			 * may be needed for generalized code.
+			 *
+			           // 0x80000{0,1,2,3}0C0701103F, +0x0400_0000_0000
+			IOM0.DDRPHY_DP16_READ_DELAY_OFFSET0_RANK_PAIR{0,1,2,3}_P0_{0,1,2,3,4} =
+			           // 0x80000{0,1,2,3}0D0701103F, +0x0400_0000_0000
+			IOM0.DDRPHY_DP16_READ_DELAY_OFFSET1_RANK_PAIR{0,1,2,3}_P0_{0,1,2,3,4} =
+				  [all]   0
+				  [49-55] OFFSET0 = offset_in_ticks_rounded
+				  [57-63] OFFSET1 = offset_in_ticks_rounded
+			*/
+
+			/*
+			 * Take the dphy_nclk/SysClk alignment circuit out of the Continuous
+			 * Update mode
+			IOM0.DDRPHY_ADR_SYSCLK_CNTL_PR_P0_ADR32S{0,1} =           // 0x800080320701103F, +0x0400_0000_0000
+			IOM0.DDRPHY_DP16_SYSCLK_PR0_P0_{0,1,2,3,4} =              // 0x800000070701103F, +0x0400_0000_0000
+			IOM0.DDRPHY_DP16_SYSCLK_PR1_P0_{0,1,2,3} =                // 0x8000007F0701103F, +0x0400_0000_0000
+				  [all]   0
+				  [48-63] 0x8020      // From the DDR PHY workbook
+			*/
+			/* Has the same stride as DP16 */
+			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
+			              0x800080320701103F, /* ADR_SYSCLK_CNTRL_PR_P0_ADR32S0 */
+			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
+			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
+			              0x800080320701103F,
+			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
+
+			for (dp = 0; dp < 4; dp++) {
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
+				              0x800000070701103F, /* DP16_SYSCLK_PR0_P0_<dp> */
+				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
+				              0x8000007F0701103F, /* DP16_SYSCLK_PR1_P0_<dp> */
+				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
+			}
+			dp_mca_and_or(mcs_ids[mcs_i], 4, mca_i,
+						  0x800000070701103F, /* DP16_SYSCLK_PR0_P0_4 */
+						  ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
+		}
+
+		/* Wait at least 32 dphy_nclk clock cycles */
+		delay_nck(32);
+		/* Done bang-bang-lock */
+
+		/* Per J. Bialas, force_mclk_low can be dasserted */
+		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
+			if (!mca->functional)
+				continue;
+
+			/* MC01.PORT0.SRQ.MBA_FARB5Q =
+					[8]     MBA_FARB5Q_CFG_FORCE_MCLK_LOW_N = 1
+			*/
+			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~0, PPC_BIT(8));
+
+		}
+
+		/* Workarounds */
+		/*
+		 * Does not apply to DD2, but even then reads and writes back some
+		 * registers without modifications.
+		 */
+		// mss::workarounds::dp16::after_phy_reset();
+
+		/*
+		 * Comments from Hostboot:
+		 *
+		 * "New for Nimbus - perform duty cycle clock distortion calibration
+		 * (DCD cal).
+		 * Per PHY team's characterization, the DCD cal needs to be run after DLL
+		 * calibration."
+		 *
+		 * However, it can be skipped based on ATTR_MSS_RUN_DCD_CALIBRATION,
+		 * and by default it is skipped.
+		 */
+		// mss::adr32s::duty_cycle_distortion_calibration();
+
+		/* FIR */
+		check_during_phy_reset(mcs_ids[mcs_i], mcs_i);
+		fir_unmask(mcs_ids[mcs_i], mcs_i);
 	}
 
 	printk(BIOS_EMERG, "ending istep 13.9\n");

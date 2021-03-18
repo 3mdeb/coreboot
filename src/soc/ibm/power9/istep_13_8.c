@@ -3365,6 +3365,11 @@ static void fir_unmask(chiplet_id_t id, int mca_i)
 	  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0   // calibration errors
 	  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // DLL errors
 	*/
+	/*
+	 * I expected the following line to be a proper one, but it results in
+	 * non-readable SCOM. This is where MCA numbering comes in...
+	 */
+	//mca_and_or(id, mca_i, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
 	scom_and_or_for_chiplet(id, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
 
 	/* MC01.PORT0.SRQ.MBACALFIRQ =         // maybe use SCOM1 (AND) 0x07010901?

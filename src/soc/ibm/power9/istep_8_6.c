@@ -33,11 +33,9 @@ static const uint32_t EPSILON_R_T2_F8[] = {  148,  149,  152,  155,  160,  184 }
 static const uint32_t EPSILON_W_T0_F8[] = {    0,    0,    0,    0,    0,    5 };
 static const uint32_t EPSILON_W_T1_F8[] = {   76,   77,   78,   80,   82,   94 };
 
-<<<<<<< HEAD
-/* Keep them static and later we can use function to retrieve the values set here */
-=======
+
 /* Keep them global and later we can use function to retrieve the values set here */
->>>>>>> b06d6bcd3c (src/soc/ibm/power9/isteps/istep8.c: Changing commentary to group of)
+
 static uint32_t eps_r[NUM_EPSILON_READ_TIERS];
 static uint32_t eps_w[NUM_EPSILON_WRITE_TIERS];
 static int8_t eps_guardband;

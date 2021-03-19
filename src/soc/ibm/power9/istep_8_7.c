@@ -65,4 +65,21 @@ static int p9_query_config_links(const uint8_t *i_target, uint8_t *o_link_is_ena
 	return 0;
 
 }
-_
+
+static int p9_cfg_links_set_link_active_attr(const uint64_t* i_target, const bool i_enable)
+{
+	if (*i_target == TARGET_TYPE_XBUS || *i_target == TARGET_TYPE_OBUS)
+	{	
+		uint8_t l_active = (i_enable) ?
+			ENUM_ATTR_PROC_FABRIC_LINK_ACTIVE_TRUE:
+			ENUM_ATTR_PROC_FABRIC_LINK_ACTIVE_FALSE;
+	}
+	else 
+	{
+		printk (BIOS_ERR, "Invalid Target Type");
+		return -1;
+	}
+
+	return 0;
+}
+

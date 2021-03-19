@@ -167,7 +167,7 @@ static void dump_epsilons(void)
 static int p9_calculate_epsilons(uint8_t *floor_ratio, uint8_t *ceiling_ratio,
 				 uint32_t *fbc_freq, uint32_t *freq_ceiling)
 {
-	uint8_t eps_table_type = EPS_TYPE_LE; /* ATTR_PROC_EPS_TABLE_TYPE from talox.xml */
+	uint8_t eps_table_type = EPS_TYPE_LE; /* ATTR_PROC_EPS_TABLE_TYPE from talos.xml */
 	uint32_t i;
 
 	/* Processor SMP Fabric broadcast scope configuration.

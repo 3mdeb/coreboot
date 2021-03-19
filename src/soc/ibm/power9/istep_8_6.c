@@ -36,13 +36,13 @@ static const uint32_t EPSILON_W_T1_F8[] = {   76,   77,   78,   80,   82,   94 }
 
 /* Keep them global and later we can use function to retrieve the values set here */
 
-static uint32_t eps_r[NUM_EPSILON_READ_TIERS];
-static uint32_t eps_w[NUM_EPSILON_WRITE_TIERS];
-static int8_t eps_guardband;
-static uint8_t core_floor_ratio;
-static uint8_t core_ceiling_ratio;
-static uint32_t freq_fbc;
-static uint32_t freq_core_ceiling;
+uint32_t eps_r[NUM_EPSILON_READ_TIERS];
+uint32_t eps_w[NUM_EPSILON_WRITE_TIERS];
+int8_t eps_guardband;
+uint8_t core_floor_ratio;
+uint8_t core_ceiling_ratio;
+uint32_t freq_fbc;
+uint32_t freq_core_ceiling;
 
 static int p9_calculate_frequencies(uint8_t *floor_ratio, uint8_t *ceiling_ratio,
 				    uint32_t *fbc_freq, uint32_t *freq_ceiling)

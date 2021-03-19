@@ -149,7 +149,7 @@ static void config_guardband_epsilon(const uint8_t gb_percentage, uint32_t *targ
 
 }
 
-static void dump_eplisons(void)
+static void dump_epsilons(void)
 {
 	uint32_t i;
 

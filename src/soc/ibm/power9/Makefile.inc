@@ -6,6 +6,7 @@ bootblock-y += bootblock.c
 postcar-y += exit_car.S
 romstage-y += romstage.c
 romstage-y += istep_8_6.c
+romstage-y += istep_8_7.c
 ramstage-y += chip.c
 ramstage-y += timer.c
 

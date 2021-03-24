@@ -18,7 +18,6 @@ void istep_13_4(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.4\n");
 	int i;
-	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 	report_istep(13,4);
 

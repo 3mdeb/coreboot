@@ -14,8 +14,10 @@
  * added to SCOM address for those registers or not. Undocumented registers are
  * marked with (?) in the comments.
  */
-static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void p9n_mca_scom(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	/*
 	 * Mixing rules:
 	 * - rank configurations are the same for both DIMMs
@@ -483,8 +485,9 @@ static void p9n_mca_scom(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	mca_and_or(id, mca_i, 0x07010A38, ~0ull, PPC_BIT(9));
 }
 
-static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
+static void thermal_throttle_scominit(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	/* Set power control register */
 	/* MC01.PORT0.SRQ.PC.MBARPC0Q =
 	    [3-5]   MBARPC0Q_CFG_MIN_MAX_DOMAINS =                          0
@@ -540,8 +543,9 @@ static void thermal_throttle_scominit(chiplet_id_t id, int mca_i)
  * for functional MCAs, maybe this can be called just for magic, non-functional
  * ones to save time, but for now do it in a way the Hostboot does it.
  */
-static void p9n_ddrphy_scom(chiplet_id_t id, int mca_i)
+static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 	/*
 	 * Hostboot sets this to proper value in phy_scominit(), but I don't see
@@ -693,8 +697,9 @@ static void p9n_ddrphy_scom(chiplet_id_t id, int mca_i)
 	           PPC_SHIFT(0x0202, 63));
 }
 
-static void p9n_mcbist_scom(chiplet_id_t id)
+static void p9n_mcbist_scom(int mcs_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	/* MC01.MCBIST.MBA_SCOMFIR.WATCFG0AQ =
 	    [0-47]  WATCFG0AQ_CFG_WAT_EVENT_SEL =  0x400000000000
 	*/
@@ -760,8 +765,10 @@ static void p9n_mcbist_scom(chiplet_id_t id)
 	                        PPC_SHIFT(0x4, 22) | PPC_SHIFT(0x4, 25) | PPC_SHIFT(0x4, 40));
 }
 
-static void set_rank_pairs(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void set_rank_pairs(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	/*
 	 * Assumptions:
 	 * - non-LR DIMMs (platform wiki),
@@ -869,8 +876,9 @@ static void set_rank_pairs(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	/* These are not valid anyway, so don't bother setting anything. */
 }
 
-static void reset_data_bit_enable(chiplet_id_t id, int mca_i)
+static void reset_data_bit_enable(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	for (dp = 0; dp < 4; dp++) {
@@ -918,8 +926,10 @@ static const uint16_t x8_clk[8][5] = {
 	{0x0CC0, 0xC0C0, 0x0F00, 0xC300, 0xC000}, /* Port 7 */
 };
 
-static void reset_clock_enable(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+static void reset_clock_enable(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	/* Assume the same rank configuration for both DIMMs */
 	int dp;
 	int width = mca->dimm[0].present ? mca->dimm[0].width :
@@ -969,8 +979,11 @@ static const uint32_t ATTR_MSS_VPD_MT_VREF_MC_RD[4] = {
 	0x00014f20,	// 2R in both DIMMs
 };
 
-static void reset_rd_vref(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void reset_rd_vref(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
 	int dp;
 	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
 	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
@@ -1032,8 +1045,9 @@ static void reset_rd_vref(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	}
 }
 
-static void pc_reset(chiplet_id_t id, int mca_i)
+static void pc_reset(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	/* These are from VPD */
 	uint64_t ATTR_MSS_EFF_DPHY_WLO = mem_data.speed == 1866 ? 1 : 2;
 	uint64_t ATTR_MSS_EFF_DPHY_RLO = mem_data.speed == 1866 ? 4 :
@@ -1066,8 +1080,11 @@ static void pc_reset(chiplet_id_t id, int mca_i)
 	mca_and_or(id, mca_i, 0x8000C0180701103F, 0, 0);
 }
 
-static void wc_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void wc_reset(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
 	/* IOM0.DDRPHY_WC_CONFIG0_P0 =
 	      [all]   0
 	      // BUG? Mismatch between comment (-,-), code (+,+) and docs (-,+) for operations inside 'max'
@@ -1132,8 +1149,11 @@ static void wc_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	           PPC_SHIFT(ns_to_nck(150), 59));
 }
 
-static void rc_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void rc_reset(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
 	/* IOM0.DDRPHY_RC_CONFIG0_P0
 	      [all]   0
 	      [48-51] GLOBAL_PHY_OFFSET =
@@ -1221,8 +1241,10 @@ static const uint8_t ATTR_MSS_VPD_MT_ODT_WR[4][2][2] = {
 	{ {0xC0, 0xC0}, {0x0C, 0x0C} },	// 2R in both DIMMs
 };
 
-static void seq_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void seq_reset(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
 	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
 	if (mca->dimm[0].present && mca->dimm[1].present)
@@ -1355,8 +1377,9 @@ static void seq_reset(chiplet_id_t id, int mca_i, mca_data_t *mca)
 #undef F
 }
 
-static void reset_ac_boost_cntl(chiplet_id_t id, int mca_i)
+static void reset_ac_boost_cntl(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	/* IOM0.DDRPHY_DP16_ACBOOST_CTL_BYTE{0,1}_P0_{0,1,2,3,4} =
@@ -1394,8 +1417,9 @@ static void reset_ac_boost_cntl(chiplet_id_t id, int mca_i)
 	}
 }
 
-static void reset_ctle_cntl(chiplet_id_t id, int mca_i)
+static void reset_ctle_cntl(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	/* IOM0.DDRPHY_DP16_CTLE_CTL_BYTE{0,1}_P0_{0,1,2,3,4} =        // 0x8000002{0,1}0701103F, +0x0400_0000_0000
@@ -2775,8 +2799,11 @@ static const uint8_t ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D1_CKE0[][MCA_PER_MCS] = 
 	{ 0x20, 0x16 },	// JR
 };
 
-static void reset_delay(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+static void reset_delay(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
 	/* See comments in ATTR_MSS_VPD_MR_MC_PHASE_ROT_CNTL_D0_CSN0 for layout */
 	int speed_idx = mem_data.speed == 1866 ? 0 :
 	                mem_data.speed == 2133 ? 8 :
@@ -2997,8 +3024,9 @@ static void reset_delay(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
  * are different than in documentation. */
 static const uint8_t ATTR_MSS_VPD_MR_TSYS_ADR[] = { 0x79, 0x7B, 0x7D, 0x7F };
 
-static void reset_tsys_adr(chiplet_id_t id, int mca_i)
+static void reset_tsys_adr(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int i = mem_data.speed == 1866 ? 0 :
 	        mem_data.speed == 2133 ? 1 :
 	        mem_data.speed == 2400 ? 2 : 3;
@@ -3023,8 +3051,9 @@ static void reset_tsys_adr(chiplet_id_t id, int mca_i)
  * are different than in documentation. */
 static const uint8_t ATTR_MSS_VPD_MR_TSYS_DATA[] = { 0x74, 0x77, 0x79, 0x7C };
 
-static void reset_tsys_data(chiplet_id_t id, int mca_i)
+static void reset_tsys_data(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int i = mem_data.speed == 1866 ? 0 :
 	        mem_data.speed == 2133 ? 1 :
 	        mem_data.speed == 2400 ? 2 : 3;
@@ -3045,8 +3074,9 @@ static void reset_tsys_data(chiplet_id_t id, int mca_i)
 	}
 }
 
-static void reset_io_impedances(chiplet_id_t id, int mca_i)
+static void reset_io_impedances(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	for (dp = 0; dp < 5; dp++) {
@@ -3183,8 +3213,10 @@ static void reset_io_impedances(chiplet_id_t id, int mca_i)
 
 static const uint8_t ATTR_MSS_VPD_MT_VREF_DRAM_WR[] = {0x0E, 0x18, 0x1E, 0x22};
 
-static void reset_wr_vref_registers(chiplet_id_t id, int mca_i, mca_data_t *mca)
+static void reset_wr_vref_registers(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	int dp;
 	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
 	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
@@ -3275,8 +3307,9 @@ static void reset_wr_vref_registers(chiplet_id_t id, int mca_i, mca_data_t *mca)
 	}
 }
 
-static void reset_drift_limits(chiplet_id_t id, int mca_i)
+static void reset_drift_limits(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	for (dp = 0; dp < 5; dp++) {
@@ -3288,8 +3321,9 @@ static void reset_drift_limits(chiplet_id_t id, int mca_i)
 	}
 }
 
-static void rd_dia_config5(chiplet_id_t id, int mca_i)
+static void rd_dia_config5(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	for (dp = 0; dp < 5; dp++) {
@@ -3305,8 +3339,9 @@ static void rd_dia_config5(chiplet_id_t id, int mca_i)
 	}
 }
 
-static void dqsclk_offset(chiplet_id_t id, int mca_i)
+static void dqsclk_offset(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
 	for (dp = 0; dp < 5; dp++) {
@@ -3320,47 +3355,48 @@ static void dqsclk_offset(chiplet_id_t id, int mca_i)
 	}
 }
 
-static void phy_scominit(chiplet_id_t id, int mcs_i, int mca_i, mca_data_t *mca)
+static void phy_scominit(int mcs_i, int mca_i)
 {
 	/* Hostboot here sets strength, we did it in p9n_ddrphy_scom(). */
-	set_rank_pairs(id, mca_i, mca);
+	set_rank_pairs(mcs_i, mca_i);
 
-	reset_data_bit_enable(id, mca_i);
+	reset_data_bit_enable(mcs_i, mca_i);
 
 	/* Assume there are no bad bits (disabled DQ/DQS lines) for now */
 	// reset_bad_bits();
 
-	reset_clock_enable(id, mcs_i, mca_i, mca);
-	reset_rd_vref(id, mca_i, mca);
+	reset_clock_enable(mcs_i, mca_i);
+	reset_rd_vref(mcs_i, mca_i);
 
-	pc_reset(id, mca_i);
-	wc_reset(id, mca_i, mca);
-	rc_reset(id, mca_i, mca);
-	seq_reset(id, mca_i, mca);
+	pc_reset(mcs_i, mca_i);
+	wc_reset(mcs_i, mca_i);
+	rc_reset(mcs_i, mca_i);
+	seq_reset(mcs_i, mca_i);
 
-	reset_ac_boost_cntl(id, mca_i);
-	reset_ctle_cntl(id, mca_i);
-	reset_delay(id, mcs_i, mca_i, mca);
-	reset_tsys_adr(id, mca_i);
-	reset_tsys_data(id, mca_i);
-	reset_io_impedances(id, mca_i);
-	reset_wr_vref_registers(id, mca_i, mca);
-	reset_drift_limits(id, mca_i);
+	reset_ac_boost_cntl(mcs_i, mca_i);
+	reset_ctle_cntl(mcs_i, mca_i);
+	reset_delay(mcs_i, mca_i);
+	reset_tsys_adr(mcs_i, mca_i);
+	reset_tsys_data(mcs_i, mca_i);
+	reset_io_impedances(mcs_i, mca_i);
+	reset_wr_vref_registers(mcs_i, mca_i);
+	reset_drift_limits(mcs_i, mca_i);
 
 	/* Workarounds */
 
 	/* Doesn't apply to DD2 */
 	// dqs_polarity();
 
-	rd_dia_config5(id, mca_i);
-	dqsclk_offset(id, mca_i);
+	rd_dia_config5(mcs_i, mca_i);
+	dqsclk_offset(mcs_i, mca_i);
 
 	/* Doesn't apply to DD2 */
 	// odt_config();
 }
 
-static void fir_unmask(chiplet_id_t id, int mca_i)
+static void fir_unmask(int mcs_i, int mca_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG =      // maybe use SCOM1 (AND) 0x07011001?
 	  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0   // calibration errors
 	  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // DLL errors
@@ -3394,7 +3430,6 @@ void istep_13_8(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.8\n");
 	int mcs_i, mca_i;
-	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 	report_istep(13,8);
 
@@ -3416,15 +3451,14 @@ void istep_13_8(void)
 			/* Some registers cannot be initialized without data from SPD */
 			if (mca->functional) {
 				/* Assume DIMM mixing rules are followed - same rank config on both DIMMs*/
-				p9n_mca_scom(mcs_ids[mcs_i], mca_i, mca);
-				thermal_throttle_scominit(mcs_ids[mcs_i], mca_i);
+				p9n_mca_scom(mcs_i, mca_i);
+				thermal_throttle_scominit(mcs_i, mca_i);
 			}
 
 			/* The rest can and should be initialized also on magic port */
-			p9n_ddrphy_scom(mcs_ids[mcs_i], mca_i);
+			p9n_ddrphy_scom(mcs_i, mca_i);
 		}
-		/* This is for MCBIST, does it need chiplet ID? */
-		p9n_mcbist_scom(mcs_ids[mcs_i]);
+		p9n_mcbist_scom(mcs_i);
 	}
 
 	/* This double loop is a part of phy_scominit() in Hostboot, but this is simpler. */
@@ -3436,14 +3470,14 @@ void istep_13_8(void)
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 			/* No magic for phy_scmoinit(). */
 			if (mca->functional)
-				phy_scominit(mcs_ids[mcs_i], mcs_i, mca_i, mca);
+				phy_scominit(mcs_i, mca_i);
 
 			/*
 			 * TODO: test this with DIMMs on both MCS. Maybe this has to be done
 			 * in a separate loop, after all phy_scominit()'s are done.
 			 */
 			if (mca_i == 0 || mca->functional)
-				fir_unmask(mcs_ids[mcs_i], mca_i);
+				fir_unmask(mcs_i, mca_i);
 		}
 	}
 

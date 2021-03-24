@@ -4,8 +4,9 @@
 #include <console/console.h>
 #include <timer.h>
 
-static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
+static int test_dll_calib_done(int mcs_i, int mca_i, bool *do_workaround)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	uint64_t status = mca_read(id, mca_i, 0x8000C0000701103F);
 	/*
 	if (IOM0.DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0
@@ -36,8 +37,9 @@ static int test_dll_calib_done(chiplet_id_t id, int mca_i, bool *do_workaround)
 	return 0;
 }
 
-static int test_bb_lock(chiplet_id_t id, int mcs_i)
+static int test_bb_lock(int mcs_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	uint64_t res = PPC_BIT(48) | PPC_BIT(56);
 	int mca_i, dp;
 
@@ -119,12 +121,13 @@ static void fix_bad_voltage_settings(void)
 */
 }
 
-static void check_during_phy_reset(chiplet_id_t id, int mcs_i)
+static void check_during_phy_reset(int mcs_i)
 {
 	/*
 	 * Mostly FFDC, which to my current knowledge is just the error logging. If
 	 * it does anything else, this whole function needs rechecking.
 	 */
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int mca_i;
 	uint64_t val;
 
@@ -172,8 +175,9 @@ static void check_during_phy_reset(chiplet_id_t id, int mcs_i)
 	}
 }
 
-static void fir_unmask(chiplet_id_t id, int mcs_i)
+static void fir_unmask(int mcs_i)
 {
+	chiplet_id_t id = mcs_ids[mcs_i];
 	int mca_i;
 
 	/*
@@ -303,7 +307,6 @@ void istep_13_9(void)
 	printk(BIOS_EMERG, "starting istep 13.9\n");
 	int mcs_i, mca_i, dp;
 	long time;
-	chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 	bool need_dll_workaround;
 
 	report_istep(13,9);
@@ -520,8 +523,7 @@ void istep_13_9(void)
 				break;
 		}
 		/* 50*10ns, but we don't have such precision. */
-		time = wait_us(1, test_dll_calib_done(mcs_ids[mcs_i], mca_i,
-		                                      &need_dll_workaround));
+		time = wait_us(1, test_dll_calib_done(mcs_i, mca_i, &need_dll_workaround));
 		if (!time)
 			die("DLL calibration timeout\n");
 
@@ -550,7 +552,7 @@ void istep_13_9(void)
 			 * This is not safe if DLL calibration takes more time for other MCAs,
 			 * but this is the way Hostboot does it.
 			 */
-			test_dll_calib_done(mcs_ids[mcs_i], mca_i, &need_dll_workaround);
+			test_dll_calib_done(mcs_i, mca_i, &need_dll_workaround);
 
 			/*
 			if (IOM0.DDRPHY_ADR_DLL_VREG_COARSE_P0_ADR32S0        |       // 0x8000803E0701103F
@@ -625,7 +627,7 @@ void istep_13_9(void)
 		 * Increasing the timeout helps (maybe that's just luck), but
 		 * this probably isn't a proper way to do this.
 		 */
-		time = wait_ms(1000, test_bb_lock(mcs_ids[mcs_i], mcs_i));
+		time = wait_ms(1000, test_bb_lock(mcs_i));
 		if (!time)
 			die("BB lock timeout\n");
 
@@ -743,8 +745,8 @@ void istep_13_9(void)
 		// mss::adr32s::duty_cycle_distortion_calibration();
 
 		/* FIR */
-		check_during_phy_reset(mcs_ids[mcs_i], mcs_i);
-		fir_unmask(mcs_ids[mcs_i], mcs_i);
+		check_during_phy_reset(mcs_i);
+		fir_unmask(mcs_i);
 	}
 
 	printk(BIOS_EMERG, "ending istep 13.9\n");

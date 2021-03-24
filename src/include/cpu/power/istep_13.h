@@ -91,6 +91,7 @@ typedef struct {
 } mcbist_data_t;
 
 extern mcbist_data_t mem_data;
+static const chiplet_id_t mcs_ids[MCS_PER_PROC] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 /*
  * All time conversion functions assume that both MCSs have the same frequency.

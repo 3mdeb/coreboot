@@ -34,6 +34,7 @@ typedef struct {
 	uint8_t width;
 	uint8_t density;
 	uint8_t *spd;
+	uint8_t rcd_i2c_addr;
 } rdimm_data_t;
 
 typedef struct {
@@ -150,7 +151,7 @@ static inline void delay_nck(uint64_t nck)
 	udelay(nck_to_us(nck));
 }
 
-#define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - lsb))
+#define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - (lsb)))
 
 /* TODO: discover how MCAs are numbered (0,1,2,3? 0,1,6,7? 0,1,4,5?) */
 /* TODO: consider non-RMW variants */
@@ -180,9 +181,17 @@ static inline uint64_t dp_mca_read(chiplet_id_t mcs, int dp, int mca, uint64_t s
 	return mca_read(mcs, mca, scom + dp * 0x40000000000);
 }
 
+
+void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
+                         uint8_t cke, uint16_t idles);
+void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, int ranks, int mirror,
+                 uint16_t idles);
+void ccs_execute(chiplet_id_t id, int mca_i);
+
 void istep_13_2(void);
 void istep_13_3(void);
 void istep_13_4(void);
 void istep_13_6(void);
 void istep_13_8(void);	// TODO: takes epsilon values from 8.6 and MSS data from 7.4
 void istep_13_9(void);
+void istep_13_10(void);

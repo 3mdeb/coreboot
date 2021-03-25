@@ -10,7 +10,10 @@ romstage-y += istep_13_4.c
 romstage-y += istep_13_6.c
 romstage-y += istep_13_8.c
 romstage-y += istep_13_9.c
+romstage-y += istep_13_10.c
 romstage-y += i2c.c
+romstage-y += ccs.c
+
 ramstage-y += chip.c
 ramstage-y += timer.c
 

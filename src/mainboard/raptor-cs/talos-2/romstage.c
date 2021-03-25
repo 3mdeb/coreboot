@@ -4,7 +4,6 @@
 #include <cpu/power/vpd.h>
 #include <cpu/power/istep_13.h>
 #include <program_loading.h>
-#include <device/smbus_host.h>
 #include <lib.h>	// hexdump
 #include <spd_bin.h>
 #include <endian.h>
@@ -121,7 +120,7 @@ static void prepare_dimm_data(void)
 	 * and choose the highest value. For the range supported by the platform we
 	 * can check MTB only.
 	 *
-	 * TODO2: check if we can have different frequencies across MCSs.
+	 * TODO: check if we can have different frequencies across MCSs.
 	 */
 	for (i = 0; i < CONFIG_DIMM_MAX; i++) {
 		if (is_proper_dimm(blk.spd_array[i], i)) {
@@ -141,6 +140,8 @@ static void prepare_dimm_data(void)
 
 			dimm->present = true;
 			dimm->spd = blk.spd_array[i];
+			/* RCD address is the same as SPD, with one additional bit set */
+			dimm->rcd_i2c_addr = blk.addr_map[i] | 0x08;
 			/*
 			 * SPD fields in spd.h are not compatible with DDR4 and those in
 			 * spd_bin.h are just a few of all required.
@@ -152,6 +153,9 @@ static void prepare_dimm_data(void)
 			dimm->mranks = ((blk.spd_array[i][12] >> 3) & 0x7) + 1;
 			dimm->log_ranks = dimm->mranks * (((blk.spd_array[i][6] >> 4) & 0x7) + 1);
 			dimm->density = blk.spd_array[i][4] & 0xF;
+
+			if ((blk.spd_array[i][5] & 0x38) > 0x20)
+				die("DIMMs with more than 16 row address bits are not supported\n");
 
 			if (blk.spd_array[i][18] > tckmin)
 				tckmin = blk.spd_array[i][18];
@@ -321,6 +325,7 @@ void main(void)
 	report_istep(13,7);	// no-op
 	istep_13_8();
 	istep_13_9();
+	istep_13_10();
 
 	/* Test if SCOM still works. Maybe should check also indirect access? */
 	printk(BIOS_DEBUG, "0xF000F = %llx\n", read_scom(0xf000f));

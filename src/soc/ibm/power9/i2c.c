@@ -100,7 +100,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 	 *
 	 * Use value for 400 kHz as it is the one used by Hostboot.
 	 */
-	write_scom(MODE_REG(3), 0x0177000000000000);	// 400kHz
+	write_scom(MODE_REG(bus), 0x0177000000000000);	// 400kHz
 
 	write_scom(RES_ERR_REG(bus), CLEAR_ERR);
 
@@ -143,8 +143,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 			else
 			{
 				/* Write */
-				while ((r & FIFO_COUNT_FLD) >> 32 > I2C_MAX_FIFO_CAPACITY &&
-				       (r & DATA_REQUEST) == 0) {
+				while ((r & DATA_REQUEST) == 0) {
 					if (r & UNRECOVERABLE) {
 						printk(BIOS_INFO, "I2C transfer failed (0x%16.16llx)\n", r);
 						return -1;

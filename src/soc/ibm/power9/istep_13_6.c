@@ -5,7 +5,7 @@
 #include <timer.h>
 
 /*
- * TODO: ATTR_PG value should come from MVPD partition, but it is empty after
+ * TODO: ATTR_PG value should come from MEMD partition, but it is empty after
  * build. Default value from talos.xml (5 for all chiplets) probably never makes
  * sense. Value read from already booted MVPD is 0xE0 for both MCSs. We can
  * either add functions to read and parse MVPD or just hardcode the values. So

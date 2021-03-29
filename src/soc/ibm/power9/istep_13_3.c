@@ -98,5 +98,7 @@ void istep_13_3(void)
 	// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG_AND
 	write_scom(0x000D0064, ~PPC_BIT(0));
 
+	/* FIXME: do we need to repeat it for second MCS? */
+
 	printk(BIOS_EMERG, "ending istep 13.3\n");
 }

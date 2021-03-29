@@ -148,7 +148,6 @@ static void check_during_phy_reset(int mcs_i)
 			       mca_i, val);
 		}
 
-		/* TODO: this really asks for non-RMW version. */
 		mca_and_or(id, mca_i, 0x07010900,
 		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(10)), 0);
 
@@ -162,16 +161,14 @@ static void check_during_phy_reset(int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7
 		*/
-		/* FIXME: how is PHY numbering related to MCA numbering? mca_i/2? */
-		// val = mca_read(id, mca_i, 0x07011000);
-		val = mca_read(id, 0, 0x07011000);
+		val = mca_read(id, mca_i, 0x07011000);
 		if (val & PPC_BITMASK(54, 61)) {
 			/* No idea how severe that error is... */
 			printk(BIOS_ERR, "Error detected in IOM_PHY%d_DDRPHY_FIR_REG: %#llx\n",
-				   /* mca_i */ 0, val);
+				   mca_i , val);
 		}
 
-		mca_and_or(id, /* mca_i */ 0, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
+		mca_and_or(id, mca_i, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
 	}
 }
 
@@ -263,17 +260,13 @@ static void fir_unmask(int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 0   // recoverable_error (0,1,0)
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 0   // recoverable_error (0,1,0)
 		*/
-		/* FIXME: how is PHY numbering related to MCA numbering? mca_i/2? */
-		//mca_and_or(id, mca_i, 0x07011006,
-		mca_and_or(id, 0, 0x07011006,
+		mca_and_or(id, mca_i, 0x07011006,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
-		//mca_and_or(id, mca_i, 0x07011007,
-		mca_and_or(id, 0, 0x07011007,
+		mca_and_or(id, mca_i, 0x07011007,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61));
-		//mca_and_or(id, mca_i, 0x07011003,
-		mca_and_or(id, 0, 0x07011003,
+		mca_and_or(id, mca_i, 0x07011003,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
 	}

@@ -774,12 +774,15 @@ static void set_rank_pairs(int mcs_i, int mca_i)
 	 * - non-LR DIMMs (platform wiki),
 	 * - no ATTR_EFF_RANK_GROUP_OVERRIDE,
 	 * - mixing rules followed - the same rank configuration for both DIMMs.
+	 *
+	 * Because rank pairs are defined for each MCA, we can only have up to two
+	 * 2R DIMMs. For such configurations, RP0 primary is rank 0 on DIMM 0,
+	 * RP1 primary - rank 1 DIMM 0, RP2 primary - rank 0 DIMM 1,
+	 * RP3 primary - rank 1 DIMM 1. There are no secondary (this is true for
+	 * RDIMM only), tertiary or quaternary rank pairs.
 	 */
 
 	static const uint16_t F[] = {0, 0xf000, 0xf0f0, 0xfff0, 0xffff};
-	/* TODO: maybe we should check if dimm[0].mranks == dimm[1].mranks? */
-	uint64_t rp = 0x1537 & F[mca->dimm[0].present ? mca->dimm[0].mranks :
-	                                                mca->dimm[1].mranks];
 
 	/* TODO: can we mix mirrored and non-mirrored 2R DIMMs in one port? */
 
@@ -796,7 +799,7 @@ static void set_rank_pairs(int mcs_i, int mca_i)
 		[63]    RANK_PAIR1_SEC_V = 1: if (rank_count0 == 4)
 	*/
 	mca_and_or(id, mca_i, 0x8000C0020701103F, ~PPC_BITMASK(48, 63),
-	           PPC_SHIFT(rp, 63));
+	           PPC_SHIFT(0x1537 & F[mca->dimm[0].mranks], 63));
 
 	/* IOM0.DDRPHY_PC_RANK_PAIR1_P0 =
 	    [48-63] = 0x1537 & F[rank_count1]:     // F = {0, 0xf000, 0xf0f0, 0xfff0, 0xffff}
@@ -810,7 +813,7 @@ static void set_rank_pairs(int mcs_i, int mca_i)
 		[63]    RANK_PAIR3_SEC_V = 1: if (rank_count1 == 4)
 	*/
 	mca_and_or(id, mca_i, 0x8000C0030701103F, ~PPC_BITMASK(48, 63),
-	           PPC_SHIFT(rp, 63));
+	           PPC_SHIFT(0x1537 & F[mca->dimm[1].mranks], 63));
 
 	/* IOM0.DDRPHY_PC_RANK_PAIR2_P0 =
 	    [48-63] = 0
@@ -3401,12 +3404,7 @@ static void fir_unmask(int mcs_i, int mca_i)
 	  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0   // calibration errors
 	  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // DLL errors
 	*/
-	/*
-	 * I expected the following line to be a proper one, but it results in
-	 * non-readable SCOM. This is where MCA numbering comes in...
-	 */
-	//mca_and_or(id, mca_i, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
-	scom_and_or_for_chiplet(id, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
+	mca_and_or(id, mca_i, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
 
 	/* MC01.PORT0.SRQ.MBACALFIRQ =         // maybe use SCOM1 (AND) 0x07010901?
 	  [4]   MBACALFIRQ_RCD_PARITY_ERROR = 0
@@ -3474,7 +3472,7 @@ void istep_13_8(void)
 
 			/*
 			 * TODO: test this with DIMMs on both MCS. Maybe this has to be done
-			 * in a separate loop, after all phy_scominit()'s are done.
+			 * in a separate loop, after phy_scominit()'s are done on both MCSs.
 			 */
 			if (mca_i == 0 || mca->functional)
 				fir_unmask(mcs_i, mca_i);

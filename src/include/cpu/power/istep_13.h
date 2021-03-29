@@ -153,13 +153,17 @@ static inline void delay_nck(uint64_t nck)
 
 #define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - (lsb)))
 
-/* TODO: discover how MCAs are numbered (0,1,2,3? 0,1,6,7? 0,1,4,5?) */
+/* TODO: discover which MCAs are used on second MCS (0,1,6,7? 0,1,4,5?) */
 /* TODO: consider non-RMW variants */
 static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom,
                               uint64_t and, uint64_t or)
 {
-	/* Indirect registers have different stride than the direct ones. */
-	unsigned mul = (scom & PPC_BIT(0)) ? 0x400 : 0x40;
+	/*
+	 * Indirect registers have different stride than the direct ones in
+	 * general, except for (only?) direct PHY registers.
+	 */
+	unsigned mul = (scom & PPC_BIT(0) ||
+	                (scom & 0xFFFFF000) == 0x07011000) ? 0x400 : 0x40;
 	scom_and_or_for_chiplet(mcs, scom + mca * mul, and, or);
 }
 
@@ -171,8 +175,10 @@ static inline void dp_mca_and_or(chiplet_id_t mcs, int dp, int mca,
 
 static inline uint64_t mca_read(chiplet_id_t mcs, int mca, uint64_t scom)
 {
-	/* Indirect registers have different stride than the direct ones. */
-	unsigned mul = (scom & PPC_BIT(0)) ? 0x400 : 0x40;
+	/* Indirect registers have different stride than the direct ones in
+	 * general, except for (only?) direct PHY registers. */
+	unsigned mul = (scom & PPC_BIT(0) ||
+	                (scom & 0xFFFFF000) == 0x07011000) ? 0x400 : 0x40;
 	return read_scom_for_chiplet(mcs, scom + mca * mul);
 }
 
@@ -195,3 +201,4 @@ void istep_13_6(void);
 void istep_13_8(void);	// TODO: takes epsilon values from 8.6 and MSS data from 7.4
 void istep_13_9(void);
 void istep_13_10(void);
+void istep_13_11(void);

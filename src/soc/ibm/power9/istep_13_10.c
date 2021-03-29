@@ -252,8 +252,8 @@ static void mrs_load(int mcs_i, int mca_i, int d)
 	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	int ranks = mca->dimm[d].mranks;
 	int mirrored = mca->dimm[d].spd[136] & 1;
-	int tMRD = 8;
-	int tMOD = 24;
+	const int tMRD = 8;
+	const int tMOD = 24;
 	mrs_cmd_t mrs;
 	int vpd_idx = (ranks - 1) * 2 + (!!mca->dimm[d ^ 1].present);
 
@@ -366,10 +366,16 @@ void istep_13_10(void)
 			[1]   CCS_MODEQ_CCS_UE_DISABLE =            0
 			[24]  CCS_MODEQ_CFG_CCS_PARITY_AFTER_CMD =  1
 			[26]  CCS_MODEQ_COPY_CKE_TO_SPARE_CKE =     1   // Docs: "Does not apply for POWER9. No spare chips to copy to."
+			// The following are set in 13.11, but we can do it here, one less RMW
+			// "Hm. Centaur sets this up for the longest duration possible. Can we do better?"
+			// This is timeout so we should only hit it in the case of error. What is the unit of this field? Memclocks?
+			[8-23]  CCS_MODEQ_DDR_CAL_TIMEOUT_CNT =       0xffff
+			[30-31] CCS_MODEQ_DDR_CAL_TIMEOUT_CNT_MULT =  3
 		*/
 		scom_and_or_for_chiplet(mcs_ids[mcs_i], 0x070123A7,
 		                        ~(PPC_BIT(0) | PPC_BIT(1)),
-		                        PPC_BIT(24) | PPC_BIT(26));
+		                        PPC_BIT(24) | PPC_BIT(26) | PPC_SHIFT(0xFFFF, 23) |
+		                        PPC_SHIFT(3, 31));
 
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];

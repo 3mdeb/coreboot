@@ -144,6 +144,12 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 }
 
 /*
+ * Constant to invert A3-A9, A11, A13, BA0-1, BG0-1. This also changes BG1 to 1,
+ * which automatically selects B-side. Note that A17 is not included here.
+ */
+static const mrs_cmd_t invert = 0xF02BF8;
+
+/*
  * Procedure for sending MRS through CCS
  *
  * We need to remember about two things here:
@@ -161,37 +167,51 @@ void ccs_execute(chiplet_id_t id, int mca_i)
  * the order of those operations doesn't matter.
  */
 /* TODO: add support for A17. For now it is blocked in initial SPD parsing. */
-void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, int ranks, int mirror,
-                 uint16_t idles)
+void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, enum rank_selection ranks,
+                 int mirror, uint16_t idles)
 {
-	if (ranks != 1 && ranks != 2)
-		die("Too many ranks specified for MRS command\n");
+	if (ranks & DIMM0_RANK0) {
+		/* DIMM 0, rank 0, side A */
+		/*
+		 * "Not sure if we can get tricky here and only delay after the b-side MR.
+		 * The question is whether the delay is needed/assumed by the register or is
+		 * purely a DRAM mandated delay. We know we can't go wrong having both
+		 * delays but if we can ever confirm that we only need one we can fix this.
+		 * BRS"
+		 */
+		ccs_add_instruction(id, mrs, 0x7, 0xF, idles);
 
-	/* Rank 0, side A */
-	/*
-	 * "Not sure if we can get tricky here and only delay after the b-side MR.
-	 * The question is whether the delay is needed/assumed by the register or is
-	 * purely a DRAM mandated delay. We know we can't go wrong having both
-	 * delays but if we can ever confirm that we only need one we can fix this.
-	 * BRS"
-	 */
-	ccs_add_instruction(id, mrs, 0x7, 0xF, idles);
+		/* DIMM 0, rank 0, side B - invert A3-A9, A11, A13, A17 (TODO), BA0-1, BG0-1 */
+		ccs_add_instruction(id, mrs ^ invert, 0x7, 0xF, idles);
+	}
 
-	/* Rank 0, side B - invert A3-A9, A11, A13, A17 (TODO), BA0-1, BG0-1 */
-	mrs ^= 0xF02BF8;	/* This also changes BG1 to 1, which selects B-side */
-	ccs_add_instruction(id, mrs, 0x7, 0xF, idles);
+	if (ranks & DIMM0_RANK1) {
+		/* DIMM 0, rank 1, side A, mirror if needed */
+		if (mirror)
+			mrs = ddr4_mrs_mirror_pins(mrs);
 
-	if (ranks == 1)
-		return;
+		ccs_add_instruction(id, mrs, 0xB, 0xF, idles);
 
-	/* Rank 1, side A - revert MRS, mirror if needed */
-	mrs ^= 0xF02BF8;
-	if (mirror)
-		mrs = ddr4_mrs_mirror_pins(mrs);
+		/* DIMM 0, rank 1, side B - MRS is already mirrored, just invert it */
+		ccs_add_instruction(id, mrs ^ invert, 0xB, 0xF, idles);
+	}
 
-	ccs_add_instruction(id, mrs, 0xB, 0xF, idles);
+	if (ranks & DIMM1_RANK0) {
+		/* DIMM 1, rank 0, side A */
+		ccs_add_instruction(id, mrs, 0xD, 0xF, idles);
 
-	/* Rank 1, side B - MRS is already mirrored, just invert it */
-	mrs ^= 0xF02BF8;
-	ccs_add_instruction(id, mrs, 0xB, 0xF, idles);
+		/* DIMM 1, rank 0, side B - invert A3-A9, A11, A13, A17 (TODO), BA0-1, BG0-1 */
+		ccs_add_instruction(id, mrs ^ invert, 0xD, 0xF, idles);
+	}
+
+	if (ranks & DIMM1_RANK1) {
+		/* DIMM 1, rank 1, side A, mirror if needed */
+		if (mirror)
+			mrs = ddr4_mrs_mirror_pins(mrs);
+
+		ccs_add_instruction(id, mrs, 0xE, 0xF, idles);
+
+		/* DIMM 1, rank 1, side B - MRS is already mirrored, just invert it */
+		ccs_add_instruction(id, mrs ^ invert, 0xE, 0xF, idles);
+	}
 }

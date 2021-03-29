@@ -8,10 +8,22 @@ static void setup_and_execute_zqcal(int mcs_i, int mca_i, int d)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
-	int ranks = mca->dimm[d].mranks;
 	int mirrored = mca->dimm[d].spd[136] & 1; /* Maybe add this to mca_data_t? */
-	const int tZQinit = 1024;
 	mrs_cmd_t cmd = ddr4_get_zqcal_cmd(DDR4_ZQCAL_LONG);
+	enum rank_selection ranks;
+
+	if (d == 0) {
+		if (mca->dimm[d].mranks == 2)
+			ranks = DIMM0_ALL_RANKS;
+		else
+			ranks = DIMM0_RANK0;
+	}
+	else {
+		if (mca->dimm[d].mranks == 2)
+			ranks = DIMM1_ALL_RANKS;
+		else
+			ranks = DIMM1_RANK0;
+	}
 
 	/*
 	 * JEDEC: "All banks must be precharged and tRP met before ZQCL or ZQCS

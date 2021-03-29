@@ -250,12 +250,23 @@ static void mrs_load(int mcs_i, int mca_i, int d)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
-	int ranks = mca->dimm[d].mranks;
 	int mirrored = mca->dimm[d].spd[136] & 1;
-	const int tMRD = 8;
-	const int tMOD = 24;
 	mrs_cmd_t mrs;
-	int vpd_idx = (ranks - 1) * 2 + (!!mca->dimm[d ^ 1].present);
+	int vpd_idx = (mca->dimm[d].mranks - 1) * 2 + (!!mca->dimm[d ^ 1].present);
+	enum rank_selection ranks;
+
+	if (d == 0) {
+		if (mca->dimm[d].mranks == 2)
+			ranks = DIMM0_ALL_RANKS;
+		else
+			ranks = DIMM0_RANK0;
+	}
+	else {
+		if (mca->dimm[d].mranks == 2)
+			ranks = DIMM1_ALL_RANKS;
+		else
+			ranks = DIMM1_RANK0;
+	}
 
 	mrs = ddr4_get_mr3(DDR4_MR3_MPR_SERIAL,
                        DDR4_MR3_CRC_DM_5,

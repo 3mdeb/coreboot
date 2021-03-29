@@ -11,6 +11,9 @@
 #define DIMMS_PER_MCA		2
 #define DIMMS_PER_MCS		(DIMMS_PER_MCA * MCA_PER_MCS)
 
+/* FIXME: implement reading from VPD partition and remove the following */
+#include "vpd_data.h"
+
 /* These should be in one of the SPD headers. */
 #define WIDTH_x4		0
 #define WIDTH_x8		1

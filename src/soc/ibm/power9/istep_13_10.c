@@ -129,11 +129,6 @@ static void rcd_load(mca_data_t *mca, int d)
 	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RCBx, 0x07);
 }
 
-/* VPD has per rank settings, but both ranks (if present) are the same. */
-static const uint8_t ATTR_MSS_VPD_MT_DRAM_RTT_PARK[] = {0, 0, 0, 60};
-static const uint8_t ATTR_MSS_VPD_MT_DRAM_RTT_WR[] = {80, 120, 0, 120};
-static const uint8_t ATTR_MSS_VPD_MT_DRAM_RTT_NOM[] = {0, 48, 34, 120};
-
 static enum ddr4_mr5_rtt_park vpd_to_rtt_park(uint8_t vpd)
 {
 	/* Fun fact: this is 240/vpd with bit order reversed */

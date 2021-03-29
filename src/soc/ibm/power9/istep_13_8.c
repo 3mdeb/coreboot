@@ -64,7 +64,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	uint64_t ref_blk_cfg = mranks == 4 ? 0x4 :
 	                       mranks == 2 ? (n_dimms == 1 ? 0x1 : 0x3) :
 	                       n_dimms == 1 ? 0x0 : 0x2;
-	uint64_t en_ref_blk = log_ranks > 8 ? 0 :
+	uint64_t en_ref_blk = (log_ranks <= 1 || log_ranks > 8) ? 0 :
 	                      (n_dimms == 1 && mranks == 4 && log_ranks == 8) ? 0 : 3;
 
 	scom_and_or_for_chiplet(nest, 0x05010824,
@@ -3400,13 +3400,13 @@ static void phy_scominit(int mcs_i, int mca_i)
 static void fir_unmask(int mcs_i, int mca_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
-	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG =      // maybe use SCOM1 (AND) 0x07011001?
+	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG =
 	  [56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0   // calibration errors
 	  [58]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_4 = 0   // DLL errors
 	*/
 	mca_and_or(id, mca_i, 0x07011000, ~(PPC_BIT(56) | PPC_BIT(58)), 0);
 
-	/* MC01.PORT0.SRQ.MBACALFIRQ =         // maybe use SCOM1 (AND) 0x07010901?
+	/* MC01.PORT0.SRQ.MBACALFIRQ =
 	  [4]   MBACALFIRQ_RCD_PARITY_ERROR = 0
 	  [8]   MBACALFIRQ_DDR_MBA_EVENT_N =  0
 	*/

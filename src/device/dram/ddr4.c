@@ -536,3 +536,16 @@ mrs_cmd_t ddr4_get_mr6(u8 tccd_l,
 
 	return cmd;
 }
+
+/*
+ * ZQCL: A16 = H, A15 = H, A14 = L, A10 = H, rest either L or H
+ * ZQCS: A16 = H, A15 = H, A14 = L, A10 = L, rest either L or H
+ */
+mrs_cmd_t ddr4_get_zqcal_cmd(enum ddr4_zqcal_ls long_short)
+{
+	mrs_cmd_t cmd = 1 << 16 | 1 << 15;
+
+	cmd |= long_short << 10;
+
+	return cmd;
+}

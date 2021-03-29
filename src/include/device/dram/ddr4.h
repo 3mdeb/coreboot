@@ -365,4 +365,11 @@ mrs_cmd_t ddr4_get_mr6(u8 tccd_l,
                        enum ddr4_mr6_vrefdq_training_range range,
                        u8 vrefdq_value);
 
+enum ddr4_zqcal_ls {
+	DDR4_ZQCAL_SHORT = 0,
+	DDR4_ZQCAL_LONG =  1,
+};
+
+mrs_cmd_t ddr4_get_zqcal_cmd(enum ddr4_zqcal_ls long_short);
+
 #endif /* DEVICE_DRAM_DDR4L_H */

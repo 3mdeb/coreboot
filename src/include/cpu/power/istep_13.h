@@ -27,6 +27,11 @@
 #define PSEC_PER_NSEC		1000
 #define PSEC_PER_USEC		1000000
 
+/* Values are the same across all supported speed bins */
+static const int tMRD = 8;
+static const int tMOD = 24;
+static const int tZQinit = 1024;
+
 typedef struct {
 	bool present;
 	uint8_t mranks;
@@ -187,11 +192,21 @@ static inline uint64_t dp_mca_read(chiplet_id_t mcs, int dp, int mca, uint64_t s
 	return mca_read(mcs, mca, scom + dp * 0x40000000000);
 }
 
+enum rank_selection {
+	DIMM0_RANK0 =		1 << 0,
+	DIMM0_RANK1 =		1 << 1,
+	DIMM0_ALL_RANKS = 	DIMM0_RANK0 | DIMM0_RANK1,
+	DIMM1_RANK0 =		1 << 2,
+	DIMM1_RANK1 =		1 << 3,
+	DIMM1_ALL_RANKS = 	DIMM1_RANK0 | DIMM1_RANK1,
+	BOTH_DIMMS_1R =	DIMM0_RANK0 | DIMM1_RANK0,
+	BOTH_DIMMS_2R =	DIMM0_ALL_RANKS | DIMM1_ALL_RANKS
+};
 
 void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
                          uint8_t cke, uint16_t idles);
-void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, int ranks, int mirror,
-                 uint16_t idles);
+void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, enum rank_selection ranks,
+                 int mirror, uint16_t idles);
 void ccs_execute(chiplet_id_t id, int mca_i);
 
 void istep_13_2(void);

@@ -193,6 +193,7 @@ static inline uint64_t dp_mca_read(chiplet_id_t mcs, int dp, int mca, uint64_t s
 }
 
 enum rank_selection {
+	NO_RANKS =		0,
 	DIMM0_RANK0 =		1 << 0,
 	DIMM0_RANK1 =		1 << 1,
 	DIMM0_ALL_RANKS = 	DIMM0_RANK0 | DIMM0_RANK1,
@@ -203,11 +204,89 @@ enum rank_selection {
 	BOTH_DIMMS_2R =	DIMM0_ALL_RANKS | DIMM1_ALL_RANKS
 };
 
+enum cal_config {
+	CAL_WR_LEVEL =			PPC_BIT(48),
+	CAL_INITIAL_PAT_WR =		PPC_BIT(49),
+	CAL_DQS_ALIGN =		PPC_BIT(50),
+	CAL_RDCLK_ALIGN =		PPC_BIT(51),
+	CAL_READ_CTR =			PPC_BIT(52),
+	CAL_WRITE_CTR =		PPC_BIT(53),
+	CAL_INITIAL_COARSE_WR =	PPC_BIT(54),
+	CAL_COARSE_RD =		PPC_BIT(55),
+	CAL_CUSTOM_RD =		PPC_BIT(56),
+	CAL_CUSTOM_WR =		PPC_BIT(57)
+};
+
 void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
                          uint8_t cke, uint16_t idles);
 void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, enum rank_selection ranks,
                  int mirror, uint16_t idles);
+void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
+                     uint64_t step_cycles);
 void ccs_execute(chiplet_id_t id, int mca_i);
+
+static inline enum ddr4_mr5_rtt_park vpd_to_rtt_park(uint8_t vpd)
+{
+	/* Fun fact: this is 240/vpd with bit order reversed */
+	switch (vpd) {
+		case 34:
+			return DDR4_MR5_RTT_PARK_RZQ_7;
+		case 40:
+			return DDR4_MR5_RTT_PARK_RZQ_6;
+		case 48:
+			return DDR4_MR5_RTT_PARK_RZQ_5;
+		case 60:
+			return DDR4_MR5_RTT_PARK_RZQ_4;
+		case 80:
+			return DDR4_MR5_RTT_PARK_RZQ_3;
+		case 120:
+			return DDR4_MR5_RTT_PARK_RZQ_2;
+		case 240:
+			return DDR4_MR5_RTT_PARK_RZQ_1;
+		default:
+			return DDR4_MR5_RTT_PARK_OFF;
+	}
+}
+
+static inline enum ddr4_mr2_rtt_wr vpd_to_rtt_wr(uint8_t vpd)
+{
+	switch (vpd) {
+		case 0:
+			return DDR4_MR2_RTT_WR_OFF;
+		case 80:
+			return DDR4_MR2_RTT_WR_RZQ_3;
+		case 120:
+			return DDR4_MR2_RTT_WR_RZQ_2;
+		case 240:
+			return DDR4_MR2_RTT_WR_RZQ_1;
+		default:
+			/* High-Z is 1 in VPD */
+			return DDR4_MR2_RTT_WR_HI_Z;
+	}
+}
+
+static inline enum ddr4_mr1_rtt_nom vpd_to_rtt_nom(uint8_t vpd)
+{
+	/* Fun fact: this is 240/vpd with bit order reversed */
+	switch (vpd) {
+		case 34:
+			return DDR4_MR1_RTT_NOM_RZQ_7;
+		case 40:
+			return DDR4_MR1_RTT_NOM_RZQ_6;
+		case 48:
+			return DDR4_MR1_RTT_NOM_RZQ_5;
+		case 60:
+			return DDR4_MR1_RTT_NOM_RZQ_4;
+		case 80:
+			return DDR4_MR1_RTT_NOM_RZQ_3;
+		case 120:
+			return DDR4_MR1_RTT_NOM_RZQ_2;
+		case 240:
+			return DDR4_MR1_RTT_NOM_RZQ_1;
+		default:
+			return DDR4_MR1_RTT_NOM_OFF;
+	}
+}
 
 void istep_13_2(void);
 void istep_13_3(void);

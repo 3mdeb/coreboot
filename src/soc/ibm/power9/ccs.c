@@ -85,9 +85,75 @@ void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
 	}
 }
 
+/* TODO: remove when all problems are resolved, leave just die() for timeout */
+static void dump_cal_errors(chiplet_id_t id, int mca_i)
+{
+	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(1));
+#if CONFIG(DEBUG_RAM_SETUP)
+	int dp;
+
+	for (dp = 0; dp < 5; dp++) {
+		printk(BIOS_ERR, "DP %d\n", dp);
+		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000007A0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - WR_ERROR0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000001B0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - RD_STATUS0\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000140701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS2\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000100701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000000E0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR0\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000AE0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR1\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000AF0701103F));
+	}
+
+	printk(BIOS_ERR, "%#16.16llx - APB_ERROR_STATUS0\n",
+	       mca_read(id, mca_i, 0x8000D0010701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - RC_ERROR_STATUS0\n",
+	       mca_read(id, mca_i, 0x8000C8050701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - SEQ_ERROR_STATUS0\n",
+	       mca_read(id, mca_i, 0x8000C4080701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - WC_ERROR_STATUS0\n",
+	       mca_read(id, mca_i, 0x8000CC030701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - PC_ERROR_STATUS0\n",
+	       mca_read(id, mca_i, 0x8000C0120701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_ERROR\n",
+	       mca_read(id, mca_i, 0x8000C0180701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - DDRPHY_PC_INIT_CAL_STATUS\n",
+	       mca_read(id, mca_i, 0x8000C0190701103F));
+
+	printk(BIOS_ERR, "%#16.16llx - IOM_PHY0_DDRPHY_FIR_REG\n",
+	       mca_read(id, mca_i, 0x07011000));
+#endif
+	die("CCS execution timeout\n");
+}
+
 void ccs_execute(chiplet_id_t id, int mca_i)
 {
+	uint64_t poll_timeout;
 	long time;
+
+	/*
+	 * Polling parameters: initial delay is total_cycles/8, no delay between
+	 * polls (coreboot API checks in a busy loop, but there is nothing else to
+	 * do than wait), poll count is whatever it takes to get to total_cycles
+	 * times 4 just in case (won't hurt unless calibration fails anyway).
+	 */
+	if (total_cycles < 8)
+		total_cycles = 8;
+	poll_timeout = nck_to_us((total_cycles * 7 * 4) / 8);
+
+	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(1));
+	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
 	/* Is it always as described below (CKE, CSN) or is it a copy of last instr? */
 	/* Final DES - CCS does not wait for IDLES for the last command before
 	 * clearing IP (in progress) bit, so we must use one separate DES
@@ -106,12 +172,17 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	                       PPC_SHIFT(3, 33) | PPC_SHIFT(3, 37));
 	write_scom_for_chiplet(id, 0x07012335 + instr, PPC_BIT(58));
 
+	printk(BIOS_ERR, "0Last ARR0 (%d) = %#16.16llx\n", instr,
+	       read_scom_for_chiplet(id, 0x07012315 + instr));
+	printk(BIOS_ERR, "0Last ARR1 (%d) = %#16.16llx, %lld us timeout\n", instr,
+	       read_scom_for_chiplet(id, 0x07012335 + instr),
+	       poll_timeout + nck_to_us(total_cycles/8));
 	/* Select ports
 	MC01.MCBIST.MBA_SCOMFIR.MCB_CNTLQ
 	      // Broadcast mode is not supported, set only one bit at a time
 	      [2-5]   MCB_CNTLQ_MCBCNTL_PORT_SEL = bitmap with MCA index
 	*/
-	write_scom_for_chiplet(id, 0x070123DB, PPC_BIT(2 + mca_i));
+	scom_and_or_for_chiplet(id, 0x070123DB, ~PPC_BITMASK(2, 5), PPC_BIT(2 + mca_i));
 
 	/* Lets go
 	MC01.MCBIST.MBA_SCOMFIR.CCS_CNTLQ
@@ -121,20 +192,36 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(0));
 
 	/* With microsecond resolution we are probably wasting a lot of time here. */
-	delay_nck(total_cycles);
+	delay_nck(total_cycles/8);
 
 	/* timeout(50*10ns):
 	  if MC01.MCBIST.MBA_SCOMFIR.CCS_STATQ[0] (CCS_STATQ_CCS_IP) != 1: break
 	  delay(10ns)
 	if MC01.MCBIST.MBA_SCOMFIR.CCS_STATQ != 0x40..00: report failure  // only [1] set, others 0
 	*/
-	time = wait_us(1, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
+	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
 
+	/* TODO: remove those prints when everything works */
+	printk(BIOS_ERR, "1Last ARR0 (%d) = %#16.16llx\n", instr,
+	       read_scom_for_chiplet(id, 0x07012315 + instr));
+	printk(BIOS_ERR, "1Last ARR1 (%d) = %#16.16llx\n", instr,
+	       read_scom_for_chiplet(id, 0x07012335 + instr));
 	if (!time)
-		die("CCS execution timeout\n");
+		dump_cal_errors(id, mca_i);
+
+	printk(BIOS_ERR, "2Last ARR1 (%d) = %#16.16llx, took %lld us\n", instr,
+	       read_scom_for_chiplet(id, 0x07012335 + instr),
+	       time + nck_to_us(total_cycles/8));
 
 	if (read_scom_for_chiplet(id, 0x070123A6) != PPC_BIT(1))
 		die("(%#16.16llx) CCS execution error\n", read_scom_for_chiplet(id, 0x070123A6));
+
+	/* Fill all ARR0/ARR1 registers with DES, CCS end */
+	do {
+		write_scom_for_chiplet(id, 0x07012315 + instr, PPC_BIT(20) | PPC_SHIFT(0xF, 27) |
+							   PPC_SHIFT(3, 33) | PPC_SHIFT(3, 37));
+		write_scom_for_chiplet(id, 0x07012335 + instr, PPC_BIT(58));
+	} while (instr--);
 
 	instr = 0;
 	total_cycles = 0;
@@ -214,4 +301,56 @@ void ccs_add_mrs(chiplet_id_t id, mrs_cmd_t mrs, enum rank_selection ranks,
 		/* DIMM 1, rank 1, side B - MRS is already mirrored, just invert it */
 		ccs_add_instruction(id, mrs ^ invert, 0xE, 0xF, idles);
 	}
+}
+
+void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
+                     uint64_t step_cycles)
+{
+	/* Pull in 8 refresh commands */
+	/*
+	for (int i = 0; i < 8; i++) {
+		mca_data_t *mca = &mem_data.mcs[0].mca[mca_i];
+		ccs_add_instruction(id, 1<<14, 0, 0xF, mca->nrfc + 1);
+		ccs_add_instruction(id, (1<<14) | (1<<23), 0, 0xF, mca->nrfc + 2);
+	}
+	*/
+
+	/* MC01.MCBIST.CCS.CCS_INST_ARR0_n
+		[all]   0
+		// "CKE is high Note: P8 set all 4 of these high - not sure if that's correct. BRS"
+		[24-27] CCS_INST_ARR0_00_CCS_DDR_CKE =      0xf
+		[32-33] CCS_INST_ARR0_00_CCS_DDR_CSN_0_1 =  3     // Not used by the engine for calibration?
+		[36-37] CCS_INST_ARR0_00_CCS_DDR_CSN_2_3 =  3     // Not used by the engine for calibration?
+		[56-59] CCS_INST_ARR0_00_CCS_DDR_CAL_TYPE = 0xc
+	*/
+	write_scom_for_chiplet(id, 0x07012315 + instr,
+	                       PPC_SHIFT(0xF, 27) | PPC_SHIFT(3, 33) |
+	                       PPC_SHIFT(3, 37) | PPC_SHIFT(0xC, 59));
+
+	/* MC01.MCBIST.CCS.CCS_INST_ARR1_n
+		[all]   0
+		[53+rp] CCS_INST_ARR1_00_DDR_CAL_RANK =           1
+		[57]    CCS_INST_ARR1_00_DDR_CALIBRATION_ENABLE = 1
+		[59-63] CCS_INST_ARR1_00_GOTO_CMD =               instr + 1
+	*/
+	write_scom_for_chiplet(id, 0x07012335 + instr,
+	                       PPC_BIT(53 + rp) | PPC_BIT(57) | PPC_SHIFT(instr + 1, 63));
+
+	/* I'm assuming we don't need separate commands for RCD sides... */
+	total_cycles += step_cycles;
+	instr++;
+
+	/* Setup calibration config
+	IOM0.DDRPHY_PC_INIT_CAL_CONFIG0_P0
+		[48-57] i_cal_config            // cal_config is already encoded, don't shift
+		[58]    ABORT_ON_CAL_ERROR =  0
+		[60+rp] ENA_RANK_PAIR =       1   // So, rp must be [0-3]
+	*/
+	mca_and_or(id, mca_i, 0x8000C0160701103F,
+	           ~(PPC_BITMASK(48, 58) | PPC_BITMASK(60, 63)),
+	           conf | PPC_BIT(60 + rp));
+
+	printk(BIOS_ERR, "Sending PHY calibration command %#x to CCS - %d instruction(s)\n",
+	       conf, instr);
+	ccs_execute(id, mca_i);
 }

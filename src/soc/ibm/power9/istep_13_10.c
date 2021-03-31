@@ -129,69 +129,6 @@ static void rcd_load(mca_data_t *mca, int d)
 	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RCBx, 0x07);
 }
 
-static enum ddr4_mr5_rtt_park vpd_to_rtt_park(uint8_t vpd)
-{
-	/* Fun fact: this is 240/vpd with bit order reversed */
-	switch (vpd) {
-		case 34:
-			return DDR4_MR5_RTT_PARK_RZQ_7;
-		case 40:
-			return DDR4_MR5_RTT_PARK_RZQ_6;
-		case 48:
-			return DDR4_MR5_RTT_PARK_RZQ_5;
-		case 60:
-			return DDR4_MR5_RTT_PARK_RZQ_4;
-		case 80:
-			return DDR4_MR5_RTT_PARK_RZQ_3;
-		case 120:
-			return DDR4_MR5_RTT_PARK_RZQ_2;
-		case 240:
-			return DDR4_MR5_RTT_PARK_RZQ_1;
-		default:
-			return DDR4_MR5_RTT_PARK_OFF;
-	}
-}
-
-static enum ddr4_mr2_rtt_wr vpd_to_rtt_wr(uint8_t vpd)
-{
-	switch (vpd) {
-		case 0:
-			return DDR4_MR2_RTT_WR_OFF;
-		case 80:
-			return DDR4_MR2_RTT_WR_RZQ_3;
-		case 120:
-			return DDR4_MR2_RTT_WR_RZQ_2;
-		case 240:
-			return DDR4_MR2_RTT_WR_RZQ_1;
-		default:
-			/* High-Z is 1 in VPD */
-			return DDR4_MR2_RTT_WR_HI_Z;
-	}
-}
-
-static enum ddr4_mr1_rtt_nom vpd_to_rtt_nom(uint8_t vpd)
-{
-	/* Fun fact: this is 240/vpd with bit order reversed */
-	switch (vpd) {
-		case 34:
-			return DDR4_MR1_RTT_NOM_RZQ_7;
-		case 40:
-			return DDR4_MR1_RTT_NOM_RZQ_6;
-		case 48:
-			return DDR4_MR1_RTT_NOM_RZQ_5;
-		case 60:
-			return DDR4_MR1_RTT_NOM_RZQ_4;
-		case 80:
-			return DDR4_MR1_RTT_NOM_RZQ_3;
-		case 120:
-			return DDR4_MR1_RTT_NOM_RZQ_2;
-		case 240:
-			return DDR4_MR1_RTT_NOM_RZQ_1;
-		default:
-			return DDR4_MR1_RTT_NOM_OFF;
-	}
-}
-
 /*
  * Programming the Mode Registers consists of entering special mode using MRS
  * (Mode Register Set) command and sending MR# values, one at a time, in a
@@ -262,6 +199,11 @@ static void mrs_load(int mcs_i, int mca_i, int d)
 		else
 			ranks = DIMM1_RANK0;
 	}
+
+	/*
+	 * If any of the following are changed, make sure to change istep 13.11 too,
+	 * some of the pre-/post-workarounds are also writing to these registers.
+	 */
 
 	mrs = ddr4_get_mr3(DDR4_MR3_MPR_SERIAL,
                        DDR4_MR3_CRC_DM_5,

@@ -5,16 +5,13 @@
 #include <arch/io.h>
 #include <console/console.h>
 #include <endian.h>
+#include <symbols.h>
 #include "../../../../3rdparty/ffs/ffs/ffs.h"
-
-/* Base is not NULL on real hardware, it will be patched later */
-static struct mem_region_device boot_dev =
-	MEM_REGION_DEV_RO_INIT(NULL, CONFIG_ROM_SIZE);
 
 #define LPC_FLASH_MIN (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_FW_SPACE)
 #define LPC_FLASH_TOP (LPC_FLASH_MIN + FW_SPACE_SIZE)
 
-/* TODO: at some point we will have to change it to a bigger partition (HBI?) */
+/* TODO: at some point we may have to change it to a bigger partition (HBI?) */
 #define CBFS_PARTITION_NAME "HBB"
 
 /* ffs_entry is not complete in included ffs.h, it lacks user data layout.
@@ -124,7 +121,7 @@ static uint64_t rd64_unaligned(void *addr, int first_read)
 /*
  * memcpy from cache-inhibited source
  *
- * Assume both dest and src are 8B-aligned and do not overlap. Copies ALIGN(n,8)
+ * Assume src is 8B-aligned and does not overlap with dest. Copies ALIGN(n,8)
  * bytes, make sure dest is big enough.
  */
 static inline void memcpy_ci_src(void *dest, const void *src, size_t n)
@@ -216,34 +213,23 @@ static ecc_status_t remove_ecc(uint8_t* io_src, size_t i_srcSz,
 	return rc;
 }
 
-/*
- * This buffer makes it possible to use small mmap-ed structures without the
- * need for readat(). It has some drawbacks: limited size, only one mmaped
- * region possible at the time (using this rdev) and possibly more reads from
- * flash device than necessary.
- *
- * Such approach works for small structures like cbfs_file or its filename.
- * It does not work for LZMA decompression, as it tries to mmap whole compressed
- * file. LZ4 works nice, it uses in-place decompression after compressed image
- * is read with rdev_readat().
- */
-static uint8_t buf[0x100];
-static int buf_in_use;
+static char* cbfs_base;
 
-static ssize_t ecc_readat(const struct region_device *rd, void *b,
+/*
+ * PNOR has to be accessed with Cache Inhibited forms of instructions, and they
+ * require that the address is aligned, so we can just memcpy the data.
+ */
+static ssize_t no_ecc_readat(const struct region_device *rd, void *b,
 				size_t offset, size_t size)
 {
-	const struct mem_region_device *mdev;
 	uint8_t tmp[8];
 	size_t off_a = ALIGN_DOWN(offset, 8);
 	size_t size_left = size;
 
-	mdev = container_of(rd, __typeof__(*mdev), rdev);
-
 	/* If offset is not 8B-aligned */
 	if (offset & 0x7) {
 		int i;
-		remove_ecc((uint8_t *) &mdev->base[(off_a * 9)/8], 9, tmp, 8);
+		memcpy_ci_src(tmp, &cbfs_base[off_a], 8);
 		for (i = 8 - (offset & 7); i < 8; i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 			if (!--size_left)
@@ -253,7 +239,43 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 	}
 
 	/* Align down size_left to 8B */
-	remove_ecc((uint8_t *) &mdev->base[(off_a * 9)/8],
+	memcpy_ci_src(b, &cbfs_base[off_a], ALIGN_DOWN(size_left, 8));
+
+	/* Copy the rest of requested unaligned data, if any */
+	if (size_left & 7) {
+		off_a += ALIGN_DOWN(size_left, 8);
+		b += ALIGN_DOWN(size_left, 8);
+		int i;
+		memcpy_ci_src(tmp, &cbfs_base[off_a], 8);
+		for (i = 0; i < (size_left & 7); i++) {
+			*((uint8_t *)(b++)) = tmp[i];
+		}
+	}
+
+	return size;
+}
+
+static ssize_t ecc_readat(const struct region_device *rd, void *b,
+				size_t offset, size_t size)
+{
+	uint8_t tmp[8];
+	size_t off_a = ALIGN_DOWN(offset, 8);
+	size_t size_left = size;
+
+	/* If offset is not 8B-aligned */
+	if (offset & 0x7) {
+		int i;
+		remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8], 9, tmp, 8);
+		for (i = 8 - (offset & 7); i < 8; i++) {
+			*((uint8_t *)(b++)) = tmp[i];
+			if (!--size_left)
+				return size;
+		}
+		off_a += 8;
+	}
+
+	/* Align down size_left to 8B */
+	remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8],
 	           (ALIGN_DOWN(size_left, 8) * 9) / 8,
 	           b,
 	           ALIGN_DOWN(size_left, 8));
@@ -263,7 +285,7 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 		off_a += ALIGN_DOWN(size_left, 8);
 		b += ALIGN_DOWN(size_left, 8);
 		int i;
-		remove_ecc((uint8_t *) &mdev->base[(off_a * 9)/8], 9, tmp, 8);
+		remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8], 9, tmp, 8);
 		for (i = 0; i < (size_left & 7); i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 		}
@@ -272,31 +294,10 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 	return size;
 }
 
-static void *ecc_mmap(const struct region_device *rd, size_t offset, size_t size)
-{
-	if (buf_in_use) {
-		printk(BIOS_ERR, "ecc_mmap: cannot mmap multiple ranges at once\n");
-		return NULL;
-	}
-	if (size > sizeof(buf)) {
-		printk(BIOS_ERR, "ecc_mmap: size too big (%lx)\n", size);
-		return NULL;
-	}
-	buf_in_use = 1;
-	ecc_readat(rd, buf, offset, size);
-	return buf;
-}
-
-static int ecc_munmap(const struct region_device *rd, void *mapping)
-{
-	buf_in_use = 0;
-	return 0;
-}
-
-struct region_device_ops ecc_rdev_ops = {
-	.mmap = ecc_mmap,
-	.munmap = ecc_munmap,
-	.readat = ecc_readat,
+struct region_device_ops boot_rdev_ops = {
+	.mmap = mmap_helper_rdev_mmap,
+	.munmap = mmap_helper_rdev_munmap,
+	.readat = no_ecc_readat,
 };
 
 static void find_cbfs_in_pnor(void)
@@ -380,24 +381,36 @@ static void find_cbfs_in_pnor(void)
 
 		cbfs = (char *) pnor_base + block_size * e->base;
 
-		/* Skip PNOR partition header size */
+		/* Skip PNOR partition header */
 		cbfs += 0x1000;
 		if (e->user.data[0] & FFS_ENRY_INTEG_ECC) {
 			printk(BIOS_DEBUG, "CBFS partition has ECC\n");
-			boot_dev.rdev.ops = &ecc_rdev_ops;
+			boot_rdev_ops.readat = ecc_readat;
 			cbfs += 0x200;
 		}
 
 		printk(BIOS_DEBUG, "CBFS partition at %p\n", cbfs);
-		boot_dev.base = cbfs;
+		cbfs_base = cbfs;
 		break;
 	}
 }
 
+static struct mmap_helper_region_device boot_mdev = MMAP_HELPER_REGION_INIT(
+	&boot_rdev_ops, 0, CONFIG_ROM_SIZE);
+
+void boot_device_init(void)
+{
+	static int init_done;
+	if (init_done)
+		return;
+
+	mmap_helper_device_init(&boot_mdev, _cbfs_cache, REGION_SIZE(cbfs_cache));
+	find_cbfs_in_pnor();
+
+	init_done = 1;
+}
+
 const struct region_device *boot_device_ro(void)
 {
-	if (boot_dev.base == NULL)
-		find_cbfs_in_pnor();
-
-	return &boot_dev.rdev;
+	return &boot_mdev.rdev;
 }

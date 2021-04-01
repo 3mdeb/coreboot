@@ -44,4 +44,5 @@ SECTIONS
 	// - need to be compatible with payload's expectations
 
 	RAMSTAGE(0x300000, 5M)
+	CBFS_CACHE(0x800000, 2M)
 }

@@ -4,89 +4,6 @@
 #include <cpu/power/istep_14_1.h>
 #include <cpu/power/scom.h>
 
-// errlHndl_t runStep(const TargetHandleList & i_targetList)
-// {
-//     // memory diagnostics ipl step entry point
-//     Globals globals;
-//     TargetHandle_t top = nullptr;
-//     targetService().getTopLevelTarget(top);
-
-//     if(top)
-//     {
-//         globals.mfgPolicy = top->getAttr<ATTR_MNFG_FLAGS>();
-//         // by default 0
-//         // see hostboot/src/usr/targeting/common/xmltohb/attribute_types.xml:7292
-//         uint8_t maxMemPatterns = top->getAttr<ATTR_RUN_MAX_MEM_PATTERNS>();
-//         // This registry / attr is the same as the
-//         // exhaustive mnfg one
-//         if(maxMemPatterns)
-//         {
-//             globals.mfgPolicy |= MNFG_FLAG_ENABLE_EXHAUSTIVE_PATTERN_TEST;
-//         }
-//         globals.simicsRunning = false;
-//     }
-
-//     // get the workflow for each target mba passed in.
-//     // associate each workflow with the target handle.
-//     WorkFlowAssocMap list;
-//     TargetHandleList::const_iterator tit;
-//     DiagMode mode;
-//     for(tit = i_targetList.begin(); tit != i_targetList.end(); ++tit)
-//     {
-//         // mode = 0 (ONE_PATTERN) is the default output
-//         getDiagnosticMode(globals, *tit, mode);
-//         // create a list with patterns
-//         // for ONE_PATTERN the list is as follows
-//         // list[0] = RESTORE_DRAM_REPAIRS
-//         // list[1] = START_PATTERN_0
-//         // list[2] = START_SCRUB
-//         // list[3] = CLEAR_HW_CHANGED_STATE
-//         //
-//         // for FOUR_PATTERNS it can also be
-//         // list[0] = RESTORE_DRAM_REPAIRS
-//         // list[1] START_RANDOM_PATTERN
-//         // list[2] START_SCRUB
-//         // list[3] START_PATTERN_2
-//         // list[4] START_SCRUB
-//         // list[5] START_PATTERN_1
-//         // list[6] START_SCRUB
-//         // list[7] CLEAR_HW_CHANGED_STATE
-//         //
-//         // or dor NINE_PATTERNS
-//         // list[0] = RESTORE_DRAM_REPAIRS
-//         // list[1] START_PATTERN_7
-//         // list[2] START_SCRUB
-//         // list[3] START_PATTERN_6
-//         // list[4] START_SCRUB
-//         // list[5] START_PATTERN_5
-//         // list[6] START_SCRUB
-//         // list[7] START_PATTERN_4
-//         // list[8] START_SCRUB
-//         // list[9] START_PATTERN_3
-//         // list[10] START_SCRUB
-//         // list[11] CLEAR_HW_CHANGED_STATE
-//         getWorkFlow(mode, list[*tit], globals);
-//     }
-
-//     // set global data
-//     Singleton<StateMachine>::instance().setGlobals(globals);
-//     // calling errlHndl_t StateMachine::run(const WorkFlowAssocMap & i_list)
-//     Singleton<StateMachine>::instance().run(list);
-
-//     // If this step completes without the need for a reconfig due to an RCD
-//     // parity error, clear all RCD parity error counters.
-//     ATTR_RECONFIGURE_LOOP_type attr = top->getAttr<ATTR_RECONFIGURE_LOOP>();
-//     if (0 == (attr & RECONFIGURE_LOOP_RCD_PARITY_ERROR))
-//     {
-//         TargetHandleList trgtList; getAllChiplets(trgtList, TYPE_MCA);
-//         for (auto & trgt : trgtList)
-//         {
-//             if (0 != trgt->getAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>())
-//                 trgt->setAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>(0);
-//         }
-//     }
-// }
-
 void memDiag(void){
 
     // memory diagnostics ipl step entry point
@@ -94,61 +11,23 @@ void memDiag(void){
     TargetHandle_t top = nullptr;
     targetService().getTopLevelTarget(top);
 
-    if(top)
-    {
-        globals.mfgPolicy = top->getAttr<ATTR_MNFG_FLAGS>();
-        // by default 0
-        // see hostboot/src/usr/targeting/common/xmltohb/attribute_types.xml:7292
-        uint8_t maxMemPatterns = top->getAttr<ATTR_RUN_MAX_MEM_PATTERNS>();
-        // This registry / attr is the same as the
-        // exhaustive mnfg one
-        if(maxMemPatterns)
-        {
-            globals.mfgPolicy |= MNFG_FLAG_ENABLE_EXHAUSTIVE_PATTERN_TEST;
-        }
-        globals.simicsRunning = false;
-    }
+    globals.mfgPolicy = 0;
+    globals.simicsRunning = false;
 
     // get the workflow for each target mba passed in.
     // associate each workflow with the target handle.
     WorkFlowAssocMap list;
     TargetHandleList::const_iterator tit;
     DiagMode mode;
-    for(tit = i_targetList.begin(); tit != i_targetList.end(); ++tit)
-    {
-        // mode = 0 (ONE_PATTERN) is the default output
-        getDiagnosticMode(globals, *tit, mode);
+    for(unsigned int targetIndex = 0; targetIndex < memdiagTargetsSize; ++targetIndex) {
+        getDiagnosticMode(globals, memdiagTargets[targetIndex], mode);
         // create a list with patterns
         // for ONE_PATTERN the list is as follows
         // list[0] = RESTORE_DRAM_REPAIRS
         // list[1] = START_PATTERN_0
         // list[2] = START_SCRUB
         // list[3] = CLEAR_HW_CHANGED_STATE
-        //
-        // for FOUR_PATTERNS it can also be
-        // list[0] = RESTORE_DRAM_REPAIRS
-        // list[1] START_RANDOM_PATTERN
-        // list[2] START_SCRUB
-        // list[3] START_PATTERN_2
-        // list[4] START_SCRUB
-        // list[5] START_PATTERN_1
-        // list[6] START_SCRUB
-        // list[7] CLEAR_HW_CHANGED_STATE
-        //
-        // or dor NINE_PATTERNS
-        // list[0] = RESTORE_DRAM_REPAIRS
-        // list[1] START_PATTERN_7
-        // list[2] START_SCRUB
-        // list[3] START_PATTERN_6
-        // list[4] START_SCRUB
-        // list[5] START_PATTERN_5
-        // list[6] START_SCRUB
-        // list[7] START_PATTERN_4
-        // list[8] START_SCRUB
-        // list[9] START_PATTERN_3
-        // list[10] START_SCRUB
-        // list[11] CLEAR_HW_CHANGED_STATE
-        getWorkFlow(mode, list[*tit], globals);
+        getWorkFlow(mode, list[memdiagTargets[targetIndex]], globals);
     }
 
     // set global data

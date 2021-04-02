@@ -4,7 +4,233 @@
 #include <cpu/power/istep_14_1.h>
 #include <cpu/power/scom.h>
 
-void memDiag(void){
+errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
+{
+    errlHndl_t err = nullptr;
+    uint64_t workItem;
+
+    TargetHandle_t target;
+
+    // starting a maint cmd ...  register a timeout monitor
+    uint64_t maintCmdTO = getTimeoutValue();
+
+    uint64_t monitorId = CommandMonitor::INVALID_MONITOR_ID;
+    i_wfp.timeoutCnt = 0; // reset for new work item
+    workItem = *i_wfp.workItem;
+
+    target = getTarget(i_wfp);
+
+    TYPE trgtType = target->getAttr<ATTR_TYPE>();
+    // new command...use the full range
+    // target type is MBA
+    if (TYPE_MBA == trgtType)
+    {
+        uint32_t stopCondition =
+            mss_MaintCmd::STOP_END_OF_RANK                  |
+            mss_MaintCmd::STOP_ON_MPE                       |
+            mss_MaintCmd::STOP_ON_UE                        |
+            mss_MaintCmd::STOP_ON_END_ADDRESS               |
+            mss_MaintCmd::ENABLE_CMD_COMPLETE_ATTENTION;
+
+        if(TARGETING::MNFG_FLAG_IPL_MEMORY_CE_CHECKING & iv_globals.mfgPolicy)
+        {
+            // For MNFG mode, check CE also
+            stopCondition |= mss_MaintCmd::STOP_ON_HARD_NCE_ETE;
+        }
+
+        fapi2::buffer<uint64_t> startAddr, endAddr;
+        mss_MaintCmd * cmd = nullptr;
+        cmd = static_cast<mss_MaintCmd *>(i_wfp.data);
+        fapi2::Target<fapi2::TARGET_TYPE_MBA> fapiMba(target);
+
+        // We will always do ce setup though CE calculation
+        // is only done during MNFG. This will give use better ffdc.
+        err = ceErrorSetup<TYPE_MBA>(target);
+
+        FAPI_INVOKE_HWP(err, mss_get_address_range, fapiMba, MSS_ALL_RANKS, startAddr, endAddr);
+        // new command...use the full range
+        if(workItem == START_RANDOM_PATTERN)
+        {
+            cmd = new mss_SuperFastRandomInit(
+                fapiMba,
+                startAddr,
+                endAddr,
+                mss_MaintCmd::PATTERN_RANDOM,
+                stopCondition,
+                false);
+        } else if(workItem == START_SCRUB)
+        {
+            cmd = new mss_SuperFastRead(
+                fapiMba,
+                startAddr,
+                endAddr,
+                stopCondition,
+                false);
+        } else // PATTERNS
+        {
+            cmd = new mss_SuperFastInit(
+                fapiMba,
+                startAddr,
+                endAddr,
+                static_cast<mss_MaintCmd::PatternIndex>(workItem),
+                stopCondition,
+                false);
+        }
+        i_wfp.data = cmd;
+        // Command and address configured.
+        // Invoke the command.
+        FAPI_INVOKE_HWP(err, cmd->setupAndExecuteCmd);
+    }
+    //target type is MCBIST
+    else if(TYPE_MCBIST == trgtType)
+    {
+        fapi2::Target<fapi2::TARGET_TYPE_MCBIST> fapiMcbist(target);
+        mss::mcbist::stop_conditions<mss::mc_type::NIMBUS> stopCond;
+        switch(workItem)
+        {
+            case START_RANDOM_PATTERN:
+                FAPI_INVOKE_HWP(err, sf_init, fapiMcbist, mss::mcbist::PATTERN_RANDOM);
+                break;
+            case START_SCRUB:
+                //set stop conditions
+                stopCond.set_pause_on_mpe(mss::ON);
+                stopCond.set_pause_on_ue(mss::ON);
+                stopCond.set_pause_on_aue(mss::ON);
+                stopCond.set_nce_inter_symbol_count_enable(mss::ON);
+                stopCond.set_nce_soft_symbol_count_enable(mss::ON);
+                stopCond.set_nce_hard_symbol_count_enable(mss::ON);
+                if(TARGETING::MNFG_FLAG_IPL_MEMORY_CE_CHECKING & iv_globals.mfgPolicy)
+                {
+                    stopCond.set_pause_on_nce_hard(mss::ON);
+                }
+                FAPI_INVOKE_HWP(err, nim_sf_read, fapiMcbist, stopCond);
+                break;
+            case START_PATTERN_0:
+            case START_PATTERN_1:
+            case START_PATTERN_2:
+            case START_PATTERN_3:
+            case START_PATTERN_4:
+            case START_PATTERN_5:
+            case START_PATTERN_6:
+            case START_PATTERN_7:
+                FAPI_INVOKE_HWP(err, sf_init, fapiMcbist, workItem);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+template<TARGETING::TYPE T>
+uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
+{
+    // will unlock when going out of scope
+    PRDF_SYSTEM_SCOPELOCK;
+
+    bool calloutMade = false;
+
+    // Will need the chip and system objects initialized for several parts
+    // of this function and sub-functions.
+    if ( (false == g_initialized) || (nullptr == systemPtr) )
+    {
+        errlHndl_t errl = noLock_initialize();
+        if ( nullptr != errl )
+        {
+            RDR::commitErrl<T>( errl, i_trgt );
+            return FAIL;
+        }
+    }
+
+    std::vector<MemRank> ranks;
+    getMasterRanks<T>( i_trgt, ranks );
+
+    bool spareDramDeploy = mnfgSpareDramDeploy();
+
+    if ( spareDramDeploy )
+    {
+        // Deploy all spares for MNFG corner tests.
+        RDR::deployDramSpares<T>( i_trgt, ranks );
+    }
+
+    if ( areDramRepairsDisabled() )
+    {
+        // DRAM Repairs are disabled in MNFG mode, so screen all DIMMs with
+        // VPD information.
+        if ( RDR::screenBadDqs<T>(i_trgt, ranks) )
+            calloutMade = true;
+
+        // No need to continue because there will not be anything to
+        // restore.
+        return FAIL;
+    }
+
+    if ( spareDramDeploy )
+    {
+        // This is an error. The MNFG spare DRAM deply bit is set, but DRAM
+        // Repairs have not been disabled.
+
+        RDR::commitSoftError<T>( PRDF_INVALID_CONFIG, i_trgt,
+                                    PRDFSIG_RdrInvalidConfig, true );
+
+        return FAIL;
+    }
+
+    uint8_t rankMask = 0, dimmMask = 0;
+    if ( SUCCESS != mssRestoreDramRepairs<T>( i_trgt, rankMask,
+                                                dimmMask) )
+    {
+        return FAIL;
+    }
+
+    // Callout DIMMs with too many bad bits and not enough repairs available
+    if ( RDR::processBadDimms<T>(i_trgt, dimmMask) )
+        calloutMade = true;
+
+    // Check repaired ranks for RAS policy violations.
+    if ( RDR::processRepairedRanks<T>(i_trgt, rankMask) )
+        calloutMade = true;
+
+    return calloutMade ? FAIL : SUCCESS;
+}
+
+bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
+{
+    uint64_t workItem = *i_wfp->workItem;
+
+    switch(workItem)
+    {
+        case RESTORE_DRAM_REPAIRS:
+        {
+            TargetHandle_t target = getTarget(*i_wfp);
+            // Get the connected MCAs.
+            TargetHandleList mcaList;
+            getChildAffinityTargets(mcaList, target, CLASS_UNIT, TYPE_MCA);
+            for (auto & mca : mcaList)
+            {
+                PRDF::restoreDramRepairs<TYPE_MCA>(mca);
+            }
+            break;
+        }
+        case START_PATTERN_0:
+        case START_PATTERN_1:
+        case START_PATTERN_2:
+        case START_PATTERN_3:
+        case START_PATTERN_4:
+        case START_PATTERN_5:
+        case START_PATTERN_6:
+        case START_PATTERN_7:
+        case START_RANDOM_PATTERN:
+        case START_SCRUB:
+            doMaintCommand(*i_wfp);
+            break;
+        default:
+            break;
+    }
+    ++i_wfp->workItem;
+    scheduleWorkItem(*i_wfp);
+}
+
+void memDiag(void) {
 
     // memory diagnostics ipl step entry point
     Globals globals;
@@ -26,7 +252,6 @@ void memDiag(void){
         // list[0] = RESTORE_DRAM_REPAIRS
         // list[1] = START_PATTERN_0
         // list[2] = START_SCRUB
-        // list[3] = CLEAR_HW_CHANGED_STATE
         getWorkFlow(mode, list[memdiagTargets[targetIndex]], globals);
     }
 

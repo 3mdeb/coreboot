@@ -13,6 +13,8 @@ void mainboard_post(uint8_t value)
 	outb(value, 0x80);
 }
 
+/* Every byte counts when building for SEEPROM, aspeed_early_config() adds ~1.2kB */
+#if !CONFIG(BOOTBLOCK_IN_SEEPROM)
 void bootblock_mainboard_early_init(void)
 {
 	struct config_data vuart_init[] = {
@@ -61,3 +63,4 @@ void bootblock_mainboard_early_init(void)
 	const pnp_devfn_t serial_dev = PNP_DEV(0x2e, AST2400_ILPC2AHB);
 	aspeed_early_config(serial_dev, vuart_init, ARRAY_SIZE(vuart_init));
 }
+#endif

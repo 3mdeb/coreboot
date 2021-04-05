@@ -40,6 +40,7 @@ enum ecc_bitfields {
 	E7 = 64         //< Error in ECC bit 7
 };
 
+/*
 static uint64_t ecc_matrix[] = {
 	//0000000000000000111010000100001000111100000011111001100111111111
 	0x0000e8423c0f99ff,
@@ -57,6 +58,17 @@ static uint64_t ecc_matrix[] = {
 	0x99ff0000e8423c0f,
 	//1111111100000000000000001110100001000010001111000000111110011001
 	0xff0000e8423c0f99
+};
+*/
+
+/*
+ * Compressed version of table above, saves 48 bytes. Rotating value in register
+ * results in exactly the same size as full table, due to cost of loading values
+ * into registers.
+ */
+static uint8_t ecc_matrix[] = {
+	0x00, 0x00, 0xe8, 0x42, 0x3c, 0x0f, 0x99, 0xff,
+	0x00, 0x00, 0xe8, 0x42, 0x3c, 0x0f, 0x99
 };
 
 static uint8_t syndrome_matrix[] = {
@@ -143,7 +155,7 @@ static uint8_t generate_ecc(uint64_t i_data)
 	uint8_t result = 0;
 
 	for (int i = 0; i < 8; i++) {
-		result |= __builtin_parityll(ecc_matrix[i] & i_data) << i;
+		result |= __builtin_parityll((*(uint64_t *)&ecc_matrix[i]) & i_data) << i;
 	}
 	return result;
 }

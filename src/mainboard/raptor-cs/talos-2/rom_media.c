@@ -213,7 +213,7 @@ static ecc_status_t remove_ecc(uint8_t* io_src, size_t i_srcSz,
 	return rc;
 }
 
-static char* cbfs_base;
+static char *pnor_base;
 
 /*
  * PNOR has to be accessed with Cache Inhibited forms of instructions, and they
@@ -223,13 +223,15 @@ static ssize_t no_ecc_readat(const struct region_device *rd, void *b,
 				size_t offset, size_t size)
 {
 	uint8_t tmp[8];
+	offset -= rd->region.offset;
 	size_t off_a = ALIGN_DOWN(offset, 8);
 	size_t size_left = size;
+	char *part_base = pnor_base + rd->region.offset;
 
 	/* If offset is not 8B-aligned */
 	if (offset & 0x7) {
 		int i;
-		memcpy_ci_src(tmp, &cbfs_base[off_a], 8);
+		memcpy_ci_src(tmp, &part_base[off_a], 8);
 		for (i = 8 - (offset & 7); i < 8; i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 			if (!--size_left)
@@ -239,14 +241,14 @@ static ssize_t no_ecc_readat(const struct region_device *rd, void *b,
 	}
 
 	/* Align down size_left to 8B */
-	memcpy_ci_src(b, &cbfs_base[off_a], ALIGN_DOWN(size_left, 8));
+	memcpy_ci_src(b, &part_base[off_a], ALIGN_DOWN(size_left, 8));
 
 	/* Copy the rest of requested unaligned data, if any */
 	if (size_left & 7) {
 		off_a += ALIGN_DOWN(size_left, 8);
 		b += ALIGN_DOWN(size_left, 8);
 		int i;
-		memcpy_ci_src(tmp, &cbfs_base[off_a], 8);
+		memcpy_ci_src(tmp, &part_base[off_a], 8);
 		for (i = 0; i < (size_left & 7); i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 		}
@@ -259,13 +261,15 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 				size_t offset, size_t size)
 {
 	uint8_t tmp[8];
+	offset -= rd->region.offset;
 	size_t off_a = ALIGN_DOWN(offset, 8);
 	size_t size_left = size;
+	char *part_base = pnor_base + rd->region.offset;
 
 	/* If offset is not 8B-aligned */
 	if (offset & 0x7) {
 		int i;
-		remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8], 9, tmp, 8);
+		remove_ecc((uint8_t *) &part_base[(off_a * 9)/8], 9, tmp, 8);
 		for (i = 8 - (offset & 7); i < 8; i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 			if (!--size_left)
@@ -275,7 +279,7 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 	}
 
 	/* Align down size_left to 8B */
-	remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8],
+	remove_ecc((uint8_t *) &part_base[(off_a * 9)/8],
 	           (ALIGN_DOWN(size_left, 8) * 9) / 8,
 	           b,
 	           ALIGN_DOWN(size_left, 8));
@@ -285,7 +289,7 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 		off_a += ALIGN_DOWN(size_left, 8);
 		b += ALIGN_DOWN(size_left, 8);
 		int i;
-		remove_ecc((uint8_t *) &cbfs_base[(off_a * 9)/8], 9, tmp, 8);
+		remove_ecc((uint8_t *) &part_base[(off_a * 9)/8], 9, tmp, 8);
 		for (i = 0; i < (size_left & 7); i++) {
 			*((uint8_t *)(b++)) = tmp[i];
 		}
@@ -294,16 +298,23 @@ static ssize_t ecc_readat(const struct region_device *rd, void *b,
 	return size;
 }
 
-struct region_device_ops boot_rdev_ops = {
+struct region_device_ops no_ecc_rdev_ops = {
 	.mmap = mmap_helper_rdev_mmap,
 	.munmap = mmap_helper_rdev_munmap,
 	.readat = no_ecc_readat,
 };
 
-static void find_cbfs_in_pnor(void)
+struct region_device_ops ecc_rdev_ops = {
+	.mmap = mmap_helper_rdev_mmap,
+	.munmap = mmap_helper_rdev_munmap,
+	.readat = ecc_readat,
+};
+
+static void mount_part_from_pnor(const char *part_name,
+                                 struct mmap_helper_region_device *mdev,
+                                 void *cache, size_t cache_size)
 {
-	char *cbfs = NULL;
-	char *pnor_base = NULL;
+	size_t base, size;
 	unsigned int i, block_size, entry_count = 0;
 	struct ffs_hdr *hdr_pnor = (struct ffs_hdr *)LPC_FLASH_TOP;
 
@@ -313,6 +324,11 @@ static void find_cbfs_in_pnor(void)
 		/* Size is aligned up to 8 because of how memcpy_ci_src works */
 		uint8_t buffer[ALIGN(FFS_HDR_SIZE, 8)];
 		struct ffs_hdr *hdr = (struct ffs_hdr *)buffer;
+
+		if (pnor_base != NULL) {
+			hdr_pnor = (struct ffs_hdr *)pnor_base;
+			break;
+		}
 
 		/* Assume block_size = 4K */
 		hdr_pnor = (struct ffs_hdr *)(((char *)hdr_pnor) - 0x1000);
@@ -335,10 +351,9 @@ static void find_cbfs_in_pnor(void)
 		entry_count = hdr->entry_count;
 		block_size = hdr->block_size;
 
-		printk(BIOS_DEBUG, "FFS header at %p\n", hdr_pnor);
-
 		/* Every byte counts when building for SEEPROM */
 #if !CONFIG(BOOTBLOCK_IN_SEEPROM)
+		printk(BIOS_DEBUG, "FFS header at %p\n", hdr_pnor);
 		printk(BIOS_SPEW, "    size %x\n", hdr->size);
 		printk(BIOS_SPEW, "    entry_size %x\n", hdr->entry_size);
 		printk(BIOS_SPEW, "    entry_count %x\n", hdr->entry_count);
@@ -369,7 +384,7 @@ static void find_cbfs_in_pnor(void)
 		       e->name, e->base, e->size, e->actual, e->type, e->flags);
 #endif
 
-		if (strcmp(e->name, CBFS_PARTITION_NAME) != 0)
+		if (strcmp(e->name, part_name) != 0)
 			continue;
 
 		val = (uint32_t *) e;
@@ -379,24 +394,33 @@ static void find_cbfs_in_pnor(void)
 		if (csum != 0)
 			continue;
 
-		cbfs = (char *) pnor_base + block_size * e->base;
+		base = block_size * e->base;
+		/* This is size of the partition, it includes header and ECC */
+		size = e->actual;
+
+		mdev->rdev.ops = &no_ecc_rdev_ops;
 
 		/* Skip PNOR partition header */
-		cbfs += 0x1000;
+		base += 0x1000;
+		size -= 0x1000;
 		if (e->user.data[0] & FFS_ENRY_INTEG_ECC) {
-			printk(BIOS_DEBUG, "CBFS partition has ECC\n");
-			boot_rdev_ops.readat = ecc_readat;
-			cbfs += 0x200;
+			printk(BIOS_DEBUG, "%s partition has ECC\n", part_name);
+			mdev->rdev.ops = &ecc_rdev_ops;
+			base += 0x200;
+			size -= 0x200;
+			size = size / 9 * 8;
 		}
 
-		printk(BIOS_DEBUG, "CBFS partition at %p\n", cbfs);
-		cbfs_base = cbfs;
+		mdev->rdev.region.offset = base;
+		mdev->rdev.region.size = size;
+		mmap_helper_device_init(mdev, cache, cache_size);
+
 		break;
 	}
 }
 
 static struct mmap_helper_region_device boot_mdev = MMAP_HELPER_REGION_INIT(
-	&boot_rdev_ops, 0, CONFIG_ROM_SIZE);
+	&no_ecc_rdev_ops, 0, CONFIG_ROM_SIZE);
 
 void boot_device_init(void)
 {
@@ -404,8 +428,15 @@ void boot_device_init(void)
 	if (init_done)
 		return;
 
-	mmap_helper_device_init(&boot_mdev, _cbfs_cache, REGION_SIZE(cbfs_cache));
-	find_cbfs_in_pnor();
+	/*
+	 * Make sure that every partition has its own cache, either by using
+	 * different region (or buffer in code if it is small enough and used in
+	 * just one stage) or making sure that data from the first mounted partition
+	 * won't be needed after another partition is mounted (e.g. by adding umount
+	 * function that changes rdev_ops).
+	 */
+	mount_part_from_pnor(CBFS_PARTITION_NAME, &boot_mdev, _cbfs_cache,
+	                     REGION_SIZE(cbfs_cache));
 
 	init_done = 1;
 }

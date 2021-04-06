@@ -22,7 +22,6 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
 
     TYPE trgtType = target->getAttr<ATTR_TYPE>();
     // new command...use the full range
-    // target type is MBA
     if (TYPE_MBA == trgtType)
     {
         uint32_t stopCondition =
@@ -47,22 +46,12 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
         // is only done during MNFG. This will give use better ffdc.
         err = ceErrorSetup<TYPE_MBA>(target);
 
-        FAPI_INVOKE_HWP(err, mss_get_address_range, fapiMba, MSS_ALL_RANKS, startAddr, endAddr);
-        // new command...use the full range
-        if(workItem == START_RANDOM_PATTERN)
-        {
-            cmd = new mss_SuperFastRandomInit(
-                fapiMba,
-                startAddr,
-                endAddr,
-                mss_MaintCmd::PATTERN_RANDOM,
-                stopCondition,
-                false);
-        } else if(workItem == START_SCRUB)
+        FAPI_INVOKE_HWP(err, mss_get_address_range, fapiMba, endAddr);
+        if(workItem == START_SCRUB)
         {
             cmd = new mss_SuperFastRead(
                 fapiMba,
-                startAddr,
+                0,
                 endAddr,
                 stopCondition,
                 false);
@@ -70,7 +59,7 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
         {
             cmd = new mss_SuperFastInit(
                 fapiMba,
-                startAddr,
+                0,
                 endAddr,
                 static_cast<mss_MaintCmd::PatternIndex>(workItem),
                 stopCondition,
@@ -81,16 +70,12 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
         // Invoke the command.
         FAPI_INVOKE_HWP(err, cmd->setupAndExecuteCmd);
     }
-    //target type is MCBIST
     else if(TYPE_MCBIST == trgtType)
     {
         fapi2::Target<fapi2::TARGET_TYPE_MCBIST> fapiMcbist(target);
         mss::mcbist::stop_conditions<mss::mc_type::NIMBUS> stopCond;
         switch(workItem)
         {
-            case START_RANDOM_PATTERN:
-                FAPI_INVOKE_HWP(err, sf_init, fapiMcbist, mss::mcbist::PATTERN_RANDOM);
-                break;
             case START_SCRUB:
                 //set stop conditions
                 stopCond.set_pause_on_mpe(mss::ON);
@@ -106,88 +91,222 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
                 FAPI_INVOKE_HWP(err, nim_sf_read, fapiMcbist, stopCond);
                 break;
             case START_PATTERN_0:
-            case START_PATTERN_1:
-            case START_PATTERN_2:
-            case START_PATTERN_3:
-            case START_PATTERN_4:
-            case START_PATTERN_5:
-            case START_PATTERN_6:
-            case START_PATTERN_7:
                 FAPI_INVOKE_HWP(err, sf_init, fapiMcbist, workItem);
-                break;
-            default:
                 break;
         }
     }
 }
 
+fapi2::ReturnCode mss_get_address_range(
+    const fapi2::Target<fapi2::TARGET_TYPE_MBA>& i_target,
+    fapi2::buffer<uint64_t>& o_end_addr)
+{
+    constexpr uint8_t NUM_CONFIG_TYPES = 9;
+    constexpr uint8_t NUM_CONFIG_SUBTYPES = 4;
+    constexpr uint8_t NUM_SLOT_CONFIGS = 2;
+    static const uint8_t memConfigType[NUM_CONFIG_TYPES][NUM_CONFIG_SUBTYPES][NUM_SLOT_CONFIGS] =
+    {
+
+        // Refer to Centaur Workbook: 5.2 Master and Slave Rank Usage
+        //
+        //       SUBTYPE_A                    SUBTYPE_B                    SUBTYPE_C                    SUBTYPE_D
+        //
+        //SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1
+        //
+        //master slave  master slave   master slave  master slave   master slave  master slave   master slave  master slave
+        //
+        {{0xff,         0xff},         {0xff,        0xff},         {0xff,         0xff},       {0xff,         0xff}},  // TYPE_0
+        {{0x00,         0x40},         {0x10,        0x50},         {0x30,         0x70},       {0xff,         0xff}},  // TYPE_1
+        {{0x01,         0x41},         {0x03,        0x43},         {0x07,         0x47},       {0xff,         0xff}},  // TYPE_2
+        {{0x11,         0x51},         {0x13,        0x53},         {0x17,         0x57},       {0xff,         0xff}},  // TYPE_3
+        {{0x31,         0x71},         {0x33,        0x73},         {0x37,         0x77},       {0xff,         0xff}},  // TYPE_4
+        {{0x00,         0x40},         {0x10,        0x50},         {0x30,         0x70},       {0xff,         0xff}},  // TYPE_5
+        {{0x01,         0x41},         {0x03,        0x43},         {0x07,         0x47},       {0xff,         0xff}},  // TYPE_6
+        {{0x11,         0x51},         {0x13,        0x53},         {0x17,         0x57},       {0xff,         0xff}},  // TYPE_7
+        {{0x31,         0x71},         {0x33,        0x73},         {0x37,         0x77},       {0xff,         0xff}}   // TYPE_8
+    };
+
+    uint64_t l_data;
+    mss_memconfig::MemOrg l_row;
+    mss_memconfig::MemOrg l_col;
+    mss_memconfig::MemOrg l_bank;
+    uint8_t l_dramWidth = 0;
+    uint8_t l_mbaPosition = 0;
+    uint8_t l_dram_gen = 0;
+
+    const auto l_targetCentaur = i_target.getParent<fapi2::TARGET_TYPE_MEMBUF_CHIP>();
+    FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, i_target,  l_mbaPosition);
+    FAPI_ATTR_GET(fapi2::ATTR_CEN_EFF_DRAM_WIDTH, i_target,  l_dramWidth);
+    FAPI_ATTR_GET(fapi2::ATTR_CEN_EFF_DRAM_GEN, i_target,  l_dram_gen);
+    fapi2::getScom(l_targetCentaur, mss_mbaxcr[l_mbaPosition], l_data);
+
+    uint32_t l_dramSize = (uint32_t)((l_data & 0x300000000000000) >> 24);
+
+    if((l_dramWidth == mss_memconfig::X8) &&
+       (l_dramSize == mss_memconfig::GBIT_2) &&
+       (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_15;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_2) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_14;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_2) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_15;
+        l_col =   mss_memconfig::COL_11;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_2) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_15;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_4) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_4) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_15;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_4) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_11;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_4) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_8) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_11;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_8) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_8) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
+    {
+        l_row =   mss_memconfig::ROW_16;
+        l_col =   mss_memconfig::COL_12;
+        l_bank =  mss_memconfig::BANK_3;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_8) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_17;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X4) &&
+              (l_dramSize == mss_memconfig::GBIT_16) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   ss_memconfig::ROW_17;
+        l_col =   ss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    } else if((l_dramWidth == mss_memconfig::X8) &&
+              (l_dramSize == mss_memconfig::GBIT_16) &&
+              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
+    {
+        l_row =   mss_memconfig::ROW_17;
+        l_col =   mss_memconfig::COL_10;
+        l_bank =  mss_memconfig::BANK_4;
+    }
+
+    uint8_t l_configType = (l_data & 0xF0) >> 4;
+    uint8_t l_configSubType = (l_data & 0xC) >> 2;
+    uint8_t l_slotConfig = l_data & 0x1;
+
+    uint8_t l_end_master_rank = (memConfigType[l_configType][l_configSubType][l_slotConfig] & 0xf0) >> 4;
+    uint8_t l_end_slave_rank = memConfigType[l_configType][l_configSubType][l_slotConfig] & 0x0f;
+
+    o_end_addr =
+        (l_end_master_rank & 0xF) << 60
+      | (l_end_slave_rank & 0x7) << 57
+      | ((uint32_t)l_bank & 0xF) << 53
+      | ((uint32_t)l_row & 0x1FFFF) << 36
+      | ((uint32_t)l_col & 0xFFF) << 24;
+
+    if(l_dramWidth == mss_memconfig::X4
+    && l_dramSize  == mss_memconfig::GBIT_16
+    && l_dram_gen  == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4)
+    {
+        o_end_addr.writeBit<CEN_MBA_MBMEAQ_CMD_ROW17>(l_row18);
+    }
+}
+
+template<  mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T >
+fapi2::ReturnCode sf_init( const fapi2::Target<T>& i_target,
+                           const uint64_t i_pattern = PATTERN_0 )
+{
+    using ET = mss::mcbistMCTraits<MC>;
+    constraints<MC> l_const(i_pattern);
+    sf_init_operation<MC> l_init_op(i_target, l_const, l_rc);
+    return l_init_op.execute();
+}
+
+// Helper function to access the state of manufacturing policy flags.
+bool isMnfgFlagSet(uint32_t i_flag) { return false; }
+
+bool areDramRepairsDisabled() { return false; }
+bool mnfgSpareDramDeploy() { return false; }
+
 template<TARGETING::TYPE T>
 uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
 {
-    // will unlock when going out of scope
-    PRDF_SYSTEM_SCOPELOCK;
-
     bool calloutMade = false;
 
     // Will need the chip and system objects initialized for several parts
     // of this function and sub-functions.
-    if ( (false == g_initialized) || (nullptr == systemPtr) )
+    if(false == g_initialized || nullptr == systemPtr)
     {
-        errlHndl_t errl = noLock_initialize();
-        if ( nullptr != errl )
-        {
-            RDR::commitErrl<T>( errl, i_trgt );
-            return FAIL;
-        }
+        noLock_initialize();
     }
 
     std::vector<MemRank> ranks;
     getMasterRanks<T>( i_trgt, ranks );
 
-    bool spareDramDeploy = mnfgSpareDramDeploy();
-
-    if ( spareDramDeploy )
-    {
-        // Deploy all spares for MNFG corner tests.
-        RDR::deployDramSpares<T>( i_trgt, ranks );
-    }
-
-    if ( areDramRepairsDisabled() )
-    {
-        // DRAM Repairs are disabled in MNFG mode, so screen all DIMMs with
-        // VPD information.
-        if ( RDR::screenBadDqs<T>(i_trgt, ranks) )
-            calloutMade = true;
-
-        // No need to continue because there will not be anything to
-        // restore.
-        return FAIL;
-    }
-
-    if ( spareDramDeploy )
-    {
-        // This is an error. The MNFG spare DRAM deply bit is set, but DRAM
-        // Repairs have not been disabled.
-
-        RDR::commitSoftError<T>( PRDF_INVALID_CONFIG, i_trgt,
-                                    PRDFSIG_RdrInvalidConfig, true );
-
-        return FAIL;
-    }
-
     uint8_t rankMask = 0, dimmMask = 0;
-    if ( SUCCESS != mssRestoreDramRepairs<T>( i_trgt, rankMask,
-                                                dimmMask) )
+    if(SUCCESS != mssRestoreDramRepairs<T>(i_trgt, rankMask, dimmMask))
     {
         return FAIL;
     }
 
     // Callout DIMMs with too many bad bits and not enough repairs available
-    if ( RDR::processBadDimms<T>(i_trgt, dimmMask) )
+    if(RDR::processBadDimms<T>(i_trgt, dimmMask))
         calloutMade = true;
 
     // Check repaired ranks for RAS policy violations.
-    if ( RDR::processRepairedRanks<T>(i_trgt, rankMask) )
+    if(RDR::processRepairedRanks<T>(i_trgt, rankMask))
         calloutMade = true;
 
     return calloutMade ? FAIL : SUCCESS;
@@ -195,12 +314,9 @@ uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
 
 bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
 {
-    uint64_t workItem = *i_wfp->workItem;
-
-    switch(workItem)
+    switch(*i_wfp->workItem)
     {
         case RESTORE_DRAM_REPAIRS:
-        {
             TargetHandle_t target = getTarget(*i_wfp);
             // Get the connected MCAs.
             TargetHandleList mcaList;
@@ -210,20 +326,9 @@ bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
                 PRDF::restoreDramRepairs<TYPE_MCA>(mca);
             }
             break;
-        }
         case START_PATTERN_0:
-        case START_PATTERN_1:
-        case START_PATTERN_2:
-        case START_PATTERN_3:
-        case START_PATTERN_4:
-        case START_PATTERN_5:
-        case START_PATTERN_6:
-        case START_PATTERN_7:
-        case START_RANDOM_PATTERN:
         case START_SCRUB:
             doMaintCommand(*i_wfp);
-            break;
-        default:
             break;
     }
     ++i_wfp->workItem;
@@ -237,24 +342,22 @@ void memDiag(void) {
     TargetHandle_t top = nullptr;
     targetService().getTopLevelTarget(top);
 
-    globals.mfgPolicy = 0;
-    globals.simicsRunning = false;
-
     // get the workflow for each target mba passed in.
     // associate each workflow with the target handle.
     WorkFlowAssocMap list;
     TargetHandleList::const_iterator tit;
     DiagMode mode;
     for(unsigned int targetIndex = 0; targetIndex < memdiagTargetsSize; ++targetIndex) {
-        getDiagnosticMode(globals, memdiagTargets[targetIndex], mode);
         // create a list with patterns
         // for ONE_PATTERN the list is as follows
         // list[0] = RESTORE_DRAM_REPAIRS
         // list[1] = START_PATTERN_0
         // list[2] = START_SCRUB
-        getWorkFlow(mode, list[memdiagTargets[targetIndex]], globals);
+        getWorkFlow(ONE_PATTERN, list[memdiagTargets[targetIndex]]);
     }
 
+    globals.mfgPolicy = 0;
+    globals.simicsRunning = false;
     // set global data
     Singleton<StateMachine>::instance().setGlobals(globals);
     // calling errlHndl_t StateMachine::run(const WorkFlowAssocMap & i_list)
@@ -274,8 +377,13 @@ void memDiag(void) {
     }
 }
 
-void broadcast_out_of_sync(uint64_t i_target)
+void after_memdiags(uint64_t i_target)
 {
+    uint64_t dsm0_buffer;
+    uint64_t rd_tag_delay = 0;
+    uint64_t wr_done_delay = 0;
+    uint64_t rcd_protect_time = 0;
+
     scom_and_for_chiplet(
         i_target, MCBIST_MCBISTFIRACT1,
         ~MCBIST_MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC);
@@ -283,22 +391,7 @@ void broadcast_out_of_sync(uint64_t i_target)
     for(unsigned int port = 0; port < 4; ++port)
     {
         scom_or(ECC_REG | port << PORT_OFFSET, RECR_ENABLE_UE_NOISE_WINDOW);
-    }
-}
 
-void after_memdiags(uint64_t i_target)
-{
-    uint64_t dsm0_buffer;
-    uint64_t l_mnfg_buffer;
-    uint64_t rd_tag_delay = 0;
-    uint64_t wr_done_delay = 0;
-    uint64_t rcd_protect_time = 0;
-
-    // Broadcast mode workaround for UEs causing out of sync
-    broadcast_out_of_sync(i_target);
-
-    for(unsigned int port = 0; port < 4; ++port)
-    {
         dsm0_buffer = scom_read(DSM0Q_REG | (port << PORT_OFFSET));
         wr_done_delay = (dsm0_buffer & 0xFC00000000) >> 34;
         rd_tag_delay = (dsm0_buffer & 0xFC00000) >> 22;

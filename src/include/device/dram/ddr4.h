@@ -98,7 +98,7 @@ uint16_t ddr4_speed_mhz_to_reported_mts(uint16_t speed_mhz);
  * The MRS representation has the following structure:
  *	- cmd[17:0] = Address pins A[13:0]
  *	- cmd[21:20] = Bank address BA[1:0]
- *	- cmd[23:22] = Bang group BG[1:0]
+ *	- cmd[23:22] = Bank group BG[1:0]
  *
  * Address pins A[16:14] are always low for MRS commands. A17 is reserved for
  * future use, cmd[19:18] is left as a placeholder in case it is needed.

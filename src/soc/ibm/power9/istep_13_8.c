@@ -523,8 +523,11 @@ static void thermal_throttle_scominit(int mcs_i, int mca_i)
 	    [53]    MBA_FARB3Q_CFG_NM_CHANGE_AFTER_SYNC = 0
 	*/
 	printk(BIOS_EMERG, "Please FIXME: ATTR_MSS_RUNTIME_MEM_THROTTLED_N_COMMANDS_PER_SLOT\n");
+	/* Values dumped after Hostboot's calculations, may be different for other DIMMs */
+	uint64_t nm_n_per_slot = 0x80;
+	uint64_t nm_n_per_port = 0x80;
 	mca_and_or(id, mca_i, 0x07010916, ~(PPC_BITMASK(0, 50) | PPC_BIT(53)),
-	           /* PPC_SHIFT(nm_n_per_slot, 14) | PPC_SHIFT(nm_n_per_port, 30) | */
+	           PPC_SHIFT(nm_n_per_slot, 14) | PPC_SHIFT(nm_n_per_port, 30) |
 	           PPC_SHIFT(0x200, 44) | PPC_SHIFT(1, 50));
 
 	/* Set safemode throttles */
@@ -533,7 +536,7 @@ static void thermal_throttle_scominit(int mcs_i, int mca_i)
 	    [42-55] MBA_FARB4Q_EMERGENCY_M = ATTR_MSS_MRW_MEM_M_DRAM_CLOCKS
 	*/
 	mca_and_or(id, mca_i, 0x07010917, ~PPC_BITMASK(27, 55),
-	           /* PPC_SHIFT(nm_n_per_port, 41) | */
+	           PPC_SHIFT(nm_n_per_port, 41) |
 	           PPC_SHIFT(0x200, 55));
 }
 
@@ -606,8 +609,7 @@ static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 			  [62]    S1INSDLYTAP =         1 // For proper functional operation, this bit must be 0b
 		*/
 		dp_mca_and_or(id, dp, mca_i, 0x800000770701103F,
-		              ~(PPC_BITMASK(48, 51) | PPC_BITMASK(53, 56) | PPC_BITMASK(61, 62)),
-		              PPC_BIT(61) | PPC_BIT(62));
+		              ~(PPC_BITMASK(48, 63)), PPC_BIT(61) | PPC_BIT(62));
 
 		/* IOM0.DDRPHY_DP16_IO_TX_FET_SLICE_P0_{0,1,2,3,4} =
 		  [48-63] = 0x7f7f:
@@ -624,31 +626,31 @@ static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 		*/
 		dp_mca_and_or(id, dp, mca_i, 0x800040000701103F,
 		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0xFFFF, 63));
-
-		/* IOM0.DDRPHY_ADR_DIFFPAIR_ENABLE_P0_ADR1 =
-		  [48-63] = 0x5000:
-			  [49] DI_ADR2_ADR3: 1 = Lanes 2 and 3 are a differential clock pair
-			  [51] DI_ADR6_ADR7: 1 = Lanes 6 and 7 are a differential clock pair
-		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800044010701103F,
-		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x5000, 63));
-
-		/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR1 =
-		  [48-63] = 0x4040:
-			  [49-55] ADR_DELAY2 = 0x40
-			  [57-63] ADR_DELAY3 = 0x40
-		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800044050701103F,
-		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
-
-		/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR1 =
-		  [48-63] = 0x4040:
-			  [49-55] ADR_DELAY6 = 0x40
-			  [57-63] ADR_DELAY7 = 0x40
-		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800044070701103F,
-		              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
 	}
+
+	/* IOM0.DDRPHY_ADR_DIFFPAIR_ENABLE_P0_ADR1 =
+	  [48-63] = 0x5000:
+		  [49] DI_ADR2_ADR3: 1 = Lanes 2 and 3 are a differential clock pair
+		  [51] DI_ADR6_ADR7: 1 = Lanes 6 and 7 are a differential clock pair
+	*/
+	dp_mca_and_or(id, dp, mca_i, 0x800044010701103F,
+	              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x5000, 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY1_P0_ADR1 =
+	  [48-63] = 0x4040:
+		  [49-55] ADR_DELAY2 = 0x40
+		  [57-63] ADR_DELAY3 = 0x40
+	*/
+	dp_mca_and_or(id, dp, mca_i, 0x800044050701103F,
+	              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
+
+	/* IOM0.DDRPHY_ADR_DELAY3_P0_ADR1 =
+	  [48-63] = 0x4040:
+		  [49-55] ADR_DELAY6 = 0x40
+		  [57-63] ADR_DELAY7 = 0x40
+	*/
+	dp_mca_and_or(id, dp, mca_i, 0x800044070701103F,
+	              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x4040, 63));
 
 	for (dp = 0; dp < 2; dp ++) {
 		/* IOM0.DDRPHY_ADR_DLL_VREG_CONFIG_1_P0_ADR32S{0,1} =
@@ -1270,7 +1272,7 @@ static void seq_reset(int mcs_i, int mca_i)
 		par_a17_mask = 0;
 
 	mca_and_or(id, mca_i, 0x8000C4020701103F, 0,
-	           PPC_BIT(54) | PPC_SHIFT(par_a17_mask, 62));
+	           PPC_BIT(54) | par_a17_mask);
 
 	/* All log2 values in timing registers are rounded up. */
 	/* IOM0.DDRPHY_SEQ_MEM_TIMING_PARAM0_P0 =

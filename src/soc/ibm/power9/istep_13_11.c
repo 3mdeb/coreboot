@@ -121,6 +121,10 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 		printk(BIOS_ERR, "DP %d\n", dp);
 		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
 		       dp_mca_read(id, dp, mca_i, 0x8000007A0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - DQ_BIT_DISABLE_RP0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000007C0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - DQS_BIT_DISABLE_RP0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000007D0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_ERROR0\n",
 		       dp_mca_read(id, dp, mca_i, 0x8000001B0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_STATUS0\n",
@@ -133,6 +137,13 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 		       dp_mca_read(id, dp, mca_i, 0x800000AE0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR1\n",
 		       dp_mca_read(id, dp, mca_i, 0x800000AF0701103F));
+
+		for (int i = 0; i < 24; i++) {
+			printk(BIOS_ERR, "\t%#16.16llx - WR_DELAY_VALUE_%d_RP0_REG\n",
+			       dp_mca_read(id, dp, mca_i,
+			                   0x800000380701103F + i*0x100000000), i);
+			if (i >= 16) i++;
+		}
 	}
 
 	printk(BIOS_ERR, "%#16.16llx - APB_ERROR_STATUS0\n",
@@ -291,14 +302,13 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
                            DDR4_MR1_AL_DISABLE,
                            DDR4_MR1_DLL_ENABLE);
 		/*
-		 * Next command for this rank should be enabling write leveling, done by
-		 * PHY hardware, so use tMRD.
+		 * Next command for this rank is REF, done by PHY hardware, so use tMOD.
 		 *
 		 * There are possible MRS commands to be send to other ranks, maybe we
 		 * can subtract those. On the other hand, with microsecond precision for
 		 * delays in ccs_execute(), this probably doesn't matter anyway.
 		 */
-		ccs_add_mrs(id, mrs, rank, mirrored, tMRD);
+		ccs_add_mrs(id, mrs, rank, mirrored, tMOD);
 
 		// mss::workarounds::seq::odt_config();		// Not needed on DD2
 
@@ -790,8 +800,10 @@ void istep_13_11(void)
 					clear_initial_cal_errors(mcs_i, mca_i);
 					ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_DQS_ALIGN,
 					                dqs_align_time());
-					if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0)
+					if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0) {
+						dump_cal_errors(mcs_i, mca_i);
 						die("DQS alignment failed twice, aborting\n");
+					}
 				}
 				/* Post-workaround does not apply to DD2.* */
 

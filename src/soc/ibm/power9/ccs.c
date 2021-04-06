@@ -96,6 +96,10 @@ static void dump_cal_errors(chiplet_id_t id, int mca_i)
 		printk(BIOS_ERR, "DP %d\n", dp);
 		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
 		       dp_mca_read(id, dp, mca_i, 0x8000007A0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - DQ_BIT_DISABLE_RP0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000007C0701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - DQS_BIT_DISABLE_RP0\n",
+		       dp_mca_read(id, dp, mca_i, 0x8000007D0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_ERROR0\n",
 		       dp_mca_read(id, dp, mca_i, 0x8000001B0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_STATUS0\n",
@@ -329,12 +333,12 @@ void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
 
 	/* MC01.MCBIST.CCS.CCS_INST_ARR1_n
 		[all]   0
-		[53+rp] CCS_INST_ARR1_00_DDR_CAL_RANK =           1
+		[53-56] CCS_INST_ARR1_00_DDR_CAL_RANK =           rp
 		[57]    CCS_INST_ARR1_00_DDR_CALIBRATION_ENABLE = 1
 		[59-63] CCS_INST_ARR1_00_GOTO_CMD =               instr + 1
 	*/
 	write_scom_for_chiplet(id, 0x07012335 + instr,
-	                       PPC_BIT(53 + rp) | PPC_BIT(57) | PPC_SHIFT(instr + 1, 63));
+	                       PPC_SHIFT(rp, 56) | PPC_BIT(57) | PPC_SHIFT(instr + 1, 63));
 
 	/* I'm assuming we don't need separate commands for RCD sides... */
 	total_cycles += step_cycles;

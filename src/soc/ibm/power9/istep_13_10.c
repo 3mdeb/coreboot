@@ -27,12 +27,30 @@ static void draminit_cke_helper(chiplet_id_t id, int mca_i)
 
 static void rcd_load(mca_data_t *mca, int d)
 {
+	uint8_t val;
+	rdimm_data_t *dimm = &mca->dimm[d];
+	uint8_t *spd = dimm->spd;
+
+	/* Raw card specifications are JEDEC documents MODULE4.20.28.x, where x is A-E */
+
 	/*
-	F0RC00  = 0x0   // depends on reference raw card used, sometimes 0x2 (ref. A, B, C and custom?)
-	                // Maybe SPD bytes 137 and 138 can tell this?
-	F0RC01  = 0x0   // depends on reference raw card used, sometimes 0xC (ref. C?). JESD82-31: "The system must
-	                // read the module SPD to determine which clock outputs are used by the module", but which
-	                // bytes? We can also download ref cards schematics and see which clock signals are connected.
+	F0RC00  = 0x0   // Depends on reference raw card used, sometimes 0x2 (ref. A, B, C and custom?)
+	                // Seems that 'custom' is used for > C, which means 0x2 is always set.
+	F0RC01  = 0x0   // Depends on reference raw card used, sometimes 0xC (ref. C?).
+	                // JESD82-31: "The system must read the module SPD to determine
+	                // which clock outputs are used by the module". R/C C and D use
+	                // only Y0-Y1, other R/C use all 4 signals.
+	*/
+	/*
+	 * F0RC01 is effectively based on dimm->mranks, but maybe future reference R/C
+	 * will use different clocks than Y0-Y1, which technically is possible...
+	 *
+	 * (spd[131] & 0x1F) is 0x02 for C and 0x03 for D, this line tests for both
+	 */
+	val = ((spd[131] & 0x1E) == 0x02) ? 0xC2 : 0x02;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC00_01, val);
+
+	/*
 	F0RC02  =
 	  [0] = 1 if(!(16Gb density && x4 width))     // disable A17?     // Why not use SPD[5]?
 	                // Hostboot waits for tSTAB, however it is not necessary as long as bit 3 is not changed.
@@ -40,6 +58,13 @@ static void rcd_load(mca_data_t *mca, int d)
 	  [0-1] SPD[137][4-5]   // Address/Command drive strength
 	  [2-3] SPD[137][6-7]   // CS drive strength
 	                // There is also a workaround for NVDIMM hybrids, not needed for plain RDIMM
+	*/
+	val = spd[137] & 0xF0;	// F0RC03
+	if (dimm->density != DENSITY_16Gb || dimm->width != WIDTH_x4)
+		val |= 1;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC02_03, val);
+
+	/*
 	F0RC04  =
 	  // BUG? Hostboot reverses bitfields order for RC04, 05
 	  [0-1] SPD[137][2-3]   // ODT drive strength
@@ -49,23 +74,43 @@ static void rcd_load(mca_data_t *mca, int d)
 	  [0-1] SPD[138][2-3]   // Clocks drive strength, A side (1,3)
 	  [2-3] SPD[138][0-1]   // Clocks drive strength, B side (0,2)
 	                // There is also a workaround for NVDIMM hybrids, not needed for plain RDIMM
+	*/
+	/* First read both nibbles as they are in SPD, then swap pairs of bit fields */
+	val = (spd[137] & 0x0F) | ((spd[138] & 0x0F) << 4);
+	val = ((val & 0x33) << 2) | ((val & 0xCC) >> 2);
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC04_05, val);
+
+	/*
 	F0RC06  = 0xf   // This is a command register, either don't touch it or use NOP (F)
 	F0RC07  = 0x0   // This is a command register, either don't touch it or use NOP (0)
+	*/
+
+	/*
 	F0RC08  =
 	  [0-1] =
-	      1 if master ranks == 4 (SPD[12])        // C0 and C1 enabled      // master rank AKA package rank
+	      1 if master ranks == 4 (SPD[12])        // C0 and C1 enabled
 	      3 if not 3DS (check SPD[6] and SPD[10]) // all disabled
-	      2 if slave ranks <= 2                   // C0 enabled             // slave rank AKA logical rank...
-	      1 if slave ranks <= 4                   // C0 and C1 enabled      // ...SPD[6] Die Count
+	      2 if slave ranks <= 2                   // C0 enabled
+	      1 if slave ranks <= 4                   // C0 and C1 enabled
 	      0 otherwise (3DS with 5-8 slave ranks)  // C0, C1 and C2 enabled
 	  [3] = 1 if(!(16Gb density && x4 width))     // disable A17?     // Why not use SPD[5]?
 	F0RC09  =
 	  [2] =
-	      // TODO: add test for it. Maybe leave it as 0 for now, this is "just" for power saving.
+	      // TODO: add test for it, write 1 for now
 	      0 if this DIMM's ODTs are used for writes or reads that target the other DIMM on the same port
 	      1 otherwise
 	  [3] = 1     // Register CKE Power Down. CKE must be high at the moment of writing to this register and stay high.
 	              // TODO: For how long? Indefinitely, tMRD, tInDIS, tFixedOutput or anything else?
+	*/
+	/* Assume no 4R */
+	val = (dimm->mranks == dimm->log_ranks) ? 3 :
+	      (2 - (dimm->log_ranks / dimm->mranks) / 4);
+	if (dimm->density != DENSITY_16Gb || dimm->width != WIDTH_x4)
+		val |= 8;
+	val |= 0xC0;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC08_09, val);
+
+	/*
 	F0RC0A  =
 	  [0-2] =     // There are other valid values not used by Hostboot
 	      1 if 1866 MT/s
@@ -73,6 +118,14 @@ static void rcd_load(mca_data_t *mca, int d)
 	      3 if 2400 MT/s
 	      4 if 2666 MT/s
 	F0RC0B  = 0xe   // External VrefCA connected to QVrefCA and BVrefCA
+	*/
+	val = mem_data.speed == 1866 ? 1 :
+	      mem_data.speed == 2133 ? 2 :
+	      mem_data.speed == 2400 ? 3 : 4;
+	val |= 0xE0;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC0A_0B, val);
+
+	/*
 	F0RC0C  = 0     // Normal operating mode
 	F0RC0D  =
 	  [0-1] =         // CS mode
@@ -80,15 +133,38 @@ static void rcd_load(mca_data_t *mca, int d)
 	      0 otherwise                         // direct DualCS
 	  [2] = 1         // RDIMM
 	  [3] = SPD[136]  // Address mirroring for MRS commands
+	*/
+	/* Assume RDIMM and that there are no 4R configurations, add when needed */
+	val = 0x40;
+	if (spd[136])
+		val |= 0x80;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC0C_0D, val);
+
+	/*
 	F0RC0E  = 0xd     // Parity enable, ALERT_n assertion and re-enable
 	F0RC0F  = 0       // Normal mode
+	*/
+	val = 0x0D;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC0E_0F, val);
+
+	/*
 	F0RC1x  = 0       // Normal mode, VDD/2
 	F0RC2x  = 0       // Normal mode, all I2C accesses enabled
+	*/
+
+	/*
 	F0RC3x  =
 	      0x1f if 1866 MT/s
 	      0x2c if 2133 MT/s
 	      0x39 if 2400 MT/s
 	      0x47 if 2666 MT/s
+	*/
+	val = mem_data.speed == 1866 ? 0x1F :
+	      mem_data.speed == 2133 ? 0x2C :
+	      mem_data.speed == 2400 ? 0x39 : 0x47;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC3x, val);
+
+	/*
 	F0RC4x  = 0       // Should not be touched at all, it is used to access different function spaces
 	F0RC5x  = 0       // Should not be touched at all, it is used to access different function spaces
 	F0RC6x  = 0       // Should not be touched at all, it is used to access different function spaces
@@ -96,22 +172,43 @@ static void rcd_load(mca_data_t *mca, int d)
 	F0RC8x  = 0       // Default QxODT timing for reads and for writes
 	F0RC9x  = 0       // QxODT not asserted during writes, all ranks
 	F0RCAx  = 0       // QxODT not asserted during reads, all ranks
+	*/
+
+	/*
 	F0RCBx  =
 	  [0-2] =       // Note that only the first line is different than F0RC08 (C0 vs. C0 & C1)
-	      6 if master ranks == 4 (SPD[12])        // C0 enabled             // master rank AKA package rank
+	      6 if master ranks == 4 (SPD[12])        // C0 enabled
 	      7 if not 3DS (check SPD[6] and SPD[10]) // all disabled
-	      6 if slave ranks <= 2                   // C0 enabled             // slave rank AKA logical rank...
-	      4 if slave ranks <= 4                   // C0 and C1 enabled      // ...SPD[6] Die Count
+	      6 if slave ranks <= 2                   // C0 enabled
+	      4 if slave ranks <= 4                   // C0 and C1 enabled
 	      0 otherwise (3DS with 5-8 slave ranks)  // C0, C1 and C2 enabled
+	*/
+	/* Assume no 4R */
+	val = (dimm->mranks == dimm->log_ranks) ? 7 :
+	      (dimm->log_ranks / dimm->mranks) == 2 ? 6 :
+	      (dimm->log_ranks / dimm->mranks) == 4 ? 4 : 0;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RCBx, val);
 
-	// After all RCWs are set, DRAM gets reset "to ensure it is reset properly". Can we ever avoid it?
-	// Comment: "Note: the minimum for a FORC06 soft reset is 32 cycles, but we empirically tested it at 8k cycles"
-	// Shouldn't we rather wait (again!) for periods defined in JESD79-4C? (200us low and 500us high)
+	/*
+	 * After all RCWs are set, DRAM gets reset "to ensure it is reset properly".
+	 * Comment: "Note: the minimum for a FORC06 soft reset is 32 cycles, but we
+	 * empirically tested it at 8k cycles". Shouldn't we rather wait (again!)
+	 * for periods defined in JESD79-4C (200us low and 500us high)?
+	 *
+	 * Do we even need it in the first place?
+	 */
+	/*
 	F0RC06 = 0x2      // Set QRST_n to active (low)
 	delay(8000 memclocks)
 	F0RC06 = 0x3      // Set QRST_n to inactive (high)
 	delay(8000 memclocks)
 	*/
+	val = 0x2;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC06_07, val);
+	delay_nck(8000);
+	val = 0x3;
+	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC06_07, val);
+	delay_nck(8000);
 
 	/*
 	 * Dumped values from currently installed DIMM, from Petitboot:
@@ -120,14 +217,15 @@ static void rcd_load(mca_data_t *mca, int d)
 	 * 0x00 0x00 0x47 0x00 0x00 0x00 0x00 0x00    F0RC1x-8x (8b each)
 	 * 0x00 0x00 0x07                             F0RC9x-Bx (8b each), then all zeroes (Error Log Registers)
 	 *
-	 * For now just copy above values, this also tests RCD/I2C API. Change command
-	 * register to NOP (was "Clear DRAM Reset" in dump).
+	 * Below is a copy of above values, this also tests RCD/I2C API. Command
+	 * register is changed to NOP (was "Clear DRAM Reset" in dump).
 	 */
-	/* TODO: implement it properly. */
+	/*
 	rcd_write_32b(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC00_01, 0x0201000f);
 	rcd_write_32b(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC08_09, 0xcbe4400d);
 	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RC3x, 0x47);
 	rcd_write_reg(SPD_I2C_BUS, mca->dimm[d].rcd_i2c_addr, F0RCBx, 0x07);
+	*/
 }
 
 /*

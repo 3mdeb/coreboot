@@ -35,7 +35,7 @@ static const int tZQinit = 1024;
 typedef struct {
 	bool present;
 	uint8_t mranks;
-	uint8_t log_ranks;
+	uint8_t log_ranks;	// In total, not per mrank
 	uint8_t width;
 	uint8_t density;
 	uint8_t *spd;

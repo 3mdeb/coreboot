@@ -1365,7 +1365,7 @@ static void seq_reset(int mcs_i, int mca_i)
 	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][0]), 51) |
 	           PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][1]), 59));
 
-	/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =     // 0x8000C40B0701103F
+	/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
 	      F(X) = (((X >> 4) & 0xc) | ((X >> 2) & 0x3))    // Bits 0,1,4,5 of X, see also MC01.PORT0.SRQ.MBA_FARB2Q
 	      [all]   0
 	      [48-51] ODT_WR_VALUES2 =
@@ -1379,6 +1379,8 @@ static void seq_reset(int mcs_i, int mca_i)
 	if (vpd_idx % 2)
 		val = PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][1][0]), 51) |
 		      PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][1][1]), 59);
+
+	mca_and_or(id, mca_i, 0x8000C40B0701103F, 0, val);
 #undef F
 }
 

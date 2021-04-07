@@ -6,15 +6,12 @@
 
 errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
 {
-    errlHndl_t err = nullptr;
     uint64_t workItem;
-
     TargetHandle_t target;
 
     // starting a maint cmd ...  register a timeout monitor
     uint64_t maintCmdTO = getTimeoutValue();
 
-    uint64_t monitorId = CommandMonitor::INVALID_MONITOR_ID;
     i_wfp.timeoutCnt = 0; // reset for new work item
     workItem = *i_wfp.workItem;
 
@@ -25,28 +22,21 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
     if (TYPE_MBA == trgtType)
     {
         uint32_t stopCondition =
-            mss_MaintCmd::STOP_END_OF_RANK                  |
-            mss_MaintCmd::STOP_ON_MPE                       |
-            mss_MaintCmd::STOP_ON_UE                        |
-            mss_MaintCmd::STOP_ON_END_ADDRESS               |
-            mss_MaintCmd::ENABLE_CMD_COMPLETE_ATTENTION;
-
-        if(TARGETING::MNFG_FLAG_IPL_MEMORY_CE_CHECKING & iv_globals.mfgPolicy)
-        {
-            // For MNFG mode, check CE also
-            stopCondition |= mss_MaintCmd::STOP_ON_HARD_NCE_ETE;
-        }
+            mss_MaintCmd::STOP_END_OF_RANK
+          | mss_MaintCmd::STOP_ON_MPE
+          | mss_MaintCmd::STOP_ON_UE
+          | mss_MaintCmd::STOP_ON_END_ADDRESS
+          | mss_MaintCmd::ENABLE_CMD_COMPLETE_ATTENTION;
 
         fapi2::buffer<uint64_t> startAddr, endAddr;
-        mss_MaintCmd * cmd = nullptr;
-        cmd = static_cast<mss_MaintCmd *>(i_wfp.data);
+        mss_MaintCmd * cmd = static_cast<mss_MaintCmd *>(i_wfp.data);
         fapi2::Target<fapi2::TARGET_TYPE_MBA> fapiMba(target);
 
         // We will always do ce setup though CE calculation
         // is only done during MNFG. This will give use better ffdc.
-        err = ceErrorSetup<TYPE_MBA>(target);
+        ceErrorSetup<TYPE_MBA>(target);
 
-        FAPI_INVOKE_HWP(err, mss_get_address_range, fapiMba, endAddr);
+        mss_get_address_range(fapiMba, endAddr);
         if(workItem == START_SCRUB)
         {
             cmd = new mss_SuperFastRead(
@@ -66,9 +56,7 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
                 false);
         }
         i_wfp.data = cmd;
-        // Command and address configured.
-        // Invoke the command.
-        FAPI_INVOKE_HWP(err, cmd->setupAndExecuteCmd);
+        cmd->setupAndExecuteCmd();
     }
     else if(TYPE_MCBIST == trgtType)
     {
@@ -84,27 +72,66 @@ errlHndl_t StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
                 stopCond.set_nce_inter_symbol_count_enable(mss::ON);
                 stopCond.set_nce_soft_symbol_count_enable(mss::ON);
                 stopCond.set_nce_hard_symbol_count_enable(mss::ON);
-                if(TARGETING::MNFG_FLAG_IPL_MEMORY_CE_CHECKING & iv_globals.mfgPolicy)
-                {
-                    stopCond.set_pause_on_nce_hard(mss::ON);
-                }
-                FAPI_INVOKE_HWP(err, nim_sf_read, fapiMcbist, stopCond);
+                nim_sf_read(fapiMcbist, stopCond);
                 break;
             case START_PATTERN_0:
-                FAPI_INVOKE_HWP(err, sf_init, fapiMcbist, workItem);
+                sf_init(fapiMcbist, workItem);
                 break;
         }
     }
 }
 
-fapi2::ReturnCode mss_get_address_range(
-    const fapi2::Target<fapi2::TARGET_TYPE_MBA>& i_target,
-    fapi2::buffer<uint64_t>& o_end_addr)
+fapi2::ReturnCode nim_sf_init( const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target,
+                               const uint64_t i_pattern )
 {
-    constexpr uint8_t NUM_CONFIG_TYPES = 9;
-    constexpr uint8_t NUM_CONFIG_SUBTYPES = 4;
-    constexpr uint8_t NUM_SLOT_CONFIGS = 2;
-    static const uint8_t memConfigType[NUM_CONFIG_TYPES][NUM_CONFIG_SUBTYPES][NUM_SLOT_CONFIGS] =
+    return mss::memdiags::sf_init<mss::mc_type::NIMBUS>(i_target, i_pattern);
+}
+
+template<  mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T >
+fapi2::ReturnCode sf_init( const fapi2::Target<T>& i_target,
+                           const uint64_t i_pattern = PATTERN_0 )
+{
+    using ET = mss::mcbistMCTraits<MC>;
+    fapi2::ReturnCode l_rc;
+    constraints<MC> l_const(i_pattern);
+    sf_init_operation<MC> l_init_op(i_target, l_const, l_rc);
+    return l_init_op.execute();
+
+fapi_try_exit:
+    return fapi2::current_err;
+}
+
+fapi2::ReturnCode nim_sf_read( const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target,
+                               const mss::mcbist::stop_conditions<mss::mc_type::NIMBUS>& i_stop,
+                               const mss::mcbist::address& i_address,
+                               const mss::mcbist::end_boundary i_end,
+                               const mss::mcbist::address& i_end_address )
+{
+    return mss::memdiags::sf_read<mss::mc_type::NIMBUS>(i_target, i_stop, i_address, i_end, i_end_address);
+}
+
+template< mss::mc_type MC, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
+fapi2::ReturnCode sf_read(const fapi2::Target<T>& i_target,
+                          const stop_conditions<MC>& i_stop,
+                          const mss::mcbist::address& i_address = mss::mcbist::address(),
+                          const end_boundary i_end = end_boundary::STOP_AFTER_SLAVE_RANK,
+                          const mss::mcbist::address& i_end_address = mss::mcbist::address(TT::LARGEST_ADDRESS))
+{
+    using ET = mss::mcbistMCTraits<MC>;
+    FAPI_TRY(pre_maint_read_settings<MC>(i_target));
+    {
+        fapi2::ReturnCode l_rc;
+        constraints<MC> l_const(i_stop, speed::LUDICROUS, i_end, i_address, i_end_address);
+        sf_read_operation<MC> l_read_op(i_target, l_const, l_rc);
+        return l_read_op.execute();
+    }
+}
+
+void mss_get_address_range(
+    const fapi2::Target<fapi2::TARGET_TYPE_MBA>& i_target,
+    uint64_t& o_end_addr)
+{
+    static const uint8_t memConfigType[9][4][2] =
     {
 
         // Refer to Centaur Workbook: 5.2 Master and Slave Rank Usage
@@ -280,6 +307,35 @@ bool isMnfgFlagSet(uint32_t i_flag) { return false; }
 bool areDramRepairsDisabled() { return false; }
 bool mnfgSpareDramDeploy() { return false; }
 
+template<>
+bool processBadDimms<TYPE_MBA>( TargetHandle_t i_trgt, uint8_t i_badDimmMask )
+{
+    // The bits in i_badDimmMask represent DIMMs that have exceeded the
+    // available repairs. Callout these DIMMs.
+
+    bool o_calloutMade  = false;
+    bool analysisErrors = false;
+
+    // Iterate the list of all DIMMs be
+    TargetHandleList dimms = getConnected(i_trgt, TYPE_DIMM);
+    for (auto & dimm : dimms)
+    {
+        uint8_t portSlct = getDimmPort(dimm);
+        uint8_t dimmSlct = getDimmSlct(dimm);
+
+        // The 4 bits of i_badDimmMask is defined as p0d0, p0d1, p1d0, and p1d1.
+        uint8_t mask = 0x8 >> (portSlct * 2 + dimmSlct);
+
+        if(i_badDimmMask & mask)
+        {
+            __calloutDimm<TYPE_MBA>( errl, i_trgt, dimm );
+            o_calloutMade = true;
+        }
+    }
+
+    return o_calloutMade;
+}
+
 template<TARGETING::TYPE T>
 uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
 {
@@ -312,6 +368,18 @@ uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
     return calloutMade ? FAIL : SUCCESS;
 }
 
+void Util::__Util_ThreadPool_Impl::ThreadPoolImpl::insert(void* i_workItem)
+{
+    iv_worklist.push_back(i_workItem);
+    sync_cond_signal(&iv_condvar);
+}
+
+void sync_cond_signal(sync_cond_t * i_cond)
+{
+    __sync_fetch_and_add(&(i_cond->sequence),1);
+    futex_wake(&(i_cond->sequence), 1);
+}
+
 bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
 {
     switch(*i_wfp->workItem)
@@ -335,6 +403,135 @@ bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
     scheduleWorkItem(*i_wfp);
 }
 
+bool StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
+{
+    if(i_wfp.workItem == getWorkFlow(i_wfp).end())
+    {
+        i_wfp.status = COMPLETE;
+    }
+
+    if(i_wfp.status != IN_PROGRESS && allWorkFlowsComplete())
+    {
+        // Clear BAD_DQ_BIT_SET bit
+        TargetHandle_t top = NULL;
+        targetService().getTopLevelTarget(top);
+        ATTR_RECONFIGURE_LOOP_type reconfigAttr = top->getAttr<TARGETING::ATTR_RECONFIGURE_LOOP>();
+        reconfigAttr &= ~RECONFIGURE_LOOP_BAD_DQ_BIT_SET;
+        top->setAttr<TARGETING::ATTR_RECONFIGURE_LOOP>(reconfigAttr);
+        iv_done = true;
+        sync_cond_broadcast(&iv_cond);
+    }
+
+    else if(i_wfp.status == IN_PROGRESS)
+    {
+        uint64_t priority = getRemainingWorkItems(i_wfp);
+        if(!iv_tp)
+        {
+            //create same number of tasks in the pool as there are cpu threads
+            const size_t l_num_tasks = cpu_thread_count();
+            Util::ThreadPoolManager::setThreadCount(l_num_tasks);
+            iv_tp = new Util::ThreadPool<WorkItem>();
+            iv_tp->start();
+        }
+
+        TargetHandle_t target = getTarget(i_wfp);
+        iv_tp->insert(new WorkItem(*this, &i_wfp, priority, i_wfp.chipUnit));
+        return true;
+    }
+    return false;
+}
+
+void StateMachine::start()
+{
+    // schedule the first work items for all target / workFlow associations
+    for(WorkFlowPropertiesIterator wit = iv_workFlowProperties.begin();
+        wit != iv_workFlowProperties.end(); ++wit)
+    {
+        // bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
+        // this is probably later called on it
+        scheduleWorkItem(**wit);
+    }
+}
+
+void StateMachine::setup(const WorkFlowAssocMap & i_list)
+{
+    // clear out any properties from a previous run
+    reset();
+    WorkFlowProperties * p = 0;
+    for(WorkFlowAssoc it = i_list.begin(); it != i_list.end(); ++it)
+    {
+        // for each target / workFlow assoc,
+        // initialize the workFlow progress indicator
+        // to indicate that no work has been done yet
+        // for the target
+        p = new WorkFlowProperties();
+        p->assoc = it;
+        p->workItem = getWorkFlow(it).begin();
+        p->status = IN_PROGRESS;
+        p->log = 0;
+        p->timer = 0;
+        p->timeoutCnt = 0;
+        p->data = NULL;
+        if ( TYPE_OCMB_CHIP == it->first->getAttr<ATTR_TYPE>())
+        {
+            // There is no chip unit attribute for OCMBs, so just use 0
+            p->chipUnit = 0;
+        }
+        else
+        {
+            p->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
+        }
+        iv_workFlowProperties.push_back(p);
+    }
+
+    if(iv_workFlowProperties.empty())
+    {
+        iv_done = true;
+    }
+    else
+    {
+        iv_done = false;
+    }
+}
+
+void StateMachine::run(const WorkFlowAssocMap & i_list)
+{
+    // load the workflow properties
+    setup(i_list);
+    // start work items
+    start();
+    // wait for all work items to finish
+    wait();
+}
+
+void sync_cond_wait(sync_cond_t * i_cond, mutex_t * i_mutex)
+{
+    uint64_t seq = i_cond->sequence;
+    if(i_cond->mutex != i_mutex)
+    {
+        if(i_cond->mutex) return;
+
+        // Atomically set mutex
+        __sync_bool_compare_and_swap(&i_cond->mutex, NULL, i_mutex);
+        if(i_cond->mutex != i_mutex) return;
+    }
+
+    mutex_unlock(i_mutex);
+    futex_wait( &(i_cond->sequence), seq);
+    while(0 != __sync_lock_test_and_set(&(i_mutex->iv_val), 2))
+    {
+        futex_wait(&(i_mutex->iv_val),2);
+    }
+}
+
+void StateMachine::wait()
+{
+    while(!iv_done && !iv_shutdown)
+    {
+        sync_cond_wait(&iv_cond, &iv_mutex);
+    }
+}
+
 void memDiag(void) {
 
     // memory diagnostics ipl step entry point
@@ -355,18 +552,12 @@ void memDiag(void) {
         // list[2] = START_SCRUB
         getWorkFlow(ONE_PATTERN, list[memdiagTargets[targetIndex]]);
     }
-
-    globals.mfgPolicy = 0;
-    globals.simicsRunning = false;
-    // set global data
-    Singleton<StateMachine>::instance().setGlobals(globals);
     // calling errlHndl_t StateMachine::run(const WorkFlowAssocMap & i_list)
     Singleton<StateMachine>::instance().run(list);
 
     // If this step completes without the need for a reconfig due to an RCD
     // parity error, clear all RCD parity error counters.
-    ATTR_RECONFIGURE_LOOP_type attr = top->getAttr<ATTR_RECONFIGURE_LOOP>();
-    if (0 == (attr & RECONFIGURE_LOOP_RCD_PARITY_ERROR))
+    if (!(top->getAttr<ATTR_RECONFIGURE_LOOP>() & RECONFIGURE_LOOP_RCD_PARITY_ERROR))
     {
         TargetHandleList trgtList; getAllChiplets(trgtList, TYPE_MCA);
         for (auto & trgt : trgtList)

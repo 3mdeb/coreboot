@@ -87,28 +87,173 @@ fapi2::ReturnCode nim_sf_init( const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i
     return mss::memdiags::sf_init<mss::mc_type::NIMBUS>(i_target, i_pattern);
 }
 
-template<  mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T >
-fapi2::ReturnCode sf_init( const fapi2::Target<T>& i_target,
-                           const uint64_t i_pattern = PATTERN_0 )
+fapi2::ReturnCode nim_sf_read(const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target,
+                              const mss::mcbist::stop_conditions<mss::mc_type::NIMBUS>& i_stop,
+                              const mss::mcbist::address& i_address,
+                              const mss::mcbist::end_boundary i_end,
+                              const mss::mcbist::address& i_end_address)
 {
-    using ET = mss::mcbistMCTraits<MC>;
-    fapi2::ReturnCode l_rc;
-    constraints<MC> l_const(i_pattern);
-    sf_init_operation<MC> l_init_op(i_target, l_const, l_rc);
-    return l_init_op.execute();
+    return mss::memdiags::sf_read<mss::mc_type::NIMBUS>(i_target, i_stop, i_address, i_end, i_end_address);
+}
+
+template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+inline void operation<MC, T, TT>::base_init()
+{
+    // Check the state of the MCBIST engine to make sure its OK that we proceed.
+    // Force stop the engine (per spec, as opposed to waiting our turn)
+    memdiags::stop<MC>(iv_target);
+    // Zero out cmd timebase - mcbist::program constructor does that for us.
+    // Load pattern
+    iv_program.change_pattern(iv_const.iv_pattern);
+    // Load end boundaries
+    iv_program.change_end_boundary(iv_const.iv_end_boundary);
+    // Load thresholds
+    iv_program.change_thresholds(iv_const.iv_stop);
+    // Setup the requested speed
+    iv_program.change_speed(iv_target, iv_const.iv_speed);
+    // Enable maint addressing mode - enabled by default in the mcbist::program ctor
+    // Apparently the MCBIST engine needs the ports selected even though the ports are specified
+    // in the subtest. We can just select them all, and it adjusts when it executes the subtest
+    iv_program.select_ports(0b1111);
+    // Kick it off, don't wait for a result
+    iv_program.change_async(mss::ON);
+}
+
+template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+inline fapi2::ReturnCode operation<MC, T, TT>::single_port_init()
+{
+    using ET = mcbistMCTraits<MC>;
+
+    const uint64_t l_relative_port_number = iv_const.iv_start_address.get_port();
+    const uint64_t l_dimm_number = iv_const.iv_start_address.get_dimm();
+
+    // No broadcast mode for this one
+    // Push on a read subtest
+    {
+        mss::mcbist::subtest_t<MC> l_subtest = iv_subtest;
+        l_subtest.enable_port(l_relative_port_number);
+        l_subtest.enable_dimm(l_dimm_number);
+        iv_program.iv_subtests.push_back(l_subtest);
+    }
+
+    // The address should have the port and DIMM noted in it. All we need to do is calculate the
+    // remainder of the address
+    if (iv_const.iv_end_address == TT::LARGEST_ADDRESS)
+    {
+        // Only the DIMM range as we don't want to cross ports.
+        iv_const.iv_start_address.template get_range<mss::mcbist::address::DIMM>(iv_const.iv_end_address);
+    }
+
+    // Configure the address range
+    mss::mcbist::config_address_range0<MC>(iv_target, iv_const.iv_start_address, iv_const.iv_end_address);
+
+    // Initialize the common sections
+    base_init();
 
 fapi_try_exit:
     return fapi2::current_err;
 }
 
-fapi2::ReturnCode nim_sf_read( const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target,
-                               const mss::mcbist::stop_conditions<mss::mc_type::NIMBUS>& i_stop,
-                               const mss::mcbist::address& i_address,
-                               const mss::mcbist::end_boundary i_end,
-                               const mss::mcbist::address& i_end_address )
+template<>
+fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
 {
-    return mss::memdiags::sf_read<mss::mc_type::NIMBUS>(i_target, i_stop, i_address, i_end, i_end_address);
+    // Let's assume we are going to send out all subtest unless we are in broadcast mode,
+    // where we only send up to 2 subtests under an MCA ( 1 for each DIMM) which is why no const
+    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
+
+    // Get the port/DIMM information for the addresses. This is an integral value which allows us to index
+    // all the DIMM across a controller.
+    const uint64_t l_portdimm_start_address = iv_const.iv_start_address.get_port_dimm();
+    const uint64_t l_portdimm_end_address = iv_const.iv_end_address.get_port_dimm();
+
+    // If start address == end address we can handle the single port case simply
+    if (l_portdimm_start_address == l_portdimm_end_address)
+    {
+        // Single port case; simple.
+        return single_port_init();
+    }
+
+    // Determine which ports are functional and whether we can broadcast to them
+    // If we're in broadcast mode, PRD sends DIMM 0/1 of the first functional and configured port,
+    // and we then run all ports in parallel (ports set in subtest config)
+    if( mss::mcbist::is_broadcast_capable(iv_target) == mss::YES )
+    {
+        const auto l_prev_size = l_dimms.size();
+        broadcast_mode_start_address_check(iv_target, l_portdimm_start_address, l_dimms);
+    }
+
+    // Configures all subtests under an MCBIST
+    // If we're here we know start port < end port. We want to run one subtest (for each DIMM) from start_address
+    // to the max range of the start address port, then one subtest (for each DIMM) for each port between the
+    // start/end ports and one test (for each DIMM) from the start of the end port to the end address.
+
+    // Setup the address configurations
+     multi_port_addr();
+
+    // We need to do three things here. One is to create a subtest which starts at start address and runs to
+    // the end of the port. Next, create subtests to go from the start of the next port to the end of the
+    // next port. Last we need a subtest which goes from the start of the last port to the end address specified
+    // in the end address. Notice this may mean one subtest (start and end are on the same port) or it might
+    // mean two subtests (start is one one port, end is on the next.) Or it might mean three or more subtests.
+
+    // Configure multiport subtests, can be all subtests for the DIMMs under an MCBIST,
+    // or just the DIMMs under the first configured MCA if in broadcast mode.
+    configure_multiport_subtests(l_dimms);
+
+    // Here's an interesting problem. PRD (and others maybe) expect the operation to proceed in address-order.
+    // That is, when PRD finds an address it stops on, it wants to continue from there "to the end." That means
+    // we need to keep the subtests sorted, otherwise PRD could pass one subtest come upon a fail in a subsequent
+    // subtest and re-test something it already passed. So we sort the resulting iv_subtest vector by port/DIMM
+    // in the subtest.
+    std::sort(iv_program.iv_subtests.begin(), iv_program.iv_subtests.end(),
+              [](const decltype(iv_subtest)& a, const decltype(iv_subtest)& b) -> bool
+    {
+        const uint64_t l_a_portdimm = (a.get_port() << 1) | a.get_dimm();
+        const uint64_t l_b_portdimm = (b.get_port() << 1) | b.get_dimm();
+        return l_a_portdimm < l_b_portdimm;
+    });
+    // Initialize the common sections
+    base_init();
+    // And configure broadcast mode if required
+    mss::mcbist::configure_broadcast_mode(iv_target, iv_program);
+
+fapi_try_exit:
+    return fapi2::current_err;
 }
+
+template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+inline fapi2::ReturnCode operation<MC, T, TT>::multi_port_init()
+{
+    const auto l_port = mss::find_targets<TT::PORT_TYPE>(iv_target);
+    // Make sure we have ports, if we don't then exit out
+    if(l_port.size() == 0)
+    {
+        // Cronus can have no ports under an MCBIST, FW deconfigures by association
+        return fapi2::FAPI2_RC_SUCCESS;
+    }
+    // Let's assume we are going to send out all subtest unless we are in broadcast mode,
+    // where we only send up to 2 subtests under an port ( 1 for each DIMM) which is why no const
+    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
+    if( l_dimms.size() == 0)
+    {
+        // Cronus can have no DIMMS under an MCBIST, FW deconfigures by association
+        return fapi2::FAPI2_RC_SUCCESS;
+    }
+    return multi_port_init_internal();
+}
+
+template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
+struct sf_read_operation : public operation<MC>
+{
+    sf_read_operation( const fapi2::Target<T>& i_target,
+                       const constraints<MC> i_const,
+                       fapi2::ReturnCode& o_rc):
+    operation<MC>(i_target, mss::mcbist::read_subtest<MC>(), i_const)
+    {
+        o_rc = this->multi_port_init();
+    }
+};
+
 
 template< mss::mc_type MC, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
 fapi2::ReturnCode sf_read(const fapi2::Target<T>& i_target,
@@ -118,13 +263,10 @@ fapi2::ReturnCode sf_read(const fapi2::Target<T>& i_target,
                           const mss::mcbist::address& i_end_address = mss::mcbist::address(TT::LARGEST_ADDRESS))
 {
     using ET = mss::mcbistMCTraits<MC>;
-    FAPI_TRY(pre_maint_read_settings<MC>(i_target));
-    {
-        fapi2::ReturnCode l_rc;
-        constraints<MC> l_const(i_stop, speed::LUDICROUS, i_end, i_address, i_end_address);
-        sf_read_operation<MC> l_read_op(i_target, l_const, l_rc);
-        return l_read_op.execute();
-    }
+    fapi2::ReturnCode l_rc;
+    constraints<MC> l_const(i_stop, speed::LUDICROUS, i_end, i_address, i_end_address);
+    sf_read_operation<MC> l_read_op(i_target, l_const, l_rc);
+    return l_read_op.execute();
 }
 
 void mss_get_address_range(
@@ -291,21 +433,35 @@ void mss_get_address_range(
     }
 }
 
+class operation
+{
+    inline fapi2::ReturnCode execute(const fapi2::Target<T>& i_target)
+    {
+        return mss::mcbist::execute(i_target, iv_program);
+    }
+}
+
 template<  mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T >
-fapi2::ReturnCode sf_init( const fapi2::Target<T>& i_target,
-                           const uint64_t i_pattern = PATTERN_0 )
+fapi2::ReturnCode sf_init(const fapi2::Target<T>& i_target,
+                          const uint64_t i_pattern = PATTERN_0 )
 {
     using ET = mss::mcbistMCTraits<MC>;
     constraints<MC> l_const(i_pattern);
-    sf_init_operation<MC> l_init_op(i_target, l_const, l_rc);
-    return l_init_op.execute();
+    sf_init_operation<MC> l_init_op(l_const, l_rc);
+    return l_init_op.execute(i_target);
 }
 
-// Helper function to access the state of manufacturing policy flags.
-bool isMnfgFlagSet(uint32_t i_flag) { return false; }
+uint8_t getDimmPort( TARGETING::TargetHandle_t i_dimmTrgt )
+{
 
-bool areDramRepairsDisabled() { return false; }
-bool mnfgSpareDramDeploy() { return false; }
+}
+
+//------------------------------------------------------------------------------
+
+uint8_t getDimmSlct( TargetHandle_t i_trgt )
+{
+    return dimm->getAttr<ATTR_POS_ON_MEM_PORT>();
+}
 
 template<>
 bool processBadDimms<TYPE_MBA>( TargetHandle_t i_trgt, uint8_t i_badDimmMask )
@@ -314,14 +470,12 @@ bool processBadDimms<TYPE_MBA>( TargetHandle_t i_trgt, uint8_t i_badDimmMask )
     // available repairs. Callout these DIMMs.
 
     bool o_calloutMade  = false;
-    bool analysisErrors = false;
-
     // Iterate the list of all DIMMs be
     TargetHandleList dimms = getConnected(i_trgt, TYPE_DIMM);
     for (auto & dimm : dimms)
     {
-        uint8_t portSlct = getDimmPort(dimm);
-        uint8_t dimmSlct = getDimmSlct(dimm);
+        uint8_t portSlct = dimm->getAttr<ATTR_MEM_PORT>();
+        uint8_t dimmSlct = dimm->getAttr<ATTR_POS_ON_MEM_PORT>();
 
         // The 4 bits of i_badDimmMask is defined as p0d0, p0d1, p1d0, and p1d1.
         uint8_t mask = 0x8 >> (portSlct * 2 + dimmSlct);
@@ -340,7 +494,6 @@ template<TARGETING::TYPE T>
 uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
 {
     bool calloutMade = false;
-
     // Will need the chip and system objects initialized for several parts
     // of this function and sub-functions.
     if(false == g_initialized || nullptr == systemPtr)
@@ -349,14 +502,13 @@ uint32_t restoreDramRepairs( TargetHandle_t i_trgt )
     }
 
     std::vector<MemRank> ranks;
-    getMasterRanks<T>( i_trgt, ranks );
+    getMasterRanks<T>(i_trgt, ranks);
 
     uint8_t rankMask = 0, dimmMask = 0;
     if(SUCCESS != mssRestoreDramRepairs<T>(i_trgt, rankMask, dimmMask))
     {
         return FAIL;
     }
-
     // Callout DIMMs with too many bad bits and not enough repairs available
     if(RDR::processBadDimms<T>(i_trgt, dimmMask))
         calloutMade = true;
@@ -380,15 +532,19 @@ void sync_cond_signal(sync_cond_t * i_cond)
     futex_wake(&(i_cond->sequence), 1);
 }
 
+ALWAYS_INLINE inline TARGETING::TargetHandle_t getTarget(WorkFlowProperties & i_wfp)
+{
+    return i_wfp.assoc->first;
+}
+
 bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
 {
     switch(*i_wfp->workItem)
     {
         case RESTORE_DRAM_REPAIRS:
-            TargetHandle_t target = getTarget(*i_wfp);
             // Get the connected MCAs.
             TargetHandleList mcaList;
-            getChildAffinityTargets(mcaList, target, CLASS_UNIT, TYPE_MCA);
+            getChildAffinityTargets(mcaList, getTarget(*i_wfp), CLASS_UNIT, TYPE_MCA);
             for (auto & mca : mcaList)
             {
                 PRDF::restoreDramRepairs<TYPE_MCA>(mca);
@@ -453,34 +609,26 @@ void StateMachine::start()
     }
 }
 
-void StateMachine::setup(const WorkFlowAssocMap & i_list)
+void StateMachine::setup(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST */ )
 {
     // clear out any properties from a previous run
     reset();
-    WorkFlowProperties * p = 0;
+    WorkFlowProperties * wfp = 0;
     for(WorkFlowAssoc it = i_list.begin(); it != i_list.end(); ++it)
     {
         // for each target / workFlow assoc,
         // initialize the workFlow progress indicator
         // to indicate that no work has been done yet
         // for the target
-        p = new WorkFlowProperties();
-        p->assoc = it;
-        p->workItem = getWorkFlow(it).begin();
-        p->status = IN_PROGRESS;
-        p->log = 0;
-        p->timer = 0;
-        p->timeoutCnt = 0;
-        p->data = NULL;
-        if ( TYPE_OCMB_CHIP == it->first->getAttr<ATTR_TYPE>())
-        {
-            // There is no chip unit attribute for OCMBs, so just use 0
-            p->chipUnit = 0;
-        }
-        else
-        {
-            p->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
-        }
+        wfp = new WorkFlowProperties();
+        wfp->assoc = it;
+        wfp->workItem = getWorkFlow(it).begin();
+        wfp->status = IN_PROGRESS;
+        wfp->log = 0;
+        wfp->timer = 0;
+        wfp->timeoutCnt = 0;
+        wfp->data = NULL;
+        wfp->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
         iv_workFlowProperties.push_back(p);
     }
 
@@ -494,7 +642,7 @@ void StateMachine::setup(const WorkFlowAssocMap & i_list)
     }
 }
 
-void StateMachine::run(const WorkFlowAssocMap & i_list)
+void StateMachine::run(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST*/)
 {
     // load the workflow properties
     setup(i_list);
@@ -532,7 +680,17 @@ void StateMachine::wait()
     }
 }
 
-void memDiag(void) {
+void getWorkFlow(
+    DiagMode i_mode,
+    WorkFlow & o_wf,
+    const Globals & i_globals)
+{
+    o_wf.push_back(RESTORE_DRAM_REPAIRS);
+    o_wf.push_back(START_PATTERN_0);
+    o_wf.push_back(START_SCRUB);
+}
+
+void memDiag(TargetHandleList i_targetList /*TYPE_MCBIST*/) {
 
     // memory diagnostics ipl step entry point
     Globals globals;
@@ -543,37 +701,33 @@ void memDiag(void) {
     // associate each workflow with the target handle.
     WorkFlowAssocMap list;
     TargetHandleList::const_iterator tit;
-    DiagMode mode;
-    for(unsigned int targetIndex = 0; targetIndex < memdiagTargetsSize; ++targetIndex) {
-        // create a list with patterns
-        // for ONE_PATTERN the list is as follows
-        // list[0] = RESTORE_DRAM_REPAIRS
-        // list[1] = START_PATTERN_0
-        // list[2] = START_SCRUB
-        getWorkFlow(ONE_PATTERN, list[memdiagTargets[targetIndex]]);
+    for(tit = i_targetList.begin(); tit != i_targetList.end(); ++tit)
+    {
+        list[*tit].push_back(RESTORE_DRAM_REPAIRS);
+        list[*tit].push_back(START_PATTERN_0);
+        list[*tit].push_back(START_SCRUB);
     }
-    // calling errlHndl_t StateMachine::run(const WorkFlowAssocMap & i_list)
     Singleton<StateMachine>::instance().run(list);
 
     // If this step completes without the need for a reconfig due to an RCD
     // parity error, clear all RCD parity error counters.
-    if (!(top->getAttr<ATTR_RECONFIGURE_LOOP>() & RECONFIGURE_LOOP_RCD_PARITY_ERROR))
-    {
-        TargetHandleList trgtList; getAllChiplets(trgtList, TYPE_MCA);
-        for (auto & trgt : trgtList)
-        {
-            if (0 != trgt->getAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>())
-                trgt->setAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>(0);
-        }
-    }
+    // if (!(top->getAttr<ATTR_RECONFIGURE_LOOP>() & RECONFIGURE_LOOP_RCD_PARITY_ERROR))
+    // {
+    //     TargetHandleList trgtList; getAllChiplets(trgtList, TYPE_MCA);
+    //     for (auto & trgt : trgtList)
+    //     {
+    //         if (0 != trgt->getAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>())
+    //             trgt->setAttr<ATTR_RCD_PARITY_RECONFIG_LOOP_COUNT>(0);
+    //     }
+    // }
 }
 
 void after_memdiags(uint64_t i_target)
 {
     uint64_t dsm0_buffer;
-    uint64_t rd_tag_delay = 0;
-    uint64_t wr_done_delay = 0;
-    uint64_t rcd_protect_time = 0;
+    uint64_t rd_tag_delay;
+    uint64_t wr_done_delay;
+    uint64_t rcd_protect_time;
 
     scom_and_for_chiplet(
         i_target, MCBIST_MCBISTFIRACT1,
@@ -634,7 +788,9 @@ void istep_14_1(void)
 {
     printk(BIOS_EMERG, "starting istep 14.1\n");
     report_istep(14, 1);
-    memDiag();
+    TargetHandleList trgtList;
+    getAllChiplets(trgtList, TYPE_MCBIST);
+    memDiag(trgtList);
     for(unsigned int targetIndex = 0; targetIndex < memdiagTargetsSize; ++targetIndex) {
         after_memdiags(memdiagTargets[targetIndex]);
         for(unsigned int port = 0; port < 4; ++port) {

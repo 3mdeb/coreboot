@@ -559,7 +559,7 @@ bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
     scheduleWorkItem(*i_wfp);
 }
 
-bool StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
+void StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
 {
     if(i_wfp.workItem == getWorkFlow(i_wfp).end())
     {
@@ -583,18 +583,13 @@ bool StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
         uint64_t priority = getRemainingWorkItems(i_wfp);
         if(!iv_tp)
         {
-            //create same number of tasks in the pool as there are cpu threads
-            const size_t l_num_tasks = cpu_thread_count();
-            Util::ThreadPoolManager::setThreadCount(l_num_tasks);
+            // create same number of tasks in the pool as there are cpu threads
+            Util::ThreadPoolManager::setThreadCount(cpu_thread_count());
             iv_tp = new Util::ThreadPool<WorkItem>();
             iv_tp->start();
         }
-
-        TargetHandle_t target = getTarget(i_wfp);
         iv_tp->insert(new WorkItem(*this, &i_wfp, priority, i_wfp.chipUnit));
-        return true;
     }
-    return false;
 }
 
 void StateMachine::start()
@@ -629,17 +624,9 @@ void StateMachine::setup(const WorkFlowAssocMap & i_list /* target type is TYPE_
         wfp->timeoutCnt = 0;
         wfp->data = NULL;
         wfp->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
-        iv_workFlowProperties.push_back(p);
+        iv_workFlowProperties.push_back(wfp);
     }
-
-    if(iv_workFlowProperties.empty())
-    {
-        iv_done = true;
-    }
-    else
-    {
-        iv_done = false;
-    }
+    iv_done = false;
 }
 
 void StateMachine::run(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST*/)
@@ -680,23 +667,7 @@ void StateMachine::wait()
     }
 }
 
-void getWorkFlow(
-    DiagMode i_mode,
-    WorkFlow & o_wf,
-    const Globals & i_globals)
-{
-    o_wf.push_back(RESTORE_DRAM_REPAIRS);
-    o_wf.push_back(START_PATTERN_0);
-    o_wf.push_back(START_SCRUB);
-}
-
 void memDiag(TargetHandleList i_targetList /*TYPE_MCBIST*/) {
-
-    // memory diagnostics ipl step entry point
-    Globals globals;
-    TargetHandle_t top = nullptr;
-    targetService().getTopLevelTarget(top);
-
     // get the workflow for each target mba passed in.
     // associate each workflow with the target handle.
     WorkFlowAssocMap list;

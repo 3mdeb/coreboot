@@ -4,6 +4,10 @@
 #include <cpu/power/istep_14_1.h>
 #include <cpu/power/scom.h>
 
+
+uint64_t iv_parameters; // class program
+uint64_t iv_address; // class address
+
 void StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
 {
     uint64_t workItem;
@@ -35,137 +39,271 @@ void StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
     i_wfp.timer = getMonitor().addMonitor(maintCmdTO);
 }
 
-fapi2::ReturnCode nim_sf_init( const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target)
+template<mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType T = fapi2::TARGET_TYPE_MCBIST>
+fapi2::ReturnCode sf_init(const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target)
 {
-    return mss::memdiags::sf_init<mss::mc_type::NIMBUS>(i_target);
+    using ET = mss::mcbistMCTraits<mss::mc_type::NIMBUS>;
+
+    constraints<mss::mc_type::NIMBUS> l_const(PATTERN_0);
+    sf_init_operation<mss::mc_type::NIMBUS> l_init_op(l_const, l_rc);
+    return l_init_op.execute(i_target);
 }
 
-template< mss::mc_type MC, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
+template< mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
 fapi2::ReturnCode sf_read(
     const fapi2::Target<T>& i_target,
     const stop_conditions<MC>& i_stop)
 {
     using ET = mss::mcbistMCTraits<MC>;
     fapi2::ReturnCode l_rc;
-    constraints<MC> l_const(
+    constraints<mss::mc_type::NIMBUS> l_const(
         i_stop,
         speed::LUDICROUS,
         end_boundary::STOP_AFTER_SLAVE_RANK,
         mss::mcbist::address(),
         mss::mcbist::address(TT::LARGEST_ADDRESS));
-    sf_read_operation<MC> l_read_op(i_target, l_const, l_rc);
+    sf_read_operation<mss::mc_type::NIMBUS> l_read_op(i_target, l_cons);
     return l_read_op.execute();
 }
 
 template< mss::mc_type MC, fapi2::TargetType T, typename TT >
 inline void operation<MC, T, TT>::base_init()
 {
-    // Check the state of the MCBIST engine to make sure its OK that we proceed.
-    // Force stop the engine (per spec, as opposed to waiting our turn)
     memdiags::stop<MC>(iv_target);
-    // Zero out cmd timebase - mcbist::program constructor does that for us.
-    // Load pattern
-    iv_program.change_pattern(iv_const.iv_pattern);
-    // Load end boundaries
+    iv_pattern = iv_const.iv_pattern;
     iv_program.change_end_boundary(iv_const.iv_end_boundary);
-    // Load thresholds
-    iv_program.change_thresholds(iv_const.iv_stop);
-    // Setup the requested speed
-    iv_program.change_speed(iv_target, iv_const.iv_speed);
-    // Enable maint addressing mode - enabled by default in the mcbist::program ctor
-    // Apparently the MCBIST engine needs the ports selected even though the ports are specified
-    // in the subtest. We can just select them all, and it adjusts when it executes the subtest
-    iv_program.select_ports(0b1111);
-    // Kick it off, don't wait for a result
-    iv_program.change_async(mss::ON);
+    iv_thresholds = iv_const.iv_stop;
+    iv_parameters.insertFromRight<TT::MIN_CMD_GAP, TT::MIN_CMD_GAP_LEN>(0);
+    iv_parameters.writeBit<TT::MIN_GAP_TIMEBASE>(mss::OFF);
+    iv_program.select_ports(0xF);
+    iv_async = mss::ON;
+}
+
+inline void select_ports(const uint64_t i_ports)
+{
+    if (TT::MULTI_PORTS == mss::states::YES)
+    {
+        iv_control.insertFromRight<TT::PORT_SEL, TT::PORT_SEL_LEN>(i_ports);
+    }
+}
+
+
+inline void change_end_boundary(const end_boundary i_end)
+{
+    // If there's no change, just get outta here
+    if (i_end == 0xFF)
+    {
+        return;
+    }
+    // The values of the enum were crafted so that we can simply insertFromRight into the register.
+    // We take note of whether to set the slave or master rank indicator and set that as well.
+    // The hardware has to have a 1 or a 0 - so there is no choice for the rank detection. So it
+    // doesn't matter that we're processing other end boundaries here - they'll just look like we
+    // asked for a master rank detect.
+    iv_config.insertFromRight<TT::CFG_PAUSE_ON_ERROR_MODE, TT::CFG_PAUSE_ON_ERROR_MODE_LEN>(i_end);
+    const uint64_t l_detect_slave = fapi2::buffer<uint64_t>(i_end).getBit<TT::SLAVE_RANK_INDICATED_BIT>();
+    iv_addr_gen.writeBit<TT::MAINT_DETECT_SRANK_BOUNDARIES>( l_detect_slave );
+}
+
+inline uint64_t get_port()
+{
+    return iv_address & 0xC000000000000000;
 }
 
 template< mss::mc_type MC, fapi2::TargetType T, typename TT >
 inline fapi2::ReturnCode operation<MC, T, TT>::single_port_init()
 {
     using ET = mcbistMCTraits<MC>;
-
     const uint64_t l_relative_port_number = iv_const.iv_start_address.get_port();
     const uint64_t l_dimm_number = iv_const.iv_start_address.get_dimm();
 
-    // No broadcast mode for this one
-    // Push on a read subtest
-    {
-        mss::mcbist::subtest_t<MC> l_subtest = iv_subtest;
-        l_subtest.enable_port(l_relative_port_number);
-        l_subtest.enable_dimm(l_dimm_number);
-        iv_program.iv_subtests.push_back(l_subtest);
-    }
-
-    // The address should have the port and DIMM noted in it. All we need to do is calculate the
-    // remainder of the address
+    mss::mcbist::subtest_t<MC> l_subtest = iv_subtest;
+    l_subtest.enable_port(l_relative_port_number);
+    l_subtest.enable_dimm(l_dimm_number);
+    iv_program.iv_subtests.push_back(l_subtest);
     if (iv_const.iv_end_address == TT::LARGEST_ADDRESS)
     {
-        // Only the DIMM range as we don't want to cross ports.
         iv_const.iv_start_address.template get_range<mss::mcbist::address::DIMM>(iv_const.iv_end_address);
     }
-
-    // Configure the address range
     mss::mcbist::config_address_range0<MC>(iv_target, iv_const.iv_start_address, iv_const.iv_end_address);
-
-    // Initialize the common sections
     base_init();
-
-fapi_try_exit:
-    return fapi2::current_err;
 }
 
 template<>
-fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
+fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_addr()
 {
-    // Let's assume we are going to send out all subtest unless we are in broadcast mode,
-    // where we only send up to 2 subtests under an MCA ( 1 for each DIMM) which is why no const
-    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
+    using TT = mcbistTraits<>;
 
-    // Get the port/DIMM information for the addresses. This is an integral value which allows us to index
-    // all the DIMM across a controller.
+    mss::mcbist::address l_end_of_start_port;
+    mss::mcbist::address l_end_of_complete_port(TT::LARGEST_ADDRESS);
+    mss::mcbist::address l_start_of_end_port;
+
+    // The last address in the start port is the start address thru the "DIMM range" (all addresses left on this DIMM)
+    iv_const.iv_start_address.get_range<mss::mcbist::address::DIMM>(l_end_of_start_port);
+
+    // The first address in the end port is the 0th address of the 0th DIMM on said port.
+    l_start_of_end_port.set_port(iv_const.iv_end_address.get_port());
+
+    // We know we have three address configs: start address -> end of DIMM, 0 -> end of DIMM and 0 -> end address.
+    config_address_range<DEFAULT_MC_TYPE>(iv_target, iv_const.iv_start_address, l_end_of_start_port, 0);
+    config_address_range<DEFAULT_MC_TYPE>(iv_target, mss::mcbist::address(), l_end_of_complete_port, 1);
+    config_address_range<DEFAULT_MC_TYPE>(iv_target, l_start_of_end_port, iv_const.iv_end_address, 2);
+}
+
+template<mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = mcbistTraits<MC, T>>
+inline fapi2::ReturnCode config_address_range( const fapi2::Target<T>& i_target,
+        const uint64_t i_start,
+        const uint64_t i_end,
+        const uint64_t i_index)
+{
+    fapi2::putScom(i_target, TT::address_pairs[i_index].first, i_start << 26);
+    fapi2::putScom(i_target, TT::address_pairs[i_index].second, i_end << 26);
+}
+
+const mss::states is_broadcast_capable_helper(
+    const uint8_t l_bc_mode_force_off,
+    const uint8_t l_bc_mode_enable,
+    const bool l_chip_bc_capable)
+{
+    if(!l_chip_bc_capable
+     || l_bc_mode_force_off == fapi2::ENUM_ATTR_MSS_MRW_FORCE_BCMODE_OFF_YES
+     || l_bc_mode_enable == fapi2::ENUM_ATTR_MSS_OVERRIDE_MEMDIAGS_BCMODE_DISABLE)
+    {
+        return mss::states::NO;
+    }
+    return mss::states::YES;
+}
+
+const mss::states is_broadcast_capable(const std::vector<mss::dimm::kind<>>& i_kinds)
+{
+    // If we don't have any DIMM kinds exit out
+    if(i_kinds.size() == 0)
+    {
+        return mss::states::NO;
+    }
+
+    // Now the fun begins
+    // First, get the starting kind - the 0th kind in the vector
+    const auto l_expected_kind = i_kinds[0];
+
+    // Now, find if we have any kinds that differ from our first kind
+    // Note: starts on the next DIMM kind due to the fact that something always equals itself
+    const auto l_kind_it = std::find_if(
+        i_kinds.begin() + 1,
+        i_kinds.end(),
+        [&l_expected_kind]( const mss::dimm::kind<>& i_rhs) -> bool
+        {
+            return (l_expected_kind != i_rhs);
+        });
+
+    // If no DIMM kind was found that differs, then we are broadcast capable
+    if(l_kind_it == i_kinds.end())
+    {
+        return mss::states::YES;
+    }
+    // Otherwise, note the MCA that differs and return that this is not broadcast capable
+    return mss::states::NO;
+}
+
+template<>
+const mss::states is_broadcast_capable(const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target)
+{
+    // Chip is BC capable IFF the MCBIST end of rank bug is not present
+    const auto l_chip_bc_capable = !mss::chip_ec_feature_mcbist_end_of_rank(i_target);
+
+    // If BC mode is disabled in the MRW, then it's disabled here
+    uint8_t l_bc_mode_enable = 0;
+    uint8_t l_bc_mode_force_off = 0;
+    FAPI_TRY(mss::override_memdiags_bcmode(l_bc_mode_enable));
+    FAPI_TRY(mss::mrw_force_bcmode_off(l_bc_mode_force_off));
+
+    // Check if the chip and attributes allows memdiags/mcbist to be in broadcast mode
+    const auto l_state = is_broadcast_capable_helper(l_bc_mode_force_off, l_bc_mode_enable, l_chip_bc_capable);
+    if(!l_chip_bc_capable
+     || l_bc_mode_force_off == fapi2::ENUM_ATTR_MSS_MRW_FORCE_BCMODE_OFF_YES
+     || l_bc_mode_enable == fapi2::ENUM_ATTR_MSS_OVERRIDE_MEMDIAGS_BCMODE_DISABLE)
+    {
+        return mss::states::NO;
+    }
+
+    // Now that we are guaranteed to have a chip that could run broadcast mode and the system is allowed to do so,
+    // do the following steps to check whether our config is broadcast capable:
+
+    // Steps to determine if this MCBIST is broadcastable
+    // 1) Check the number of DIMM's on each MCA - true only if they all match
+    // 2) Check that all of the DIMM kinds are equal - if they are, then we can do broadcast mode
+    // 3) check the timing attributes (all of them must be equal)
+    // 3) if both 1 and 2 are true, then broadcast capable, otherwise false
+
+    // 1) Check the number of DIMM's on each MCA - if they don't match, then no
+    const auto& l_mcas = mss::find_targets<fapi2::TARGET_TYPE_MCA>(i_target);
+    const auto l_mca_check = is_broadcast_capable(l_mcas);
+
+    // 2) Check that all of the DIMM kinds are equal - if they are, then we can do broadcast mode
+    const auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(i_target);
+    const auto l_dimm_kinds = mss::dimm::kind<>::vector(l_dimms);
+    const auto l_dimm_kind_check = is_broadcast_capable(l_dimm_kinds);
+
+    // 3) check the timing attributes (all of them must be equal)
+    mss::states l_timing_check = mss::states::YES;
+    is_broadcast_capable_timings(l_mcas, l_timing_check);
+
+    // 4) if both 1-3 are true, then broadcastable, otherwise false
+    return l_mca_check == mss::states::YES
+        && l_dimm_kind_check == mss::states::YES
+        && l_timing_check == mss::states::YES
+        ? mss::states::YES : mss::states::NO;
+}
+
+template<>
+const mss::states is_broadcast_capable(const std::vector<fapi2::Target<fapi2::TARGET_TYPE_MCA>>& i_targets)
+{
+    // If we don't have MCA's exit out
+    if(i_targets.size() == 0)
+    {
+        return mss::states::NO;
+    }
+
+    // Now the fun begins
+    // First, get the number of DIMM's on the 0th MCA
+    const uint64_t l_first_mca_num_dimm = mss::count_dimm(i_targets[0]);
+
+    // Now, find if we have any MCA's that have a different number of DIMM's
+    // Note: starts on the next MCA target due to the fact that something always equals itself
+    const auto l_mca_it = std::find_if(
+        i_targets.begin() + 1,
+        i_targets.end(),
+        [l_first_mca_num_dimm](const fapi2::Target<fapi2::TARGET_TYPE_MCA>& i_rhs) -> bool
+        {
+            const uint64_t l_num_dimm = mss::count_dimm(i_rhs);
+            return (l_first_mca_num_dimm != l_num_dimm);
+        });
+
+    if(l_mca_it == i_targets.end())
+    {
+        return mss::states::YES;
+    }
+    return mss::states::NO;
+}
+
+template<>
+void operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
+{
+    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
     const uint64_t l_portdimm_start_address = iv_const.iv_start_address.get_port_dimm();
     const uint64_t l_portdimm_end_address = iv_const.iv_end_address.get_port_dimm();
 
-    // If start address == end address we can handle the single port case simply
     if (l_portdimm_start_address == l_portdimm_end_address)
     {
-        // Single port case; simple.
-        return single_port_init();
+        single_port_init();
+        return;
     }
-
-    // Determine which ports are functional and whether we can broadcast to them
-    // If we're in broadcast mode, PRD sends DIMM 0/1 of the first functional and configured port,
-    // and we then run all ports in parallel (ports set in subtest config)
-    if( mss::mcbist::is_broadcast_capable(iv_target) == mss::YES )
+    if(mss::mcbist::is_broadcast_capable(iv_target) == mss::YES)
     {
-        const auto l_prev_size = l_dimms.size();
         broadcast_mode_start_address_check(iv_target, l_portdimm_start_address, l_dimms);
     }
-
-    // Configures all subtests under an MCBIST
-    // If we're here we know start port < end port. We want to run one subtest (for each DIMM) from start_address
-    // to the max range of the start address port, then one subtest (for each DIMM) for each port between the
-    // start/end ports and one test (for each DIMM) from the start of the end port to the end address.
-
-    // Setup the address configurations
-     multi_port_addr();
-
-    // We need to do three things here. One is to create a subtest which starts at start address and runs to
-    // the end of the port. Next, create subtests to go from the start of the next port to the end of the
-    // next port. Last we need a subtest which goes from the start of the last port to the end address specified
-    // in the end address. Notice this may mean one subtest (start and end are on the same port) or it might
-    // mean two subtests (start is one one port, end is on the next.) Or it might mean three or more subtests.
-
-    // Configure multiport subtests, can be all subtests for the DIMMs under an MCBIST,
-    // or just the DIMMs under the first configured MCA if in broadcast mode.
+    multi_port_addr();
     configure_multiport_subtests(l_dimms);
-
-    // Here's an interesting problem. PRD (and others maybe) expect the operation to proceed in address-order.
-    // That is, when PRD finds an address it stops on, it wants to continue from there "to the end." That means
-    // we need to keep the subtests sorted, otherwise PRD could pass one subtest come upon a fail in a subsequent
-    // subtest and re-test something it already passed. So we sort the resulting iv_subtest vector by port/DIMM
-    // in the subtest.
     std::sort(iv_program.iv_subtests.begin(), iv_program.iv_subtests.end(),
               [](const decltype(iv_subtest)& a, const decltype(iv_subtest)& b) -> bool
     {
@@ -173,45 +311,39 @@ fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
         const uint64_t l_b_portdimm = (b.get_port() << 1) | b.get_dimm();
         return l_a_portdimm < l_b_portdimm;
     });
-    // Initialize the common sections
     base_init();
-    // And configure broadcast mode if required
     mss::mcbist::configure_broadcast_mode(iv_target, iv_program);
-
-fapi_try_exit:
-    return fapi2::current_err;
 }
 
 template< mss::mc_type MC, fapi2::TargetType T, typename TT >
-inline fapi2::ReturnCode operation<MC, T, TT>::multi_port_init()
+inline void operation<MC, T, TT>::multi_port_init()
 {
     const auto l_port = mss::find_targets<TT::PORT_TYPE>(iv_target);
     // Make sure we have ports, if we don't then exit out
     if(l_port.size() == 0)
     {
         // Cronus can have no ports under an MCBIST, FW deconfigures by association
-        return fapi2::FAPI2_RC_SUCCESS;
+        return;
     }
     // Let's assume we are going to send out all subtest unless we are in broadcast mode,
     // where we only send up to 2 subtests under an port ( 1 for each DIMM) which is why no const
     auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
-    if( l_dimms.size() == 0)
+    if(l_dimms.size() == 0)
     {
         // Cronus can have no DIMMS under an MCBIST, FW deconfigures by association
-        return fapi2::FAPI2_RC_SUCCESS;
+        return;
     }
-    return multi_port_init_internal();
+    multi_port_init_internal();
 }
 
 template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
-struct sf_read_operation : public operation<MC>
+struct sf_read_operation : public operation<mss::mc_type::NIMBUS>
 {
     sf_read_operation( const fapi2::Target<T>& i_target,
-                       const constraints<MC> i_const,
-                       fapi2::ReturnCode& o_rc):
-    operation<MC>(i_target, mss::mcbist::read_subtest<MC>(), i_const)
+                       const constraints<mss::mc_type::NIMBUS> i_const):
+    operation<mss::mc_type::NIMBUS>(i_target, mss::mcbist::read_subtest<MC>(), i_const)
     {
-        o_rc = this->multi_port_init();
+        this->multi_port_init();
     }
 };
 
@@ -387,47 +519,60 @@ class operation
     }
 }
 
-template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = mcbistTraits<MC, T>, typename ET = mcbistMCTraits<MC> >
-fapi2::ReturnCode execute( const fapi2::Target<T>& i_target, const program<MC>& i_program )
+template <mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = mcbistTraits<MC, T>, typename ET = mcbistMCTraits<MC>>
+fapi2::ReturnCode execute(const fapi2::Target<T>& i_target, const program<MC>& i_program)
 {
     fapi2::buffer<uint64_t> l_status;
-    bool l_poll_result = false;
     poll_parameters l_poll_parameters;
 
     // Init the fapi2 return code
     fapi2::current_err = fapi2::FAPI2_RC_SUCCESS;
 
-    clear_error_helper<MC>(i_target, const_cast<program<MC>&>(i_program));
+    // ----
+    // clear_errors(i_target);
+    fapi2::putScom(i_target, TT::MCBSTATQ_REG, 0);
+    fapi2::putScom(i_target, TT::SRERR0_REG, 0);
+    fapi2::putScom(i_target, TT::SRERR1_REG, 0);
+    fapi2::putScom(i_target, TT::FIRQ_REG, 0);
+    // ----
     load_fifo_mode<MC>(i_target, i_program);
     load_addr_gen<MC>(i_target, i_program);
-    load_mcbparm<MC>(i_target, i_program);
-    load_mcbamr(i_target, i_program);
-    load_config<MC>(i_target, i_program);
-    load_control<MC>(i_target, i_program);
-    load_data_config<MC>(i_target, i_program);
-    load_thresholds<MC>(i_target, i_program);
+    // ----
+    // load_mcbparm<MC>(i_target, i_program);
+    fapi2::putScom(i_target, TT::MCBPARMQ_REG, i_program.iv_parameters);
+    // ----
+    // load_mcbamr(i_target, i_program);
+    fapi2::putScom(i_target, TT::MCBAMR0A0Q_REG, i_program.iv_addr_map0);
+    fapi2::putScom(i_target, TT::MCBAMR1A0Q_REG, i_program.iv_addr_map1);
+    fapi2::putScom(i_target, TT::MCBAMR2A0Q_REG, i_program.iv_addr_map2);
+    fapi2::putScom(i_target, TT::MCBAMR3A0Q_REG, i_program.iv_addr_map3);
+    // ----
+    load_config<MC>( i_target, i_program);
+    // ----
+    // load_control<MC>(i_target, i_program);
+    fapi2::putScom(i_target, TT::CNTLQ_REG, i_program.iv_control);
+    // ----
+    load_data_config<MC>( i_target, i_program);
+    // ----
+    // load_thresholds<MC>(i_target, i_program);
+    fapi2::putScom(i_target, TT::THRESHOLD_REG, i_program);
+    // ----
     load_mcbmr<MC>(i_target, i_program);
-    start_stop<MC>(i_target, mss::START);
-    l_poll_result = mss::poll(i_target, TT::STATQ_REG, l_poll_parameters,
+    // ----
+    // start_stop<MC>(i_target, mss::START);
+    fapi2::buffer<uint64_t> l_buf;
+    fapi2::getScom(i_target, TT::CNTLQ_REG, l_buf);
+    fapi2::putScom(i_target, TT::CNTLQ_REG, l_buf.setBit<TT::MCBIST_START>());
+    // ----
+    // Verify that the in-progress bit has been set, so we know we started
+    // Don't use the program's poll as it could be a very long time. Use the default poll.
+    mss::poll(i_target, TT::STATQ_REG, l_poll_parameters,
                               [&l_status](const size_t poll_remaining, const fapi2::buffer<uint64_t>& stat_reg) -> bool
     {
         l_status = stat_reg;
         return (l_status.getBit<TT::MCBIST_IN_PROGRESS>() == true) || (l_status.getBit<TT::MCBIST_DONE>() == true);
     });
-
-    if (!i_program.iv_async)
-    {
-        return mcbist::poll(i_target, i_program);
-    }
-}
-
-template<mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T>
-fapi2::ReturnCode sf_init(const fapi2::Target<T>& i_target)
-{
-    using ET = mss::mcbistMCTraits<MC>;
-    constraints<MC> l_const(PATTERN_0);
-    sf_init_operation<MC> l_init_op(l_const, l_rc);
-    return l_init_op.execute(i_target);
+    return mcbist::poll(i_target, i_program);
 }
 
 template<>

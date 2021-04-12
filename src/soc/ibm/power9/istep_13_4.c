@@ -24,8 +24,9 @@ void istep_13_4(void)
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mem_data.mcs[i].functional)
-			continue;
+		/* According to logs, Hostboot does it also for the second MCS */
+		//~ if (!mem_data.mcs[i].functional)
+			//~ continue;
 
 		// Drop PLDY bypass of Progdelay logic
 		/*
@@ -92,7 +93,7 @@ void istep_13_4(void)
 		  [47-51] SCAN_RATIO =  3           // 4:1
 		*/
 		scom_and_or_for_chiplet(mcs_ids[i], 0x07030001, ~PPC_BITMASK(47,51),
-		                        PPC_BIT(50) | PPC_BIT(51));
+		                        PPC_SHIFT(3, 51));
 
 		// > end if
 

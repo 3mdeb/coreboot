@@ -27,8 +27,9 @@ void istep_13_2(void)
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mem_data.mcs[i].functional)
-			continue;
+		/* According to logs, Hostboot does it also for the second MCS */
+		//~ if (!mem_data.mcs[i].functional)
+			//~ continue;
 
 		// Assert endpoint reset
 		/*

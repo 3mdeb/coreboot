@@ -5,16 +5,21 @@
 #include <timer.h>
 
 /*
- * TODO: ATTR_PG value should come from MEMD partition, but it is empty after
+ * FIXME: ATTR_PG value should come from MEMD partition, but it is empty after
  * build. Default value from talos.xml (5 for all chiplets) probably never makes
- * sense. Value read from already booted MVPD is 0xE0 for both MCSs. We can
+ * sense. Value read from already booted MVPD is 0xE0 (?) for both MCSs. We can
  * either add functions to read and parse MVPD or just hardcode the values. So
  * far I haven't found the code that writes to MVPD in Hostboot, other than for
  * PDI keyword (PG keyword should be used here).
  *
- * Value below is already shifted to simplify the code.
+ * Value below comes from a log of booting Hostboot. It isn't even remotely
+ * similar to values mentioned above. It touches bits marked as reserved in the
+ * documentation, so we can't rely on specification to be up to date.
+ *
+ * As this describes whether clocks on second MCS should be started or not, this
+ * definitely will be different when more DIMMs are installed.
  */
-#define ATTR_PG			0xE000000000000000ull
+#define ATTR_PG			0xE1FC000000000000ull
 
 static inline void p9_mem_startclocks_cplt_ctrl_action_function(chiplet_id_t id)
 {
@@ -114,18 +119,17 @@ static void p9_sbe_common_clock_start_stop(chiplet_id_t id)
 	  [0-1]   CLOCK_CMD =       1     // start
 	  [2]     SLAVE_MODE =      0
 	  [3]     MASTER_MODE =     0
-	  [4-14]  CLOCK_REGION_* =  ~ATTR_PG[4-14]
+	  [4-14]  CLOCK_REGION_* =  (((~ATTR_PG[4-14]) >> 1) & 0x07FE) << 1 =
+	                            ~ATTR_PG[4-14] & 0x0FFC =
+	                            ~ATTR_PG[4-13]       // Hostboot tends to complicate
 	  [48]    SEL_THOLD_SL =    1
 	  [49]    SEL_THOLD_NSL =   1
 	  [50]    SEL_THOLD_ARY =   1
 	*/
-	//~ scom_and_or_for_chiplet(id, 0x07030006,
-	                        //~ ~(PPC_BITMASK(0,14) | PPC_BITMASK(48,50)),	// and
-	                        //~ PPC_BIT(1) | PPC_BIT(48) | PPC_BIT(49) | PPC_BIT(50)
-	                        //~ | (~ATTR_PG & PPC_BITMASK(4,14)));		// or
-
-	write_scom_for_chiplet(id, 0x07030006, PPC_BIT(1) | PPC_BIT(48) | PPC_BIT(49) | PPC_BIT(50)
-	                        | (~ATTR_PG & PPC_BITMASK(4,14)));
+	scom_and_or_for_chiplet(id, 0x07030006,
+	                        ~(PPC_BITMASK(0,14) | PPC_BITMASK(48, 50)),
+	                        PPC_BIT(1) | PPC_BIT(48) | PPC_BIT(49) | PPC_BIT(50)
+	                        | (~ATTR_PG & PPC_BITMASK(4, 13)));
 
 	// Poll OPCG done bit to check for completeness
 	/*
@@ -149,10 +153,10 @@ static void p9_sbe_common_clock_start_stop(chiplet_id_t id)
 	TP.TCMC01.MCSLOW.CLOCK_STAT_ARY                       // 0x0703000A
 	  assert(([4-14] & ATTR_PG[4-14]) == ATTR_PG[4-14])
 	*/
-	uint64_t mask = ATTR_PG & PPC_BITMASK(4,14);
-	if ((read_scom_for_chiplet(id, 0x07030008) & PPC_BITMASK(4,14)) != mask ||
-	    (read_scom_for_chiplet(id, 0x07030009) & PPC_BITMASK(4,14)) != mask ||
-	    (read_scom_for_chiplet(id, 0x0703000A) & PPC_BITMASK(4,14)) != mask)
+	uint64_t mask = ATTR_PG & PPC_BITMASK(4, 13);
+	if ((read_scom_for_chiplet(id, 0x07030008) & PPC_BITMASK(4, 13)) != mask ||
+	    (read_scom_for_chiplet(id, 0x07030009) & PPC_BITMASK(4, 13)) != mask ||
+	    (read_scom_for_chiplet(id, 0x0703000A) & PPC_BITMASK(4, 13)) != mask)
 		die("Unexpected clock status\n");
 }
 
@@ -163,6 +167,8 @@ static inline void p9_mem_startclocks_fence_setup_function(chiplet_id_t id)
 	 * which MCs are connected, but I'm not sure if this is the case. I also
 	 * don't know if it is possible to have a functional MCBIST for which we
 	 * don't want to drop the fence (functional MCBIST with nonfunctional NEST?)
+	 *
+	 * Most likely this will need to be fixed for populated second MCS.
 	 */
 
 	/*
@@ -218,14 +224,7 @@ static void p9_sbe_common_configure_chiplet_FIR(chiplet_id_t id)
 	TP.TCMC01.MCSLOW.FIR_MASK                             // 0x07040002
 	  [all]   0
 	*/
-
-	/* FIXME: this results in checkstops from IOM23 FIR and IOM23 FIR unstaged.
-	 * Temporarily leave these two bits (plus summary bit) masked. */
-	// write_scom_for_chiplet(id, 0x07040002, 0);
-	write_scom_for_chiplet(id, 0x07040002, PPC_BIT(0) | PPC_BIT(14) | PPC_BIT(16));
-
-	printk(BIOS_EMERG, "Please FIXME: 0x07040002 = %#16.16llx\n",
-	       read_scom_for_chiplet(id, 0x07040002));
+	write_scom_for_chiplet(id, 0x07040002, 0);
 }
 
 /*
@@ -247,8 +246,9 @@ void istep_13_6(void)
 	/* Assuming MC doesn't run in sync mode with Fabric, otherwise this is no-op */
 
 	for (i = 0; i < MCS_PER_PROC; i++) {
-		if (!mem_data.mcs[i].functional)
-			continue;
+		/* According to logs, Hostboot does it also for the second MCS */
+		//~ if (!mem_data.mcs[i].functional)
+			//~ continue;
 
 		// Call p9_mem_startclocks_cplt_ctrl_action_function for Mc chiplets
 		p9_mem_startclocks_cplt_ctrl_action_function(mcs_ids[i]);

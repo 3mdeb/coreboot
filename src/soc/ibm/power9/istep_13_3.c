@@ -65,6 +65,13 @@ void istep_13_3(void)
 	/* https://github.com/open-power/hostboot/blob/master/src/include/usr/sbeio/sbe_psudd.H#L418 */
 	// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
 	/* REQUIRE_RESPONSE, PSU_PUT_RING_FROM_IMAGE_CMD, CMD_CONTROL_PUTRING */
+	/*
+	 * TODO: there is also a sequence ID (bits 32-47) which has to be unique. It
+	 * has a value of 9 at this point in Hostboot logs, meaning there were
+	 * probably earlier messages to SBE. In that case, we may also need a static
+	 * variable for it, which probably implies wrapping this into a function and
+	 * moving it to separate file.
+	 */
 	write_scom(0x000D0050, 0x000001000000D301);
 
 	// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
@@ -92,6 +99,8 @@ void istep_13_3(void)
 	if (!time)
 		die("Timed out while waiting for SBE response\n");
 
+	/* This may depend on the requested frequency, but for current setup in our
+	 * lab this is ~3ms both for coreboot and Hostboot. */
 	printk(BIOS_EMERG, "putRing took %ld ms\n", time);
 
 	// Clear SBE->host doorbell

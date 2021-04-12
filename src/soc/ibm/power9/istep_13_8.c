@@ -91,6 +91,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	/* P9N2_MCS_PORT02_MCEPSQ (?)
 	    [0-7]   = 1                                 // JITTER_EPSILON
 	    // ATTR_PROC_EPS_READ_CYCLES_T* are calculated in 8.6
+	    // Rounded up?
 	    [8-15]  = (ATTR_PROC_EPS_READ_CYCLES_T0 + 6) / 4        // LOCAL_NODE_EPSILON
 	    [16-23] = (ATTR_PROC_EPS_READ_CYCLES_T1 + 6) / 4        // NEAR_NODAL_EPSILON
 	    [24-31] = (ATTR_PROC_EPS_READ_CYCLES_T1 + 6) / 4        // GROUP_EPSILON
@@ -99,8 +100,8 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	 */
 	scom_and_or_for_chiplet(nest, 0x05010826, ~PPC_BITMASK(0,47),
 	                        PPC_SHIFT(1, 7) /* FIXME: fill the rest with non-hardcoded values*/
-	                        | PPC_SHIFT(3, 15) | PPC_SHIFT(3, 23) | PPC_SHIFT(3, 31)
-	                        | PPC_SHIFT(18, 39) | PPC_SHIFT(18, 47));
+	                        | PPC_SHIFT(4, 15) | PPC_SHIFT(4, 23) | PPC_SHIFT(4, 31)
+	                        | PPC_SHIFT(0x19, 39) | PPC_SHIFT(0x19, 47));
 //~ static const uint32_t EPSILON_R_T0_LE[] = {    7,    7,    8,    8,   10,   22 };  // T0, T1
 //~ static const uint32_t EPSILON_R_T2_LE[] = {   67,   69,   71,   74,   79,  103 };  // T2
 
@@ -135,19 +136,19 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [30-35] MBA_DSM0Q_CFG_WRDATA_DLY =      ATTR_EFF_DRAM_CWL + ATTR_MSS_EFF_DPHY_WLO - 8
 	    // Assume RDIMM, non-NVDIMM only
 	    [36-41] MBA_DSM0Q_CFG_RDTAG_DLY =
-		MSS_FREQ_EQ_1866:                   ATTR_EFF_DRAM_CL[l_def_PORT_INDEX] + 7
-		MSS_FREQ_EQ_2133:                   ATTR_EFF_DRAM_CL[l_def_PORT_INDEX] + 7
-		MSS_FREQ_EQ_2400:                   ATTR_EFF_DRAM_CL[l_def_PORT_INDEX] + 8
-		MSS_FREQ_EQ_2666:                   ATTR_EFF_DRAM_CL[l_def_PORT_INDEX] + 9
+		MSS_FREQ_EQ_1866:                   ATTR_EFF_DRAM_CL + 7
+		MSS_FREQ_EQ_2133:                   ATTR_EFF_DRAM_CL + 7
+		MSS_FREQ_EQ_2400:                   ATTR_EFF_DRAM_CL + 8
+		MSS_FREQ_EQ_2666:                   ATTR_EFF_DRAM_CL + 9
 	*/
-	/* ATTR_MSS_EFF_DPHY_WLO = 1 (from VPD) */
+	/* ATTR_MSS_EFF_DPHY_WLO = 1 from VPD, 3 from dump? */
 	uint64_t rdtag_dly = mem_data.speed == 2666 ? 9 :
 	                     mem_data.speed == 2400 ? 8 : 7;
 	mca_and_or(id, mca_i, 0x0701090A, ~PPC_BITMASK(0,41),
 	           PPC_SHIFT(mca->cl - mem_data.cwl, 5) |
 	           PPC_SHIFT(mca->cl - mem_data.cwl + 5, 11) |
 	           PPC_SHIFT(5, 23) | PPC_SHIFT(24, 29) |
-	           PPC_SHIFT(mem_data.cwl + 1 - 8, 35) |
+	           PPC_SHIFT(mem_data.cwl + /* 1 */ 3 - 8, 35) |
 	           PPC_SHIFT(mca->cl + rdtag_dly, 41));
 
 	/* MC01.PORT0.SRQ.MBA_TMR0Q =
@@ -346,6 +347,12 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [40-49] MBAREF0Q_CFG_REFR_TSV_STACK =             ATTR_EFF_DRAM_TRFC_DLR
 	    [50-60] MBAREF0Q_CFG_REFR_CHECK_INTERVAL =        ((ATTR_EFF_DRAM_TREFI / 8) * 6) / 5
 	*/
+	/*
+	 * Hostboot writes slightly lower REFR_CHECK_INTERVAL, 1544 vs 1560, because
+	 * it uses 99% of tREFI in 7.4 in eff_dimm::dram_trefi(). If this causes any
+	 * issues we can do the same, but for now let's try to avoid floating point
+	 * arithmetic.
+	 */
 	mca_and_or(id, mca_i, 0x07010932, ~(PPC_BITMASK(5, 18) | PPC_BITMASK(30, 60)),
 	           PPC_SHIFT(3, 7) | PPC_SHIFT(mem_data.nrefi / (8 * 2 * log_ranks), 18) |
 	           PPC_SHIFT(mca->nrfc, 39) | PPC_SHIFT(mca->nrfc_dlr, 49) |
@@ -408,7 +415,8 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	mca_and_or(id, mca_i, 0x07010935, ~(PPC_BITMASK(12, 37) | PPC_BITMASK(46, 56)),
 	           PPC_SHIFT(5, 16) | PPC_SHIFT(tcksr_ex, 21) |
 	           PPC_SHIFT(tcksr_ex, 26) | PPC_SHIFT(txsdll, 37) |
-	           PPC_SHIFT(mem_data.nrefi / (8 * 2 * log_ranks), 56));
+	           PPC_SHIFT(mem_data.nrefi /
+	                     (8 * (mca->dimm[0].log_ranks + mca->dimm[1].log_ranks)), 56));
 
 	/* MC01.PORT0.ECC64.SCOM.RECR =
 	    [16-18] MBSECCQ_VAL_TO_DATA_DELAY =
@@ -548,6 +556,7 @@ static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 			  [62] DLL_DRVREN_MODE =      POWER8 mode (thermometer style, enabling all drivers up to the one that is used)
 			  [63] DLL_CAL_CKTS_ACTIVE =  After VREG calibration, some analog circuits are powered down
 		*/
+		/* Same as default value after reset? */
 		dp_mca_and_or(id, dp, mca_i, 0x8000002A0701103F,
 		              ~(PPC_BITMASK(48, 50) | PPC_BITMASK(52, 59) | PPC_BITMASK(62, 63)),
 		              PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
@@ -561,6 +570,7 @@ static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 			  [62] DLL_DRVREN_MODE =      POWER8 mode (thermometer style, enabling all drivers up to the one that is used)
 			  [63] DLL_CAL_CKTS_ACTIVE =  After VREG calibration, some analog circuits are powered down
 		*/
+		/* Same as default value after reset? */
 		dp_mca_and_or(id, dp, mca_i, 0x8000002B0701103F,
 		              ~(PPC_BITMASK(48, 50) | PPC_BITMASK(52, 59) | PPC_BITMASK(62, 63)),
 		              PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
@@ -657,7 +667,7 @@ static void p9n_ddrphy_scom(int mcs_i, int mca_i)
 			  [56-58] RXREG_VREG_REF_SEL_DC = 0x2
 		  [63] DLL_CAL_CKTS_ACTIVE =  0   // After VREG calibration, some analog circuits are powered down
 		*/
-		dp_mca_and_or(id, dp, mca_i, 0x8000803d0701103F,
+		dp_mca_and_or(id, dp, mca_i, 0x8000803D0701103F,
 		              ~PPC_BITMASK(48, 63), PPC_SHIFT(3, 50) | PPC_SHIFT(0x74, 59));
 	}
 
@@ -974,8 +984,8 @@ static void reset_rd_vref(int mcs_i, int mca_i)
 	      [49-55] BIT0_VREF_DAC = vref_bf
 	      [57-63] BIT1_VREF_DAC = vref_bf
 	*/
+	const uint64_t vref_bf = 12 * (100000 - ATTR_MSS_VPD_MT_VREF_MC_RD[vpd_idx]) / 6500;
 	for (dp = 0; dp < 5; dp++) {
-		uint64_t vref_bf = 12 * (100000 - ATTR_MSS_VPD_MT_VREF_MC_RD[vpd_idx]) / 6500;
 
 		/* SCOM addresses are not regular for DAC, so no inner loop. */
 		dp_mca_and_or(id, dp, mca_i, 0x800000160701103F,  // DAC_0
@@ -1026,10 +1036,12 @@ static void pc_reset(int mcs_i, int mca_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 	/* These are from VPD */
+	/*
 	uint64_t ATTR_MSS_EFF_DPHY_WLO = mem_data.speed == 1866 ? 1 : 2;
 	uint64_t ATTR_MSS_EFF_DPHY_RLO = mem_data.speed == 1866 ? 4 :
 	                                 mem_data.speed == 2133 ? 5 :
 	                                 mem_data.speed == 2400 ? 6 : 7;
+	*/
 
 	/* IOM0.DDRPHY_PC_CONFIG0_P0 has been reset in p9n_ddrphy_scom() */
 
@@ -1041,9 +1053,14 @@ static void pc_reset(int mcs_i, int mca_i)
 	      [59-61] MEMORY_TYPE =           0x5     // 0x7 for LRDIMM
 	      [62]    DDR4_LATENCY_SW =       1
 	*/
+	/*
+	 * FIXME: I have no idea where Hostboot gets these values from, they should
+	 * be the same as in VPD, yet WLO is 3 and RLO is 5 when written to SCOM...
+	 */
 	mca_and_or(id, mca_i, 0x8000C00D0701103F,
 	           ~(PPC_BITMASK(48, 55) | PPC_BITMASK(59, 62)),
-	           PPC_SHIFT(ATTR_MSS_EFF_DPHY_WLO, 51) | PPC_SHIFT(ATTR_MSS_EFF_DPHY_RLO, 55) |
+	           PPC_SHIFT(/* ATTR_MSS_EFF_DPHY_WLO */ 3, 51) |
+	           PPC_SHIFT(/* ATTR_MSS_EFF_DPHY_RLO */ 5, 55) |
 	           PPC_SHIFT(0x5, 61) | PPC_BIT(62));
 
 	/* IOM0.DDRPHY_PC_ERROR_STATUS0_P0 =
@@ -1073,20 +1090,34 @@ static void wc_reset(int mcs_i, int mca_i)
 	*/
 	/*
 	 * tMOD = max(24 nCK, 15 ns) = 24 nCK for all supported speed bins
-	 * tWLDQSEN = 25 nCK
+	 * tWLDQSEN >= 25 nCK
+	 * tWLDQSEN > tMOD + ODTLon + tADC
+	 *       0.3 tCK <= tADC <= 0.7 tCK, round to 1
+	 *       ODTLon = WL - 2 = CWL + AL + PL - 2; AL = 0, PL = 0
+	 * tWLDQSEN = max(25, tMOD + CWL - 2 + 1) = CWL + 23
 	 * tWLO = 0 - 9.5 ns, Hostboot uses ATTR_MSS_EFF_DPHY_WLO
 	 * tWLOE = 0 - 2 ns, Hostboot uses 2 ns
 	 * Longest DQ and DQS delays are both equal 1 nCK.
 	 */
+	/*
+	 * FIXME: again, tWLO = 3 in Hostboot. Why?
+	 * This is still much smaller than tWLDQSEN so leave it, for now.
+	 */
 	uint64_t tWLO = mem_data.speed == 1866 ? 1 : 2;
 	uint64_t tWLOE = ns_to_nck(2);
+	uint64_t tWLDQSEN = MAX(25, tMOD + (mem_data.cwl - 2) + 1);
 	/*
 	 * Use the version from the code, it may be longer than necessary but it
-	 * works. Note that MAX() always expands to 25 + 24 = 49, which means that
-	 * we can just write 'tWLO_tWLOE = 63'. Leaving full version below, it will
-	 * be easier to fix.
+	 * works. Note that MAX() always expands to CWL + 23 + 24 = 47 + CWL, which
+	 * means that we can just write 'tWLO_tWLOE = 61 + CWL'. Leaving full
+	 * version below, it will be easier to fix.
 	 */
-	uint64_t tWLO_tWLOE = 12 + MAX((25 + 24), (tWLO + tWLOE)) + 1 + 1;
+	/*
+	 * FIXME: relative to Hostboot, we are 2 nCK short for tWLDQSEN (37 vs 39).
+	 * It doesn't have '- 2' in its calculations (timing.H). However, this is
+	 * JEDEC way of doing it so it _should_ work.
+	 */
+	uint64_t tWLO_tWLOE = 12 + MAX((tWLDQSEN + tMOD), (tWLO + tWLOE)) + 1 + 1;
 	mca_and_or(id, mca_i, 0x8000CC000701103F, 0,
 	           PPC_SHIFT(tWLO_tWLOE, 55) | PPC_BIT(56) |
 	           PPC_SHIFT(0x20, 62) | PPC_BIT(63));
@@ -1133,16 +1164,11 @@ static void rc_reset(int mcs_i, int mca_i)
 
 	/* IOM0.DDRPHY_RC_CONFIG0_P0
 	      [all]   0
-	      [48-51] GLOBAL_PHY_OFFSET =
-			  MSS_FREQ_EQ_1866: 12
-			  MSS_FREQ_EQ_2133: 12
-			  MSS_FREQ_EQ_2400: 13
-			  MSS_FREQ_EQ_2666: 13
+	      [48-51] GLOBAL_PHY_OFFSET = 0x5      // ATTR_MSS_VPD_MR_DPHY_GPO
 	      [62]    PERFORM_RDCLK_ALIGN = 1
 	*/
-	uint64_t global_phy_offset = mem_data.speed < 2400 ? 12 : 13;
 	mca_and_or(id, mca_i, 0x8000C8000701103F, 0,
-	           PPC_SHIFT(global_phy_offset, 51) | PPC_BIT(62));
+	           PPC_SHIFT(0x5, 51) | PPC_BIT(62));
 
 	/* IOM0.DDRPHY_RC_CONFIG1_P0
 	      [all]   0
@@ -1202,7 +1228,6 @@ static void seq_reset(int mcs_i, int mca_i)
 	if (mca->dimm[0].present && mca->dimm[1].present)
 		vpd_idx++;
 
-
 	/* IOM0.DDRPHY_SEQ_CONFIG0_P0 =
 	      [all]   0
 	      [49]    TWO_CYCLE_ADDR_EN =
@@ -1229,6 +1254,14 @@ static void seq_reset(int mcs_i, int mca_i)
 	      [56-59] TRP_CYCLES =  log2(tRP)
 	      [60-63] TRFC_CYCLES = log2(tRFC)
 	*/
+	/*
+	 * FIXME or FIXHOSTBOOT: due to a bug in Hostboot TRFC_CYCLES is always 0.
+	 * A loop searches for a minimum for all MCAs, but minimum that values are
+	 * compared to is initially set to 0. This is a clear violation of RFC
+	 * timing, yet somehow it works.
+	 *
+	 * https://github.com/open-power/hostboot/blob/master/src/import/chips/p9/procedures/hwp/memory/lib/phy/seq.C#L142
+	 */
 	mca_and_or(id, mca_i, 0x8000C4120701103F, 0,
 	           PPC_SHIFT(5, 51) | PPC_SHIFT(log2_up(mca->nrcd), 55) |
 	           PPC_SHIFT(log2_up(mca->nrp), 59) | PPC_SHIFT(log2_up(mca->nrfc), 63));
@@ -1237,12 +1270,12 @@ static void seq_reset(int mcs_i, int mca_i)
 	      [all]   0
 	      [48-51] TZQINIT_CYCLES =  10      // log2(1024), JEDEC tables 169 and 170
 	      [52-55] TZQCS_CYCLES =    7       // log2(128), JEDEC tables 169 and 170
-	      [56-59] TWLDQSEN_CYCLES = 5       // log2(25) rounded up, JEDEC tables 169 and 170
+	      [56-59] TWLDQSEN_CYCLES = 6       // log2(37) rounded up, JEDEC tables 169 and 170
 	      [60-63] TWRMRD_CYCLES =   6       // log2(40) rounded up, JEDEC tables 169 and 170
 	*/
 	mca_and_or(id, mca_i, 0x8000C4130701103F, 0,
 	           PPC_SHIFT(10, 51) | PPC_SHIFT(7, 55) |
-	           PPC_SHIFT(5, 59) | PPC_SHIFT(6, 63));
+	           PPC_SHIFT(6, 59) | PPC_SHIFT(6, 63));
 
 	/* IOM0.DDRPHY_SEQ_MEM_TIMING_PARAM2_P0 =
 	      [all]   0
@@ -1869,10 +1902,9 @@ static void reset_wr_vref_registers(int mcs_i, int mca_i)
 		    [all]   0
 		*/
 		dp_mca_and_or(id, dp, mca_i, 0x800000AE0701103F, 0, 0);
-		dp_mca_and_or(id, dp, mca_i, 0x800000AE0701103F, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, 0x800000AF0701103F, 0, 0);
 
 		/* Assume RDIMM
-		 * Assume unpopulated DIMMs/ranks are not calibrated so their settings doesn't matter (more reg accesses, much simpler code)
 		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR0_P0_{0,1,2,3,4} =   // 0x8000005{E,F}0701103F, +0x0400_0000_0000
 		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR1_P0_{0,1,2,3,4} =   // 0x8000015{E,F}0701103F, +0x0400_0000_0000
 		IOM0.DDRPHY_DP16_WR_VREF_VALUE{0,1}_RANK_PAIR2_P0_{0,1,2,3,4} =   // 0x8000025{E,F}0701103F, +0x0400_0000_0000
@@ -2032,7 +2064,7 @@ void istep_13_8(void)
 	report_istep(13,8);
 
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
-		/* We neither started clocks nor dropped fences in 13.6 for non-functional MCS */
+		/* No need to initialize a non-functional MCS */
 		if (!mem_data.mcs[mcs_i].functional)
 			continue;
 
@@ -2066,7 +2098,7 @@ void istep_13_8(void)
 
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
-			/* No magic for phy_scmoinit(). */
+			/* No magic for phy_scominit(). */
 			if (mca->functional)
 				phy_scominit(mcs_i, mca_i);
 

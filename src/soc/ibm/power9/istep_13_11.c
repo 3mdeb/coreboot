@@ -642,6 +642,83 @@ static void rdclk_align_post(int mcs_i, int mca_i, int rp,
 	dqs_align_turn_on_refresh(mcs_i, mca_i);
 }
 
+static void read_ctr_pre(int mcs_i, int mca_i, int rp,
+                         enum rank_selection ranks_present)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	int dp;
+
+	/* Turn off refresh
+	IOM0.DDRPHY_PC_INIT_CAL_CONFIG1_P0
+		[52-53] REFRESH_CONTROL =   0       // refresh commands are only sent at start of initial calibration
+	*/
+	mca_and_or(id, mca_i, 0x8000C0170701103F, ~PPC_BITMASK(52, 53), 0);
+
+	for (dp = 0; dp < 5; dp++) {
+		/*
+		IOM0.DDRPHY_DP16_CONFIG0_P0_{0-4}
+			[62]  1         // part of ATESTSEL_0_4 field
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000030701103F, ~0, PPC_BIT(62));
+
+		/*
+		 * This was a part of main calibration, not pre-workaround, but this is
+		 * easier this way.
+		IOM0.DDRPHY_DP16_RD_VREF_CAL_EN_P0_{0-4}
+			[all] 0
+			[48-63] VREF_CAL_EN = 0xffff    // We already did this in reset_rd_vref() in 13.8
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000760701103F, 0, PPC_SHIFT(0xFFFF, 63));
+	}
+
+	/* This also was part of main
+	IOM0.DDRPHY_RC_RDVREF_CONFIG1_P0
+		[60]  CALIBRATION_ENABLE =  1
+		[61]  SKIP_RDCENTERING =    0
+	*/
+	mca_and_or(id, mca_i, 0x8000C80A0701103F, ~PPC_BIT(61), PPC_BIT(60));
+}
+
+static uint64_t read_ctr_time(void)
+{
+	/*
+	 * "This step runs for approximately 6 x (512/COARSE_CAL_STEP_SIZE + 4 x
+	 *  (COARSE_CAL_STEP_SIZE + 4 x CONSEQ_PASS)) x 24 DRAM clocks per rank pair."
+	 *
+	 * COARSE_CAL_STEP_SIZE = 4
+	 * CONSEQ_PASS = 8
+	 *
+	 * In tests this step takes more than that (38/30us), probably because of
+	 * REF commands that are pulled in before the calibration. It is still much
+	 * less than timeout (107us).
+	 */
+	const int COARSE_CAL_STEP_SIZE = 4;
+	const int CONSEQ_PASS = 8;
+	return 6 * (512/COARSE_CAL_STEP_SIZE + 4 * (COARSE_CAL_STEP_SIZE + 4 * CONSEQ_PASS))
+	       * 24;
+}
+
+static void read_ctr_post(int mcs_i, int mca_i, int rp,
+                          enum rank_selection ranks_present)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	int dp;
+
+	/* Does not apply to DD2 */
+	// workarounds::dp16::rd_dq::fix_delay_values();
+
+	/* Turn on refresh */
+	dqs_align_turn_on_refresh(mcs_i, mca_i);
+
+	for (dp = 0; dp < 5; dp++) {
+		/*
+		IOM0.DDRPHY_DP16_CONFIG0_P0_{0-4}
+			[62]  0         // part of ATESTSEL_0_4 field
+		*/
+		dp_mca_and_or(id, dp, mca_i, 0x800000030701103F, ~PPC_BIT(62), 0);
+	}
+}
+
 typedef void (phy_workaround_t) (int mcs_i, int mca_i, int rp,
                                  enum rank_selection ranks_present);
 
@@ -682,9 +759,15 @@ static struct phy_step steps[] = {
 		rdclk_align_time,
 		rdclk_align_post,
 	},
+	{
+		"Read Centering",
+		CAL_READ_CTR,
+		read_ctr_pre,
+		read_ctr_time,
+		read_ctr_post,
+	},
 
 /*
-	CAL_READ_CTR
 	CAL_WRITE_CTR
 	CAL_INITIAL_COARSE_WR
 	CAL_COARSE_RD
@@ -801,7 +884,8 @@ void istep_13_11(void)
 			 * - RDCLK align
 			 * - Read centering
 			 * - Write Vref latching - not exactly a calibration, but required for next
-			 *   steps
+			 *   steps; there is no help from PHY for that but it is simple to do
+			 *   manually
 			 * - Write centering
 			 * - Coarse write/read
 			 * - Custom read and/or write centering - performed in istep 13.12

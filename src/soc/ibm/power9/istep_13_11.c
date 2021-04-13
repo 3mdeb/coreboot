@@ -110,13 +110,18 @@ static void clear_initial_cal_errors(int mcs_i, int mca_i)
 	mca_and_or(id, mca_i, 0x07011000, ~PPC_BIT(56), 0);
 }
 
-/* TODO: make non-void, return status and use as a test for repetition */
 static void dump_cal_errors(int mcs_i, int mca_i)
 {
 #if CONFIG(DEBUG_RAM_SETUP)
 	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
 
+	/*
+	 * Values are printed before names for two reasons:
+	 * - it is easier to align,
+	 * - BMC buffers host's serial output both in 'obmc-console-client' and in
+	 *   Serial over LAN and may not print few last characters.
+	 */
 	for (dp = 0; dp < 5; dp++) {
 		printk(BIOS_ERR, "DP %d\n", dp);
 		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
@@ -137,6 +142,16 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 		       dp_mca_read(id, dp, mca_i, 0x800000AE0701103F));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR1\n",
 		       dp_mca_read(id, dp, mca_i, 0x800000AF0701103F));
+
+		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR0\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000300701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR1\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000310701103F));
+
+		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG1\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000350701103F));
+		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG2\n",
+		       dp_mca_read(id, dp, mca_i, 0x800000360701103F));
 
 		for (int i = 0; i < 24; i++) {
 			printk(BIOS_ERR, "\t%#16.16llx - WR_DELAY_VALUE_%d_RP0_REG\n",
@@ -165,7 +180,7 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 	       mca_read(id, mca_i, 0x8000C0180701103F));
 
 	/* 0x8000 on success */
-	printk(BIOS_ERR, "%#16.16llx - DDRPHY_PC_INIT_CAL_STATUS\n",
+	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_STATUS\n",
 	       mca_read(id, mca_i, 0x8000C0190701103F));
 
 	printk(BIOS_ERR, "%#16.16llx - IOM_PHY0_DDRPHY_FIR_REG\n",
@@ -236,7 +251,7 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
 	int vpd_idx = (mca->dimm[d].mranks - 1) * 2 + (!!mca->dimm[d ^ 1].present);
 	int mirrored = mca->dimm[d].spd[136] & 1;
 	mrs_cmd_t mrs;
-	enum rank_selection rank = NO_RANKS;
+	enum rank_selection rank = 1 << rp;
 	int i;
 
 	/*
@@ -244,42 +259,6 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
 	 * enabling equivalent terminations.
 	 */
 	if (ATTR_MSS_VPD_MT_DRAM_RTT_WR[vpd_idx] != 0) {
-		/*
-		 * This block is done after MRS commands in Hostboot, but we need rank
-		 * selection and this is the easiest way to get it. We also do not call
-		 * ccs_execute() until the end of this function.
-		 */
-		switch (rp) {
-		case 0:
-			rank = DIMM0_RANK0;
-			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
-			  [48] = 1
-			*/
-			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(48));
-			break;
-		case 1:
-			rank = DIMM0_RANK1;
-			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
-			  [57] = 1
-			*/
-			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(57));
-			break;
-		case 2:
-			rank = DIMM1_RANK0;
-			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
-			  [50] = 1
-			*/
-			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(50));
-			break;
-		case 3:
-			rank = DIMM1_RANK1;
-			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
-			  [59] = 1
-			*/
-			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(59));
-			break;
-		}
-
 		/* MR2 =               // redo the rest of the bits
 		  [A11-A9]  0
 		*/
@@ -309,6 +288,38 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
 		 * delays in ccs_execute(), this probably doesn't matter anyway.
 		 */
 		ccs_add_mrs(id, mrs, rank, mirrored, tMOD);
+
+		/*
+		 * This block is done after MRS commands in Hostboot, but we do not call
+		 * ccs_execute() until the end of this function anyway. It doesn't seem
+		 * to make a difference.
+		 */
+		switch (rp) {
+		case 0:
+			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
+			  [48] = 1
+			*/
+			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(48));
+			break;
+		case 1:
+			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
+			  [57] = 1
+			*/
+			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(57));
+			break;
+		case 2:
+			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
+			  [50] = 1
+			*/
+			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(50));
+			break;
+		case 3:
+			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
+			  [59] = 1
+			*/
+			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(59));
+			break;
+		}
 
 		// mss::workarounds::seq::odt_config();		// Not needed on DD2
 
@@ -390,7 +401,7 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 	int vpd_idx = (mca->dimm[d].mranks - 1) * 2 + (!!mca->dimm[d ^ 1].present);
 	int mirrored = mca->dimm[d].spd[136] & 1;
 	mrs_cmd_t mrs;
-	enum rank_selection rank = NO_RANKS;
+	enum rank_selection rank = 1 << rp;
 	int i;
 
 	/*
@@ -398,11 +409,6 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 	 * enabling equivalent terminations.
 	 */
 	if (ATTR_MSS_VPD_MT_DRAM_RTT_WR[vpd_idx] != 0) {
-		/*
-		 * This block is done after MRS commands in Hostboot, but we need rank
-		 * selection and this is the easiest way to get it. We also do not call
-		 * ccs_execute() until the end of this function.
-		 */
 		#define F(x) ((((x) >> 4) & 0xc) | (((x) >> 2) & 0x3))
 		/* Originally done in seq_reset() in 13.8 */
 		/* IOM0.DDRPHY_SEQ_ODT_RD_CONFIG1_P0 =
@@ -436,7 +442,7 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 		#undef F
 
 		/* MR2 =               // redo the rest of the bits
-		  [A11-A9]  0
+		  [A11-A9]  ATTR_MSS_VPD_MT_DRAM_RTT_WR
 		*/
 		mrs = ddr4_get_mr2(DDR4_MR2_WR_CRC_DISABLE,
                            vpd_to_rtt_wr(ATTR_MSS_VPD_MT_DRAM_RTT_WR[vpd_idx]),
@@ -445,8 +451,8 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 		ccs_add_mrs(id, mrs, rank, mirrored, tMRD);
 
 		/* MR1 =               // redo the rest of the bits
-		  // Write properly encoded RTT_WR value as RTT_NOM
-		  [A8-A10]  240/ATTR_MSS_VPD_MT_DRAM_RTT_WR
+		  // Write properly encoded RTT_NOM value
+		  [A8-A10]  240/ATTR_MSS_VPD_MT_DRAM_RTT_NOM
 		*/
 		mrs = ddr4_get_mr1(DDR4_MR1_QOFF_ENABLE,
                            mca->dimm[d].width == WIDTH_x8 ? DDR4_MR1_TQDS_ENABLE :
@@ -457,13 +463,12 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
                            DDR4_MR1_AL_DISABLE,
                            DDR4_MR1_DLL_ENABLE);
 		/*
-		 * Next command for this rank should be Initial Pattern Write, done by
-		 * PHY hardware, so use tMRD.
+		 * Next command for this rank should be REF before Initial Pattern Write,
+		 * done by PHY hardware, so use tMOD.
 		 */
-		ccs_add_mrs(id, mrs, rank, mirrored, tMRD);
+		ccs_add_mrs(id, mrs, rank, mirrored, tMOD);
 
 		// mss::workarounds::seq::odt_config();		// Not needed on DD2
-
 	}
 
 	/* Different workaround, executed even if RTT_WR == 0 */
@@ -554,12 +559,14 @@ static uint64_t dqs_align_time(void)
 	/*
 	 * "This step runs for approximately 6 x 600 x 4 DRAM clocks per rank pair."
 	 *
-	 * TODO: check if this is enough, now step fails for a different reason.
+	 * In tests this is a bit less than that, but not enough to impact total
+	 * times because we start busy polling earlier.
 	 */
 	return 6 * 600 * 4;
 }
 
-static void rdclk_align_pre(int mcs_i, int mca_i)
+static void rdclk_align_pre(int mcs_i, int mca_i, int rp,
+                            enum rank_selection ranks_present)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 
@@ -583,12 +590,16 @@ static uint64_t rdclk_align_time(void)
 	 * 4 x COARSE_CAL_STEP_SIZE) x 4 + 32) DRAM clocks per rank pair"
 	 *
 	 * COARSE_CAL_STEP_SIZE = 4
+	 *
+	 * In tests this finishes in about a third of this time (7 us instead of
+	 * calculated 20.16 us).
 	 */
 	const int COARSE_CAL_STEP_SIZE = 4;
 	return 24 * ((1024/COARSE_CAL_STEP_SIZE + 4*COARSE_CAL_STEP_SIZE) * 4 + 32);
 }
 
-static void rdclk_align_post(int mcs_i, int mca_i, int rp)
+static void rdclk_align_post(int mcs_i, int mca_i, int rp,
+                             enum rank_selection ranks_present)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 	int dp;
@@ -630,6 +641,80 @@ static void rdclk_align_post(int mcs_i, int mca_i, int rp)
 	/* Turn on refresh */
 	dqs_align_turn_on_refresh(mcs_i, mca_i);
 }
+
+typedef void (phy_workaround_t) (int mcs_i, int mca_i, int rp,
+                                 enum rank_selection ranks_present);
+
+struct phy_step {
+	const char *name;
+	enum cal_config cfg;
+	phy_workaround_t *pre;
+	uint64_t (*time)(void);
+	phy_workaround_t *post;
+};
+
+static struct phy_step steps[] = {
+	{
+		"Write Leveling",
+		CAL_WR_LEVEL,
+		wr_level_pre,
+		wr_level_time,
+		wr_level_post,
+	},
+	{
+		"Initial Pattern Write",
+		CAL_INITIAL_PAT_WR,
+		NULL,
+		initial_pat_wr_time,
+		NULL,
+	},
+	{
+		"DQS alignment",
+		CAL_DQS_ALIGN,
+		NULL,
+		dqs_align_time,
+		NULL,
+	},
+	{
+		"Read Clock Alignment",
+		CAL_RDCLK_ALIGN,
+		rdclk_align_pre,
+		rdclk_align_time,
+		rdclk_align_post,
+	},
+
+/*
+	CAL_READ_CTR
+	CAL_WRITE_CTR
+	CAL_INITIAL_COARSE_WR
+	CAL_COARSE_RD
+	// Following are in istep 13.12
+	CAL_CUSTOM_RD
+	CAL_CUSTOM_WR
+*/
+};
+
+static void dispatch_step(struct phy_step *step, int mcs_i, int mca_i, int rp,
+                          enum rank_selection ranks_present)
+{
+	printk(BIOS_DEBUG, "%s starting\n", step->name);
+
+	if (step->pre)
+		step->pre(mcs_i, mca_i, rp, ranks_present);
+
+	ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, step->cfg, step->time());
+
+	if (step->post)
+		step->post(mcs_i, mca_i, rp, ranks_present);
+
+	dump_cal_errors(mcs_i, mca_i);
+
+	if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0)
+		die("%s failed, aborting\n", step->name);
+
+	printk(BIOS_DEBUG, "%s done\n", step->name);
+}
+
 
 /*
  * 13.11 mss_draminit_training: Dram training
@@ -738,93 +823,8 @@ void istep_13_11(void)
 
 				dump_cal_errors(mcs_i, mca_i);
 
-				/* Write leveling */
-				wr_level_pre(mcs_i, mca_i, rp, ranks_present);
-				ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_WR_LEVEL,
-				                wr_level_time());
-				/*
-				 * First pass returns errors for CLK16 and CLK22 for first DP16
-				 * and CLK18 and CLK20 for second DP16. Second pass is able to
-				 * level those properly.
-				 */
-				/* TODO: add a helper function for all steps */
-				if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0) {
-					dump_cal_errors(mcs_i, mca_i);
-					printk(BIOS_DEBUG, "First attempt returned error, "
-					       "repeating write leveling\n");
-					/*
-					 * All registers except FIR reset to 0 when next calibration
-					 * step is started, but if we try to reset FIR when other
-					 * registers are non-0, error bit in FIR immediately gets
-					 * set again.
-					 */
-					clear_initial_cal_errors(mcs_i, mca_i);
-					ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_WR_LEVEL,
-									wr_level_time());
-					if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0)
-						die("Write leveling failed twice, aborting\n");
-				}
-				wr_level_post(mcs_i, mca_i, rp, ranks_present);
-
-				dump_cal_errors(mcs_i, mca_i);
-
-
-				/* Initial Pattern Write */
-				/*
-				 * Patterns were specified in IOM0.DDRPHY_SEQ_RD_WR_DATA{0,1}_P0
-				 * in 13.8.
-				 */
-				ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_INITIAL_PAT_WR,
-				                initial_pat_wr_time());
-
-				dump_cal_errors(mcs_i, mca_i);
-
-
-				/* DQS alignment */
-				/*
-				 * FIXME: during this step CCS goes crazy: first command gets
-				 * written in the place of the last one, minus GOTO_CMD field,
-				 * which is zeroed. This results in infinite loop and timeout.
-				 * DDRPHY_PC_INIT_CAL_STATUS is 0x0000000000000688 - meaning
-				 * there was an overflow of refresh pending counter, but whether
-				 * it is a cause or a result of CCS error is beyond my current
-				 * knowledge.
-				 */
-				ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_DQS_ALIGN,
-				                dqs_align_time());
-				if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0) {
-					dump_cal_errors(mcs_i, mca_i);
-					printk(BIOS_DEBUG, "First attempt returned error, "
-					       "repeating DQS alignment\n");
-
-					clear_initial_cal_errors(mcs_i, mca_i);
-					ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_DQS_ALIGN,
-					                dqs_align_time());
-					if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0) {
-						dump_cal_errors(mcs_i, mca_i);
-						die("DQS alignment failed twice, aborting\n");
-					}
-				}
-				/* Post-workaround does not apply to DD2.* */
-
-				dump_cal_errors(mcs_i, mca_i);
-
-				printk(BIOS_EMERG, "DQS alignment completed\n");
-
-				/*
-				 * When there are no workarounds, in theory we can chain steps:
-				ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_INITIAL_PAT_WR | CAL_DQS_ALIGN,
-				                initial_pat_wr_time() + dqs_align_time());
-				 *
-				 * However, focus on making them work first...
-				 */
-
-				/* Alignment of the internal SysClk to the Read clock */
-				rdclk_align_pre(mcs_i, mca_i);
-				ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, CAL_RDCLK_ALIGN,
-				                rdclk_align_time());
-				rdclk_align_post(mcs_i, mca_i, rp);
-				// TBD
+				for (int i = 0; i < ARRAY_SIZE(steps); i++)
+					dispatch_step(&steps[i], mcs_i, mca_i, rp, ranks_present);
 			}
 		}
 	}

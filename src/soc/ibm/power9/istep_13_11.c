@@ -364,7 +364,7 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
 	//ccs_execute(id, mca_i);
 }
 
-static uint64_t wr_level_time(void)
+static uint64_t wr_level_time(mca_data_t *mca)
 {
 	/*
 	 * "Note: the following equation is taken from the PHY workbook - leaving
@@ -510,7 +510,7 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 	//ccs_execute(id, mca_i);
 }
 
-static uint64_t initial_pat_wr_time(void)
+static uint64_t initial_pat_wr_time(mca_data_t *mca)
 {
 	/*
 	 * "Not sure how long this should take, so we're gonna use 1 to make sure we
@@ -554,7 +554,7 @@ static uint64_t initial_pat_wr_time(void)
 	return ns_to_nck(10 * 1000);
 }
 
-static uint64_t dqs_align_time(void)
+static uint64_t dqs_align_time(mca_data_t *mca)
 {
 	/*
 	 * "This step runs for approximately 6 x 600 x 4 DRAM clocks per rank pair."
@@ -583,7 +583,7 @@ static void rdclk_align_pre(int mcs_i, int mca_i, int rp,
 	mca_and_or(id, mca_i, 0x8000C0170701103F, ~PPC_BITMASK(52, 53), 0);
 }
 
-static uint64_t rdclk_align_time(void)
+static uint64_t rdclk_align_time(mca_data_t *mca)
 {
 	/*
 	 * "This step runs for approximately 24 x ((1024/COARSE_CAL_STEP_SIZE +
@@ -679,7 +679,7 @@ static void read_ctr_pre(int mcs_i, int mca_i, int rp,
 	mca_and_or(id, mca_i, 0x8000C80A0701103F, ~PPC_BIT(61), PPC_BIT(60));
 }
 
-static uint64_t read_ctr_time(void)
+static uint64_t read_ctr_time(mca_data_t *mca)
 {
 	/*
 	 * "This step runs for approximately 6 x (512/COARSE_CAL_STEP_SIZE + 4 x
@@ -719,6 +719,166 @@ static void read_ctr_post(int mcs_i, int mca_i, int rp,
 	}
 }
 
+/* Assume 18 DRAMs per DIMM ((8 data + 1 ECC) * 2), even for x8 */
+static uint16_t write_delays[18];
+
+static void write_ctr_pre(int mcs_i, int mca_i, int rp,
+                          enum rank_selection ranks_present)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+	int mirrored = mca->dimm[rp/2].spd[136] & 1;
+	mrs_cmd_t mrs;
+	enum rank_selection rank = 1 << rp;
+	int vpd_idx = (mca->dimm[rp/2].mranks - 1) * 2 + (!!mca->dimm[(rp/2) ^ 1].present);
+	int dram;
+
+	/*
+	 * Write VREF Latching
+	 *
+	 * This may be considered a separate step, but with current dispatch logic
+	 * we cannot add a step that isn't accelerated by PHY hardware so do this as
+	 * a part of pre-workaround of next step.
+	 *
+	 * "JEDEC has a 3 step latching process for WR VREF
+	 *  1) enter into VREFDQ training mode, with the desired range value is XXXXXX
+	 *  2) set the VREFDQ value while in training mode - this actually latches the value
+	 *  3) exit VREFDQ training mode and go into normal operation mode"
+	 *
+	 * Each step is followed by a 150ns (tVREFDQE or tVREFDQX) stream of DES
+	 * commands before next one.
+	 */
+	uint64_t tVREFDQ_E_X = ns_to_nck(150);
+
+	/* Fill MRS command once, then flip VREFDQ training mode bit as needed */
+	mrs = ddr4_get_mr6(mca->nccd_l,
+                       DDR4_MR6_VREFDQ_TRAINING_ENABLE,
+                       (ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx] & 0x40) >> 6,
+                       ATTR_MSS_VPD_MT_VREF_DRAM_WR[vpd_idx] & 0x3F);
+
+	/* Step 1 - enter VREFDQ training mode */
+	ccs_add_mrs(id, mrs, rank, mirrored, tVREFDQ_E_X);
+
+	/* Step 2 - latch VREFDQ value, command exactly the same as step 1 */
+	ccs_add_mrs(id, mrs, rank, mirrored, tVREFDQ_E_X);
+
+	/* Step 3 - exit VREFDQ training mode */
+	mrs ^= 1 << 7;		// A7 - VREFDQ Training Enable
+	ccs_add_mrs(id, mrs, rank, mirrored, tVREFDQ_E_X);
+
+	/* TODO: maybe drop it, next ccs_phy_hw_step() would call it anyway. */
+	//ccs_execute(id, mca_i);
+
+	/* End of VREF Latching, beginning of Write Centering pre-workaround */
+
+	/*
+	 * DRAM is one IC on the DIMM module, there are 9 DRAMs for x8 and 18 for
+	 * x4 devices (DQ bits/width) per rank. Before centering the delays are the
+	 * same for each DQ of a given DRAM, meaning it is enough to save just one
+	 * value per DRAM. For simplicity, save every 4th DQ even on x8 devices.
+	 */
+	for (dram = 0; dram < ARRAY_SIZE(write_delays); dram++) {
+		int dp = (dram * 4) / 16;
+		int val_idx = (dram * 4) % 16;
+		const uint64_t rp_mul =  0x0000010000000000;
+		const uint64_t val_mul = 0x0000000100000000;
+		/* IOM0.DDRPHY_DP16_WR_DELAY_VALUE_<val_idx>_RP<rp>_REG_P0_<dp> */
+		uint64_t val = dp_mca_read(id, dp, mca_i, 0x800000380701103F +
+		                           rp * rp_mul + val_idx * val_mul);
+		write_delays[dram] = (uint16_t) val;
+	}
+}
+
+static uint64_t write_ctr_time(mca_data_t *mca)
+{
+	/*
+	 * "1000 + (NUM_VALID_SAMPLES * (FW_WR_RD + FW_RD_WR + 16) *
+	 * (1024/(SMALL_STEP +1) + 128/(BIG_STEP +1)) + 2 * (BIG_STEP+1)/(SMALL_STEP+1)) * 24
+	 * DRAM clocks per rank pair."
+	 *
+	 * Yes, write leveling values are used for write centering, this is not an
+	 * error (or is it? CONFIG0 says BIG_STEP = 1)
+	 * WR_LVL_BIG_STEP = 7
+	 * WR_LVL_SMALL_STEP = 0
+	 * WR_LVL_NUM_VALID_SAMPLES = 5
+	 *
+	 * "Per PHY spec, defaults to 0. Would need an attribute to drive differently"
+	 * FW_WR_RD = 0
+	 *
+	 * "From the PHY spec. Also confirmed with S. Wyatt as this is different
+	 * than the calculation used in Centaur. This field must be set to the
+	 * larger of the two values in number of memory clock cycles.
+	 * FW_RD_WR = max(tWTR + 11, AL + tRTP + 3)
+	 * Note from J. Bialas: The difference between tWTR_S and tWTR_L is that _S
+	 * is write to read time to different bank groups, while _L is to the same.
+	 * The algorithm should be switching bank groups so tWTR_S can be used"
+	 *
+	 * tRTP = 7.5ns (this comes from DDR4 spec)
+	 * AL = 0
+	 *
+	 * For tWTR_S = 2.5ns this should give ~2.9-4.5ms, + 2 * 3 * 150ns from MRS
+	 * commands in pre-workaround (insignificantly small compared to total time).
+	 * In tests this is ~7.5ms, with 10.5ms timeout, mostly because the equation
+	 * below probably doesn't account for REF commands. This leaves rather small
+	 * margin for error.
+	 */
+	const int WR_LVL_BIG_STEP = 7;
+	const int WR_LVL_SMALL_STEP = 0;
+	const int WR_LVL_NUM_VALID_SAMPLES = 5;
+	int FW_RD_WR = MAX(mca->nwtr_s + 11, ps_to_nck(7500) + 3);
+	return 1000 + (WR_LVL_NUM_VALID_SAMPLES * (FW_RD_WR + 16) *
+	               (1024/(WR_LVL_SMALL_STEP + 1) + 128/(WR_LVL_BIG_STEP + 1)) +
+	               2 * (WR_LVL_BIG_STEP + 1)/(WR_LVL_SMALL_STEP + 1)) * 24;
+}
+
+static void write_ctr_post(int mcs_i, int mca_i, int rp,
+                           enum rank_selection ranks_present)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	int dp;
+	uint64_t bad_bits = 0;
+
+	/*
+	 * TODO: this just tests if workaround is needed, real workaround is not
+	 * yet implemented.
+	 */
+	for (dp = 0; dp < 5; dp++) {
+		bad_bits |= dp_mca_read(id, dp, mca_i, 0x8000007C0701103F);
+	}
+
+	if (!bad_bits)
+		return;
+
+	/*
+	 * Full workaround consists of:
+	 * - enabling PDA mode (per DRAM addressing) on MC
+	 * - reverting initial WR Vref values in MC
+	 * - reverting WR delays saved in pre-workaround
+	 * - clearing bad DQ bits (because this calibration step will be re-run)
+	 * - entering PDA mode on DRAMs
+	 * - reverting initial VREFDQ values in bad DRAM(s)
+	 * - exiting PDA mode on DRAMs (this point has its own workaround)
+	 * - exiting PDA mode on MC
+	 * - finding a median of RD Vref DAC values and disabling all DQ bits except
+	 *   one known to be good (close to median)
+	 * - rerunning main calibration, exit on success
+	 * - if it still fails, re-enable all DQ bits (bad and good), set 1D only
+	 *   write centering and rerun again
+	 */
+	die("Write Centering post-workaround required, but not yet implemented\n");
+}
+
+static uint64_t coarse_wr_rd_time(mca_data_t *mca)
+{
+	/*
+	 * "40 cycles for WR, 32 for RD"
+	 *
+	 * With number of cycles set to just the above this step times out, add time
+	 * for 15 REF commands as set in dqs_align_turn_on_refresh().
+	 */
+	return 40 + 32 + 15 * 512;
+}
+
 typedef void (phy_workaround_t) (int mcs_i, int mca_i, int rp,
                                  enum rank_selection ranks_present);
 
@@ -726,7 +886,7 @@ struct phy_step {
 	const char *name;
 	enum cal_config cfg;
 	phy_workaround_t *pre;
-	uint64_t (*time)(void);
+	uint64_t (*time)(mca_data_t *mca);
 	phy_workaround_t *post;
 };
 
@@ -766,12 +926,23 @@ static struct phy_step steps[] = {
 		read_ctr_time,
 		read_ctr_post,
 	},
+	{
+		"Write Centering",
+		CAL_WRITE_CTR,
+		write_ctr_pre,
+		write_ctr_time,
+		write_ctr_post,
+	},
+	{
+		"Coarse write/read",
+		CAL_INITIAL_COARSE_WR | CAL_COARSE_RD,
+		NULL,
+		coarse_wr_rd_time,
+		NULL,
+	},
 
 /*
-	CAL_WRITE_CTR
-	CAL_INITIAL_COARSE_WR
-	CAL_COARSE_RD
-	// Following are in istep 13.12
+	// Following are performed in istep 13.12
 	CAL_CUSTOM_RD
 	CAL_CUSTOM_WR
 */
@@ -780,12 +951,13 @@ static struct phy_step steps[] = {
 static void dispatch_step(struct phy_step *step, int mcs_i, int mca_i, int rp,
                           enum rank_selection ranks_present)
 {
+	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
 	printk(BIOS_DEBUG, "%s starting\n", step->name);
 
 	if (step->pre)
 		step->pre(mcs_i, mca_i, rp, ranks_present);
 
-	ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, step->cfg, step->time());
+	ccs_phy_hw_step(mcs_ids[mcs_i], mca_i, rp, step->cfg, step->time(mca));
 
 	if (step->post)
 		step->post(mcs_i, mca_i, rp, ranks_present);

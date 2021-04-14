@@ -169,7 +169,7 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	poll_timeout = nck_to_us((total_cycles * 7 * 4) / 8);
 
 	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(1));
-	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
+	time = wait_us(1, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
 
 	/* Is it always as described below (CKE, CSN) or is it a copy of last instr? */
 	/* Final DES - CCS does not wait for IDLES for the last command before

@@ -4,10 +4,6 @@
 #include <cpu/power/istep_14_1.h>
 #include <cpu/power/scom.h>
 
-
-uint64_t iv_parameters; // class program
-uint64_t iv_address; // class address
-
 void StateMachine::doMaintCommand(WorkFlowProperties & i_wfp)
 {
     uint64_t workItem;
@@ -56,27 +52,14 @@ fapi2::ReturnCode sf_read(
 {
     using ET = mss::mcbistMCTraits<MC>;
     fapi2::ReturnCode l_rc;
-    constraints<mss::mc_type::NIMBUS> l_const(
+    constraints<mss::mc_type::NIMBUS> l_constraints(
         i_stop,
         speed::LUDICROUS,
         end_boundary::STOP_AFTER_SLAVE_RANK,
         mss::mcbist::address(),
         mss::mcbist::address(TT::LARGEST_ADDRESS));
-    sf_read_operation<mss::mc_type::NIMBUS> l_read_op(i_target, l_cons);
+    sf_read_operation<mss::mc_type::NIMBUS> l_read_op(i_target, l_constraints);
     return l_read_op.execute();
-}
-
-template< mss::mc_type MC, fapi2::TargetType T, typename TT >
-inline void operation<MC, T, TT>::base_init()
-{
-    memdiags::stop<MC>(iv_target);
-    iv_pattern = iv_const.iv_pattern;
-    iv_program.change_end_boundary(iv_const.iv_end_boundary);
-    iv_thresholds = iv_const.iv_stop;
-    iv_parameters.insertFromRight<TT::MIN_CMD_GAP, TT::MIN_CMD_GAP_LEN>(0);
-    iv_parameters.writeBit<TT::MIN_GAP_TIMEBASE>(mss::OFF);
-    iv_program.select_ports(0xF);
-    iv_async = mss::ON;
 }
 
 inline void select_ports(const uint64_t i_ports)
@@ -108,46 +91,6 @@ inline void change_end_boundary(const end_boundary i_end)
 inline uint64_t get_port()
 {
     return iv_address & 0xC000000000000000;
-}
-
-template< mss::mc_type MC, fapi2::TargetType T, typename TT >
-inline fapi2::ReturnCode operation<MC, T, TT>::single_port_init()
-{
-    using ET = mcbistMCTraits<MC>;
-    const uint64_t l_relative_port_number = iv_const.iv_start_address.get_port();
-    const uint64_t l_dimm_number = iv_const.iv_start_address.get_dimm();
-
-    mss::mcbist::subtest_t<MC> l_subtest = iv_subtest;
-    l_subtest.enable_port(l_relative_port_number);
-    l_subtest.enable_dimm(l_dimm_number);
-    iv_program.iv_subtests.push_back(l_subtest);
-    if (iv_const.iv_end_address == TT::LARGEST_ADDRESS)
-    {
-        iv_const.iv_start_address.template get_range<mss::mcbist::address::DIMM>(iv_const.iv_end_address);
-    }
-    mss::mcbist::config_address_range0<MC>(iv_target, iv_const.iv_start_address, iv_const.iv_end_address);
-    base_init();
-}
-
-template<>
-fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_addr()
-{
-    using TT = mcbistTraits<>;
-
-    mss::mcbist::address l_end_of_start_port;
-    mss::mcbist::address l_end_of_complete_port(TT::LARGEST_ADDRESS);
-    mss::mcbist::address l_start_of_end_port;
-
-    // The last address in the start port is the start address thru the "DIMM range" (all addresses left on this DIMM)
-    iv_const.iv_start_address.get_range<mss::mcbist::address::DIMM>(l_end_of_start_port);
-
-    // The first address in the end port is the 0th address of the 0th DIMM on said port.
-    l_start_of_end_port.set_port(iv_const.iv_end_address.get_port());
-
-    // We know we have three address configs: start address -> end of DIMM, 0 -> end of DIMM and 0 -> end address.
-    config_address_range<DEFAULT_MC_TYPE>(iv_target, iv_const.iv_start_address, l_end_of_start_port, 0);
-    config_address_range<DEFAULT_MC_TYPE>(iv_target, mss::mcbist::address(), l_end_of_complete_port, 1);
-    config_address_range<DEFAULT_MC_TYPE>(iv_target, l_start_of_end_port, iv_const.iv_end_address, 2);
 }
 
 template<mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = mcbistTraits<MC, T>>
@@ -214,8 +157,8 @@ const mss::states is_broadcast_capable(const fapi2::Target<fapi2::TARGET_TYPE_MC
     // If BC mode is disabled in the MRW, then it's disabled here
     uint8_t l_bc_mode_enable = 0;
     uint8_t l_bc_mode_force_off = 0;
-    FAPI_TRY(mss::override_memdiags_bcmode(l_bc_mode_enable));
-    FAPI_TRY(mss::mrw_force_bcmode_off(l_bc_mode_force_off));
+    mss::override_memdiags_bcmode(l_bc_mode_enable);
+    mss::mrw_force_bcmode_off(l_bc_mode_force_off);
 
     // Check if the chip and attributes allows memdiags/mcbist to be in broadcast mode
     const auto l_state = is_broadcast_capable_helper(l_bc_mode_force_off, l_bc_mode_enable, l_chip_bc_capable);
@@ -286,293 +229,285 @@ const mss::states is_broadcast_capable(const std::vector<fapi2::Target<fapi2::TA
     return mss::states::NO;
 }
 
-template<>
-void operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
-{
-    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
-    const uint64_t l_portdimm_start_address = iv_const.iv_start_address.get_port_dimm();
-    const uint64_t l_portdimm_end_address = iv_const.iv_end_address.get_port_dimm();
-
-    if (l_portdimm_start_address == l_portdimm_end_address)
-    {
-        single_port_init();
-        return;
-    }
-    if(mss::mcbist::is_broadcast_capable(iv_target) == mss::YES)
-    {
-        broadcast_mode_start_address_check(iv_target, l_portdimm_start_address, l_dimms);
-    }
-    multi_port_addr();
-    configure_multiport_subtests(l_dimms);
-    std::sort(iv_program.iv_subtests.begin(), iv_program.iv_subtests.end(),
-              [](const decltype(iv_subtest)& a, const decltype(iv_subtest)& b) -> bool
-    {
-        const uint64_t l_a_portdimm = (a.get_port() << 1) | a.get_dimm();
-        const uint64_t l_b_portdimm = (b.get_port() << 1) | b.get_dimm();
-        return l_a_portdimm < l_b_portdimm;
-    });
-    base_init();
-    mss::mcbist::configure_broadcast_mode(iv_target, iv_program);
-}
-
-template< mss::mc_type MC, fapi2::TargetType T, typename TT >
-inline void operation<MC, T, TT>::multi_port_init()
-{
-    const auto l_port = mss::find_targets<TT::PORT_TYPE>(iv_target);
-    // Make sure we have ports, if we don't then exit out
-    if(l_port.size() == 0)
-    {
-        // Cronus can have no ports under an MCBIST, FW deconfigures by association
-        return;
-    }
-    // Let's assume we are going to send out all subtest unless we are in broadcast mode,
-    // where we only send up to 2 subtests under an port ( 1 for each DIMM) which is why no const
-    auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
-    if(l_dimms.size() == 0)
-    {
-        // Cronus can have no DIMMS under an MCBIST, FW deconfigures by association
-        return;
-    }
-    multi_port_init_internal();
-}
-
-template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
+template<
+    mss::mc_type MC = mss::mc_type::NIMBUS,
+    fapi2::TargetType T = mss::mcbistMCTraits<mss::mc_type::NIMBUS>::MC_TARGET_TYPE,
+    typename TT = mcbistTraits<mss::mc_type::NIMBUS, mss::mcbistMCTraits<mss::mc_type::NIMBUS>>
+>
 struct sf_read_operation : public operation<mss::mc_type::NIMBUS>
 {
+
     sf_read_operation( const fapi2::Target<T>& i_target,
-                       const constraints<mss::mc_type::NIMBUS> i_const):
-    operation<mss::mc_type::NIMBUS>(i_target, mss::mcbist::read_subtest<MC>(), i_const)
+                       const constraints<MC> i_const,
+                       fapi2::ReturnCode& o_rc):
+        operation<MC>(i_target, mss::mcbist::read_subtest<MC>(), i_const)
     {
-        this->multi_port_init();
+        o_rc = this->multi_port_init();
     }
+
+    sf_read_operation() = delete;
 };
 
-void mss_get_address_range(
-    const fapi2::Target<fapi2::TARGET_TYPE_MBA>& i_target,
-    uint64_t& o_end_addr)
+template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T = mss::mcbistMCTraits<MC>::MC_TARGET_TYPE , typename TT = mcbistTraits<MC, T> >
+struct constraints
 {
-    static const uint8_t memConfigType[9][4][2] =
+    ///
+    /// @brief constraints default constructor
+    ///
+    constraints():
+        iv_stop(),
+        iv_pattern(NO_PATTERN),
+        iv_end_boundary(NONE),
+        iv_speed(LUDICROUS),
+        iv_start_address(0),
+        iv_end_address(TT::LARGEST_ADDRESS)
     {
-
-        // Refer to Centaur Workbook: 5.2 Master and Slave Rank Usage
-        //
-        //       SUBTYPE_A                    SUBTYPE_B                    SUBTYPE_C                    SUBTYPE_D
-        //
-        //SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1   SLOT_0_ONLY   SLOT_0_AND_1
-        //
-        //master slave  master slave   master slave  master slave   master slave  master slave   master slave  master slave
-        //
-        {{0xff,         0xff},         {0xff,        0xff},         {0xff,         0xff},       {0xff,         0xff}},  // TYPE_0
-        {{0x00,         0x40},         {0x10,        0x50},         {0x30,         0x70},       {0xff,         0xff}},  // TYPE_1
-        {{0x01,         0x41},         {0x03,        0x43},         {0x07,         0x47},       {0xff,         0xff}},  // TYPE_2
-        {{0x11,         0x51},         {0x13,        0x53},         {0x17,         0x57},       {0xff,         0xff}},  // TYPE_3
-        {{0x31,         0x71},         {0x33,        0x73},         {0x37,         0x77},       {0xff,         0xff}},  // TYPE_4
-        {{0x00,         0x40},         {0x10,        0x50},         {0x30,         0x70},       {0xff,         0xff}},  // TYPE_5
-        {{0x01,         0x41},         {0x03,        0x43},         {0x07,         0x47},       {0xff,         0xff}},  // TYPE_6
-        {{0x11,         0x51},         {0x13,        0x53},         {0x17,         0x57},       {0xff,         0xff}},  // TYPE_7
-        {{0x31,         0x71},         {0x33,        0x73},         {0x37,         0x77},       {0xff,         0xff}}   // TYPE_8
-    };
-
-    uint64_t l_data;
-    mss_memconfig::MemOrg l_row;
-    mss_memconfig::MemOrg l_col;
-    mss_memconfig::MemOrg l_bank;
-    uint8_t l_dramWidth = 0;
-    uint8_t l_mbaPosition = 0;
-    uint8_t l_dram_gen = 0;
-
-    const auto l_targetCentaur = i_target.getParent<fapi2::TARGET_TYPE_MEMBUF_CHIP>();
-    FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, i_target,  l_mbaPosition);
-    FAPI_ATTR_GET(fapi2::ATTR_CEN_EFF_DRAM_WIDTH, i_target,  l_dramWidth);
-    FAPI_ATTR_GET(fapi2::ATTR_CEN_EFF_DRAM_GEN, i_target,  l_dram_gen);
-    fapi2::getScom(l_targetCentaur, mss_mbaxcr[l_mbaPosition], l_data);
-
-    uint32_t l_dramSize = (uint32_t)((l_data & 0x300000000000000) >> 24);
-
-    if((l_dramWidth == mss_memconfig::X8) &&
-       (l_dramSize == mss_memconfig::GBIT_2) &&
-       (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_15;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_2) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_14;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_2) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_15;
-        l_col =   mss_memconfig::COL_11;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_2) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_15;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_4) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_4) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_15;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_4) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_11;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_4) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_8) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_11;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_8) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_8) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR3))
-    {
-        l_row =   mss_memconfig::ROW_16;
-        l_col =   mss_memconfig::COL_12;
-        l_bank =  mss_memconfig::BANK_3;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_8) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_17;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X4) &&
-              (l_dramSize == mss_memconfig::GBIT_16) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   ss_memconfig::ROW_17;
-        l_col =   ss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
-    } else if((l_dramWidth == mss_memconfig::X8) &&
-              (l_dramSize == mss_memconfig::GBIT_16) &&
-              (l_dram_gen == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4))
-    {
-        l_row =   mss_memconfig::ROW_17;
-        l_col =   mss_memconfig::COL_10;
-        l_bank =  mss_memconfig::BANK_4;
     }
 
-    uint8_t l_configType = (l_data & 0xF0) >> 4;
-    uint8_t l_configSubType = (l_data & 0xC) >> 2;
-    uint8_t l_slotConfig = l_data & 0x1;
-
-    uint8_t l_end_master_rank = (memConfigType[l_configType][l_configSubType][l_slotConfig] & 0xf0) >> 4;
-    uint8_t l_end_slave_rank = memConfigType[l_configType][l_configSubType][l_slotConfig] & 0x0f;
-
-    o_end_addr =
-        (l_end_master_rank & 0xF) << 60
-      | (l_end_slave_rank & 0x7) << 57
-      | ((uint32_t)l_bank & 0xF) << 53
-      | ((uint32_t)l_row & 0x1FFFF) << 36
-      | ((uint32_t)l_col & 0xFFF) << 24;
-
-    if(l_dramWidth == mss_memconfig::X4
-    && l_dramSize  == mss_memconfig::GBIT_16
-    && l_dram_gen  == fapi2::ENUM_ATTR_CEN_EFF_DRAM_GEN_DDR4)
+    constraints( const uint64_t i_pattern ):
+        constraints()
     {
-        o_end_addr.writeBit<CEN_MBA_MBMEAQ_CMD_ROW17>(l_row18);
+        iv_pattern = i_pattern;
     }
+
+    constraints(const stop_conditions<MC, T, TT>& i_stop,
+                const speed i_speed,
+                const end_boundary i_end_boundary,
+                const address& i_start_address,
+                const address& i_end_address = mcbist::address(TT::LARGEST_ADDRESS)):
+        constraints(i_stop, i_start_address)
+    {
+        iv_end_boundary = i_end_boundary;
+        iv_speed = i_speed;
+        iv_end_address = i_end_address;
+        iv_stop = i_stop;
+        iv_start_address = i_start_address;
+
+        if (iv_start_address > iv_end_address)
+        {
+            iv_end_address = iv_start_address;
+        }
+    }
+
+    stop_conditions<MC, T, TT> iv_stop;
+    uint64_t iv_pattern;
+    end_boundary iv_end_boundary;
+    speed iv_speed;
+    mcbist::address iv_start_address;
+    mcbist::address iv_end_address;
+};
+
+template<mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = portTraits<mss::mc_type::NIMBUS>>
+inline fapi2::ReturnCode configure_wrq(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
+{
+    for(const auto& l_port : mss::find_targets<TT::PORT_TYPE>(i_target))
+    {
+        fapi2::buffer<uint64_t> l_data;
+        mss::getScom(l_port, portTraits<mss::mc_type::NIMBUS>::WRQ_REG, l_data);
+        l_data.writeBit<portTraits<mss::mc_type::NIMBUS>::WRQ_FIFO_MODE>(1);
+        mss::putScom(l_port, portTraits<mss::mc_type::NIMBUS>::WRQ_REG, l_data);
+    }
+}
+
+template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = portTraits<mss::mc_type::NIMBUS>>
+inline fapi2::ReturnCode configure_rrq(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
+{
+    for(const auto& l_port : mss::find_targets<TT::PORT_TYPE>(i_target))
+    {
+        fapi2::buffer<uint64_t> l_data;
+        mss::getScom(l_port, portTraits<mss::mc_type::NIMBUS>::RRQ_REG, l_data);
+        l_data.writeBit<portTraits<mss::mc_type::NIMBUS>::RRQ_FIFO_MODE>(1);
+        mss::putScom(l_port, portTraits<mss::mc_type::NIMBUS>::RRQ_REG, l_data);
+    }
+}
+
+template<
+    mss::mc_type MC = mss::mc_type::NIMBUS,
+    fapi2::TargetType T = fapi2::Target<fapi2::TARGET_TYPE_MCBIST>,
+    typename TT = mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>
+>
+inline void load_fifo_mode(
+    const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>& i_target,
+    const mcbist::program<mss::mc_type::NIMBUS>& i_program )
+{
+    const auto l_subtest_it = std::find_if(
+        i_program.iv_subtests.begin(),
+        i_program.iv_subtests.end(),
+        [](
+            const mss::mcbist::subtest_t<mss::mc_type::NIMBUS,
+            fapi2::Target<fapi2::TARGET_TYPE_MCBIST>,
+            mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>& i_rhs) -> bool
+        {
+            return i_rhs.fifo_mode_required();
+        });
+
+    if(l_subtest_it == i_program.iv_subtests.end())
+    {
+        return;
+    }
+
+    configure_wrq(i_target);
+    configure_rrq(i_target);
 }
 
 class operation
 {
-    inline fapi2::ReturnCode execute(const fapi2::Target<T>& i_target)
+    uint64_t iv_parameters; // class program
+    uint64_t iv_address; // class address
+    constraints<mss::mc_type::NIMBUS> iv_const;
+
+    inline fapi2::ReturnCode execute(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
     {
-        return mss::mcbist::execute(i_target, iv_program);
+        fapi2::buffer<uint64_t> l_status;
+        poll_parameters l_poll_parameters;
+
+        fapi2::current_err = fapi2::FAPI2_RC_SUCCESS;
+
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBSTATQ_REG, 0);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::SRERR0_REG, 0);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::SRERR1_REG, 0);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::FIRQ_REG, 0);
+
+        load_fifo_mode<mss::mc_type::NIMBUS>(i_target, ic_program);
+
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAGRAQ_REG, iv_program.iv_addr_gen);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBPARMQ_REG, iv_program.iv_parameters);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR0A0Q_REG, iv_program.iv_addr_map0);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR1A0Q_REG, iv_program.iv_addr_map1);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR2A0Q_REG, iv_program.iv_addr_map2);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR3A0Q_REG, iv_program.iv_addr_map3);
+
+        load_config<mss::mc_type::NIMBUS>(i_target, iv_program);
+
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, iv_program.iv_control);
+
+        load_data_config<mss::mc_type::NIMBUS>(i_target, iv_program);
+
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::THRESHOLD_REG, iv_program);
+
+        load_mcbmr<mss::mc_type::NIMBUS>(i_target, iv_program);
+
+        fapi2::buffer<uint64_t> l_buf;
+        fapi2::getScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, l_buf);
+        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, l_buf.setBit<TT::MCBIST_START>());
+
+        mss::poll(
+            i_target,
+            TT::STATQ_REG,
+            l_poll_parameters,
+            [&l_status](const size_t poll_remaining, const fapi2::buffer<uint64_t>& stat_reg) -> bool
+            {
+                l_status = stat_reg;
+                return (l_status.getBit<mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBIST_IN_PROGRESS>() == true)
+                    || (l_status.getBit<TT::MCBIST_DONE>() == true);
+            });
+        return mcbist::poll(i_target, iv_program);
     }
-}
 
-template <mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = mcbistTraits<MC, T>, typename ET = mcbistMCTraits<MC>>
-fapi2::ReturnCode execute(const fapi2::Target<T>& i_target, const program<MC>& i_program)
-{
-    fapi2::buffer<uint64_t> l_status;
-    poll_parameters l_poll_parameters;
-
-    // Init the fapi2 return code
-    fapi2::current_err = fapi2::FAPI2_RC_SUCCESS;
-
-    // ----
-    // clear_errors(i_target);
-    fapi2::putScom(i_target, TT::MCBSTATQ_REG, 0);
-    fapi2::putScom(i_target, TT::SRERR0_REG, 0);
-    fapi2::putScom(i_target, TT::SRERR1_REG, 0);
-    fapi2::putScom(i_target, TT::FIRQ_REG, 0);
-    // ----
-    load_fifo_mode<MC>(i_target, i_program);
-    load_addr_gen<MC>(i_target, i_program);
-    // ----
-    // load_mcbparm<MC>(i_target, i_program);
-    fapi2::putScom(i_target, TT::MCBPARMQ_REG, i_program.iv_parameters);
-    // ----
-    // load_mcbamr(i_target, i_program);
-    fapi2::putScom(i_target, TT::MCBAMR0A0Q_REG, i_program.iv_addr_map0);
-    fapi2::putScom(i_target, TT::MCBAMR1A0Q_REG, i_program.iv_addr_map1);
-    fapi2::putScom(i_target, TT::MCBAMR2A0Q_REG, i_program.iv_addr_map2);
-    fapi2::putScom(i_target, TT::MCBAMR3A0Q_REG, i_program.iv_addr_map3);
-    // ----
-    load_config<MC>( i_target, i_program);
-    // ----
-    // load_control<MC>(i_target, i_program);
-    fapi2::putScom(i_target, TT::CNTLQ_REG, i_program.iv_control);
-    // ----
-    load_data_config<MC>( i_target, i_program);
-    // ----
-    // load_thresholds<MC>(i_target, i_program);
-    fapi2::putScom(i_target, TT::THRESHOLD_REG, i_program);
-    // ----
-    load_mcbmr<MC>(i_target, i_program);
-    // ----
-    // start_stop<MC>(i_target, mss::START);
-    fapi2::buffer<uint64_t> l_buf;
-    fapi2::getScom(i_target, TT::CNTLQ_REG, l_buf);
-    fapi2::putScom(i_target, TT::CNTLQ_REG, l_buf.setBit<TT::MCBIST_START>());
-    // ----
-    // Verify that the in-progress bit has been set, so we know we started
-    // Don't use the program's poll as it could be a very long time. Use the default poll.
-    mss::poll(i_target, TT::STATQ_REG, l_poll_parameters,
-                              [&l_status](const size_t poll_remaining, const fapi2::buffer<uint64_t>& stat_reg) -> bool
+    template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+    inline void operation<MC, T, TT>::single_port_init()
     {
-        l_status = stat_reg;
-        return (l_status.getBit<TT::MCBIST_IN_PROGRESS>() == true) || (l_status.getBit<TT::MCBIST_DONE>() == true);
-    });
-    return mcbist::poll(i_target, i_program);
+        using ET = mcbistMCTraits<MC>;
+        const uint64_t l_relative_port_number = iv_const.iv_start_address.get_port();
+        const uint64_t l_dimm_number = iv_const.iv_start_address.get_dimm();
+
+        mss::mcbist::subtest_t<MC> l_subtest = iv_subtest;
+        l_subtest.enable_port(l_relative_port_number);
+        l_subtest.enable_dimm(l_dimm_number);
+        iv_program.iv_subtests.push_back(l_subtest);
+        if (iv_const.iv_end_address == TT::LARGEST_ADDRESS)
+        {
+            iv_const.iv_start_address.template get_range<mss::mcbist::address::DIMM>(iv_const.iv_end_address);
+        }
+        mss::mcbist::config_address_range0<MC>(iv_target, iv_const.iv_start_address, iv_const.iv_end_address);
+        base_init();
+    }
+
+    template<>
+    fapi2::ReturnCode operation<DEFAULT_MC_TYPE>::multi_port_addr()
+    {
+        using TT = mcbistTraits<>;
+
+        mss::mcbist::address l_end_of_start_port;
+        mss::mcbist::address l_end_of_complete_port(TT::LARGEST_ADDRESS);
+        mss::mcbist::address l_start_of_end_port;
+
+        // The last address in the start port is the start address thru the "DIMM range" (all addresses left on this DIMM)
+        iv_const.iv_start_address.get_range<mss::mcbist::address::DIMM>(l_end_of_start_port);
+
+        // The first address in the end port is the 0th address of the 0th DIMM on said port.
+        l_start_of_end_port.set_port(iv_const.iv_end_address.get_port());
+
+        // We know we have three address configs: start address -> end of DIMM, 0 -> end of DIMM and 0 -> end address.
+        config_address_range<DEFAULT_MC_TYPE>(iv_target, iv_const.iv_start_address, l_end_of_start_port, 0);
+        config_address_range<DEFAULT_MC_TYPE>(iv_target, mss::mcbist::address(), l_end_of_complete_port, 1);
+        config_address_range<DEFAULT_MC_TYPE>(iv_target, l_start_of_end_port, iv_const.iv_end_address, 2);
+    }
+
+    template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+    inline void operation<MC, T, TT>::base_init()
+    {
+        memdiags::stop<MC>(iv_target);
+        iv_pattern = iv_const.iv_pattern;
+        iv_program.change_end_boundary(iv_const.iv_end_boundary);
+        iv_thresholds = iv_const.iv_stop;
+        iv_parameters.insertFromRight<TT::MIN_CMD_GAP, TT::MIN_CMD_GAP_LEN>(0);
+        iv_parameters.writeBit<TT::MIN_GAP_TIMEBASE>(mss::OFF);
+        iv_program.select_ports(0xF);
+        iv_async = mss::ON;
+    }
+
+    template<>
+    void operation<DEFAULT_MC_TYPE>::multi_port_init_internal()
+    {
+        auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
+        const uint64_t l_portdimm_start_address = iv_const.iv_start_address.get_port_dimm();
+        const uint64_t l_portdimm_end_address = iv_const.iv_end_address.get_port_dimm();
+
+        if (l_portdimm_start_address == l_portdimm_end_address)
+        {
+            single_port_init();
+            return;
+        }
+        if(mss::mcbist::is_broadcast_capable(iv_target) == mss::YES)
+        {
+            broadcast_mode_start_address_check(iv_target, l_portdimm_start_address, l_dimms);
+        }
+        multi_port_addr();
+        configure_multiport_subtests(l_dimms);
+        std::sort(
+            iv_program.iv_subtests.begin(),
+            iv_program.iv_subtests.end(),
+            [](const decltype(iv_subtest)& a, const decltype(iv_subtest)& b) -> bool
+            {
+                const uint64_t l_a_portdimm = (a.get_port() << 1) | a.get_dimm();
+                const uint64_t l_b_portdimm = (b.get_port() << 1) | b.get_dimm();
+                return l_a_portdimm < l_b_portdimm;
+            });
+        base_init();
+        mss::mcbist::configure_broadcast_mode(iv_target, iv_program);
+    }
+
+    template< mss::mc_type MC, fapi2::TargetType T, typename TT >
+    inline void operation<MC, T, TT>::multi_port_init()
+    {
+        const auto l_port = mss::find_targets<TT::PORT_TYPE>(iv_target);
+        // Make sure we have ports, if we don't then exit out
+        if(l_port.size() == 0)
+        {
+            // Cronus can have no ports under an MCBIST, FW deconfigures by association
+            return;
+        }
+        // Let's assume we are going to send out all subtest unless we are in broadcast mode,
+        // where we only send up to 2 subtests under an port ( 1 for each DIMM) which is why no const
+        auto l_dimms = mss::find_targets<fapi2::TARGET_TYPE_DIMM>(iv_target);
+        if(l_dimms.size() == 0)
+        {
+            // Cronus can have no DIMMS under an MCBIST, FW deconfigures by association
+            return;
+        }
+        multi_port_init_internal();
+    }
 }
 
 template<>
@@ -771,15 +706,10 @@ fapi2::ReturnCode restore_repairs( const fapi2::Target<fapi2::TARGET_TYPE_MCA>& 
         restore_repairs_helper<mss::mc_type::NIMBUS, fapi2::TARGET_TYPE_DIMM>(
                        l_dimm, l_bad_bits, o_repairs_applied, o_repairs_exceeded);
     }
-
-fapi_try_exit:
-    return fapi2::current_err;
 }
 
-template<TARGETING::TYPE T /* TYPE_MCA */>
-uint32_t restoreDramRepairs(TargetHandle_t i_trgt)
+void restoreDramRepairs(TargetHandle_t i_trgt)
 {
-    bool calloutMade = false;
     // Will need the chip and system objects initialized for several parts
     // of this function and sub-functions.
     if(false == g_initialized || nullptr == systemPtr)
@@ -788,20 +718,16 @@ uint32_t restoreDramRepairs(TargetHandle_t i_trgt)
     }
 
     std::vector<MemRank> ranks;
-    getMasterRanks<TYPE_MCA>(i_trgt, ranks);
+    getMasterRanks<fapi2::TARGET_TYPE_MCA>(i_trgt, ranks);
 
     uint8_t rankMask = 0, dimmMask = 0;
-    mssRestoreDramRepairs<TYPE_MCA>(i_trgt, rankMask, dimmMask);
+    mssRestoreDramRepairs<fapi2::TARGET_TYPE_MCA>(i_trgt, rankMask, dimmMask);
 
     // Callout DIMMs with too many bad bits and not enough repairs available
-    if(RDR::processBadDimms<TYPE_MCA>(i_trgt, dimmMask))
-        calloutMade = true;
+    RDR::processBadDimms<fapi2::TARGET_TYPE_MCA>(i_trgt, dimmMask)
 
     // Check repaired ranks for RAS policy violations.
-    if(RDR::processRepairedRanks<TYPE_MCA>(i_trgt, rankMask))
-        calloutMade = true;
-
-    return calloutMade ? FAIL : SUCCESS;
+    RDR::processRepairedRanks<fapi2::TARGET_TYPE_MCA>(i_trgt, rankMask)
 }
 
 void Util::__Util_ThreadPool_Impl::ThreadPoolImpl::insert(void* i_workItem)
@@ -816,11 +742,6 @@ void sync_cond_signal(sync_cond_t * i_cond)
     futex_wake(&(i_cond->sequence), 1);
 }
 
-ALWAYS_INLINE inline TARGETING::TargetHandle_t getTarget(WorkFlowProperties & i_wfp)
-{
-    return i_wfp.assoc->first;
-}
-
 bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
 {
     switch(*i_wfp->workItem)
@@ -828,10 +749,10 @@ bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
         case RESTORE_DRAM_REPAIRS:
             // Get the connected MCAs.
             TargetHandleList mcaList;
-            getChildAffinityTargets(mcaList, getTarget(*i_wfp), CLASS_UNIT, TYPE_MCA);
+            getChildAffinityTargets(mcaList, i_wfp.assoc->first, CLASS_UNIT, fapi2::TARGET_TYPE_MCA);
             for (auto & mca : mcaList)
             {
-                PRDF::restoreDramRepairs<TYPE_MCA>(mca);
+                PRDF::restoreDramRepairs<fapi2::TARGET_TYPE_MCA>(mca);
             }
             break;
         case START_PATTERN_0:

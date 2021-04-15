@@ -969,6 +969,224 @@ static void dispatch_step(struct phy_step *step, int mcs_i, int mca_i, int rp,
 	printk(BIOS_DEBUG, "%s done\n", step->name);
 }
 
+/* Can we modify dump_cal_errors() for this? */
+static int process_initial_cal_errors(int mcs_i, int mca_i)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	int dp;
+	uint64_t err = 0;
+
+	for (dp = 0; dp < 5; dp++) {
+		/* IOM0.DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_n */
+		err |= dp_mca_read(id, dp, mca_i, 0x8000007A0701103F);
+
+		/* Both ERROR_MASK registers were set to 0xFFFF in 13.8 */
+		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR0_P0_n &
+		 * ~IOM0.DDRPHY_DP16_WR_VREF_ERROR_MASK0_P0_n */
+		err |= (dp_mca_read(id, dp, mca_i, 0x800000AE0701103F) &
+		       ~dp_mca_read(id, dp, mca_i, 0x800000FB0701103F));
+
+		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR1_P0_n &
+		 * ~IOM0.DDRPHY_DP16_WR_VREF_ERROR_MASK1_P0_n */
+		err |= (dp_mca_read(id, dp, mca_i, 0x800000AF0701103F) &
+		       ~dp_mca_read(id, dp, mca_i, 0x800000FA0701103F));
+	}
+
+	/* IOM0.DDRPHY_PC_INIT_CAL_ERROR_P0 */
+	err |= mca_read(id, mca_i, 0x8000C0180701103F);
+
+	if (err)
+		return 1;
+
+	/*
+	 * err == 0 at this point can be either a true success or an error of the
+	 * calibration engine itself. Check for latter.
+	 */
+	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG */
+	if (read_scom_for_chiplet(id, 0x07011000) & PPC_BIT(52)) {
+		/*
+		 * "Clear the PHY FIR ERROR 2 bit so we don't keep failing training and
+		 * training advance on this port"
+		 */
+		scom_and_or_for_chiplet(id, 0x07011000, ~PPC_BIT(52), 0);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+static int can_recover(int mcs_i, int mca_i, int rp)
+{
+	/*
+	 * We can recover from 1 nibble + 1 bit (or less) bad lines. Anything more
+	 * and DIMM is beyond repair. A bad nibble is a nibble with any number of
+	 * bad bits. If a DQS is bad (either true or complementary signal, or both),
+	 * a whole nibble (for x4 DRAMs) or byte (x8) is considered bad.
+	 *
+	 * Check both DQS and DQ registers in one loop, iterating over DP16s - that
+	 * way it is easier to sum bad bits/nibbles.
+	 *
+	 * See reset_clock_enable() in 13.8 or an array in process_bad_bits() in
+	 * phy/dp16.C for mapping of DQS bits in x8 and mask bits from this register
+	 * accordingly.
+	 */
+	int bad_nibbles = 0;
+	int bad_bits = 0;
+	int dp;
+	chiplet_id_t id = mcs_ids[mcs_i];
+	uint8_t width = mem_data.mcs[mcs_i].mca[mca_i].dimm[rp/2].width;
+
+	for (dp = 0; dp < 5; dp++) {
+		uint64_t reg;
+		uint64_t nibbles_mask = 0xFFFF;
+		/*
+		IOM0.DDRPHY_DP16_DQS_BIT_DISABLE_RP<rp>_P0_{0-4}:
+		  // This calculates how many (DQS_t | DQS_c) failed - if _t and _c failed for the same DQS, we count it as one.
+		  bad_dqs = bit_count((reg & 0x5500) | ((reg & 0xaa00) >> 1))
+		  if x8 && bad_dqs > 0: DIMM is FUBAR, return error
+		  total_bad_nibbles += bad_dqs
+		  // If we are already past max possible number, we might as well return now
+		  if total_bad_nibbles > 1: DIMM is FUBAR, return error
+		*/
+		const uint64_t rp_mul = 0x0000010000000000;
+		reg = dp_mca_read(id, dp, mca_i, 0x8000007D0701103F + rp * rp_mul);
+
+		/* One bad DQS on x8 is already bad 2 nibbles, can't recover from that. */
+		if (reg != 0 && width == WIDTH_x8)
+			return 0;
+
+		if (reg & (PPC_BIT(48) | PPC_BIT(49)))		// quad 0
+			nibbles_mask &= 0x0FFF;
+		if (reg & (PPC_BIT(50) | PPC_BIT(51)))		// quad 1
+			nibbles_mask &= 0xF0FF;
+		if (reg & (PPC_BIT(52) | PPC_BIT(53)))		// quad 2
+			nibbles_mask &= 0xFF0F;
+		if (reg & (PPC_BIT(54) | PPC_BIT(55)))		// quad 3
+			nibbles_mask &= 0xFFF0;
+
+		bad_nibbles += __builtin_popcount((reg & 0x5500) | ((reg & 0xAA00) >> 1));
+
+		/*
+		IOM0.DDRPHY_DP16_DQ_BIT_DISABLE_RP<rp>_P0_{0-4}:
+		  nibble = {[48-51], [52-55], [56-59], [60-63]}
+		  for each nibble:
+			if bit_count(nibble) >  1: total_bad_nibbles += 1
+			if bit_count(nibble) == 1: total_bad_bits += 1
+			// We can't have two bad bits, one of them must be treated as bad nibble
+			if total_bad_bits    >  1: total_bad_nibbles += 1, total_bad_bits -= 1
+			if total_bad_nibbles >  1: DIMM is FUBAR, return error?
+		*/
+		reg = dp_mca_read(id, dp, mca_i, 0x8000007C0701103F + rp * rp_mul);
+
+		/* Exclude nibbles corresponding to a bad DQS, it won't get worse. */
+		reg &= nibbles_mask;
+
+		/* Add bits in nibbles */
+		reg = ((reg & 0x1111) >> 0) + ((reg & 0x2222) >> 1) +
+		      ((reg & 0x4444) >> 2) + ((reg & 0x8888) >> 3);
+
+		/*
+		 * We only care if there is 0, 1 or more bad bits. Collapse bits [0-2]
+		 * of each nibble into [2], leave [3] unmodified (PPC bit numbering).
+		 */
+		reg = ((reg & 0x1111) >> 0) | ((reg & 0x2222) >> 0) |
+		      ((reg & 0x4444) >> 1) | ((reg & 0x8888) >> 2);
+
+		/* Clear bit [3] if [2] is also set. */
+		reg = (reg & 0x2222) | ((reg & 0x1111) & ~((reg & 0x2222) >> 1));
+
+		/* Now [2] is bad nibble, [3] is exactly one bad bit */
+		bad_bits += __builtin_popcount(reg & 0x1111);
+		if (bad_bits > 1) {
+			bad_nibbles += bad_bits - 1;
+			bad_bits = 1;
+		}
+		bad_nibbles += __builtin_popcount(reg & 0x2222);
+
+		/* No need to test for bad single bits, condition above handles it */
+		if (bad_nibbles > 1)
+			return 0;
+	}
+
+	/*
+	 * Now, if total_bad_nibbles is less than 2 we know that total_bad_bits is
+	 * also less than 2, and DIMM is good enough for recovery.
+	 */
+	printk(BIOS_WARNING, "MCS%d MCA%d DIMM%d has %d bad nibble(s) and %d bad "
+	       "bit(s), but can be recovered\n", mcs_i, mca_i, rp/2, bad_nibbles,
+	       bad_bits);
+	return 1;
+}
+
+static void fir_unmask(int mcs_i)
+{
+	chiplet_id_t id = mcs_ids[mcs_i];
+	int mca_i;
+
+	/*
+	 * "All mcbist attentions are already special attentions"
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRACT0
+		  [1] MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT =  0
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRACT1
+		  [1] MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT =  1
+	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRMASK
+		  [1] MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT =  0     //recoverable_error (0,1,0)
+	 */
+	scom_and_or_for_chiplet(id, 0x07012306,
+	                        ~PPC_BIT(1),
+	                        0);
+	scom_and_or_for_chiplet(id, 0x07012307,
+	                        ~PPC_BIT(1),
+	                        PPC_BIT(1));
+	scom_and_or_for_chiplet(id, 0x07012303,
+	                        ~PPC_BIT(1),
+	                        0);
+
+	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+		if (!mem_data.mcs[mcs_i].mca[mca_i].functional)
+			continue;
+
+		/*
+		MC01.PORT0.SRQ.MBACALFIR_ACTION0              // 0x07010906
+			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        0
+			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    0
+			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  0
+			[9]   MBACALFIR_MASK_WRQ_RRQ_HANG_ERR =       0
+			[11]  MBACALFIR_MASK_ASYNC_IF_ERROR =         0
+			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0
+			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   0
+		MC01.PORT0.SRQ.MBACALFIR_ACTION1              // 0x07010907
+			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        1
+			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    1
+			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  1
+			[9]   MBACALFIR_MASK_WRQ_RRQ_HANG_ERR =       1
+			[11]  MBACALFIR_MASK_ASYNC_IF_ERROR =         0
+			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0
+			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   1
+		MC01.PORT0.SRQ.MBACALFIR_MASK                 // 0x07010903
+			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        0   // recoverable_error (0,1,0)
+			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    0   // recoverable_error (0,1,0)
+			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  0   // recoverable_error (0,1,0)
+			[9]   MBACALFIR_MASK_WRQ_RRQ_HANG_ERR =       0   // recoverable_error (0,1,0)
+			[11]  MBACALFIR_MASK_ASYNC_IF_ERROR =         0   // checkstop (0,0,0)
+			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0   // checkstop (0,0,0)
+			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   0   // recoverable_error (0,1,0)
+		*/
+		mca_and_or(id, mca_i, 0x07010906,
+		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
+		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
+		           0);
+		mca_and_or(id, mca_i, 0x07010907,
+		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
+		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
+		           PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) | PPC_BIT(14));
+		mca_and_or(id, mca_i, 0x07010903,
+		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
+		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
+		           0);
+	}
+}
 
 /*
  * 13.11 mss_draminit_training: Dram training
@@ -1080,8 +1298,29 @@ void istep_13_11(void)
 
 				for (int i = 0; i < ARRAY_SIZE(steps); i++)
 					dispatch_step(&steps[i], mcs_i, mca_i, rp, ranks_present);
+
+				if (process_initial_cal_errors(mcs_i, mca_i) &&
+				    !can_recover(mcs_i, mca_i, rp)) {
+					die("Calibration failed for MCS%d MCA%d DIMM%d\n", mcs_i, mca_i, rp/2);
+				}
 			}
+
+			/* Does not apply to DD2.* */
+			//workarounds::dp16::modify_calibration_results();
 		}
+
+		/*
+		 * Hostboot just logs the errors reported earlier (i.e. more than
+		 * 1 nibble + 1 bit of bad DQ lines) "and lets PRD deconfigure based off
+		 * of ATTR_BAD_DQ_BITMAP".
+		 * TODO: what is PRD? How does it "deconfigure" and what? Quick glance
+		 * at the code: it may have something to do with undocumented 0x0501082X
+		 * SCOM registers, there are usr/diag/prdf/*//*.rule files with
+		 * yacc/flex files to compile them. It also may be using 'attn'
+		 * instruction.
+		 */
+
+		fir_unmask(mcs_i);
 	}
 
 	printk(BIOS_EMERG, "ending istep 13.11\n");

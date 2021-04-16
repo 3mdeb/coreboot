@@ -11,13 +11,17 @@
  * are not documented, except for occasional name of a constant written to it.
  * They also access registers at addresses for chiplet ID = 5 (Nest west), even
  * though the specified target is MCA. It is not clear if MCA offset has to be
- * added to SCOM address for those registers or not. Undocumented registers are
- * marked with (?) in the comments.
+ * added to SCOM address for those registers or not. Even logs from debug
+ * version of Hostboot don't list the addresses explicitly, but by comparing
+ * them with values read with 'pdbg' it seems that they use a stride of 0x10.
+ *
+ * Undocumented registers are marked with (?) in the comments.
  */
 static void p9n_mca_scom(int mcs_i, int mca_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
 	mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+	const int mca_mul = 0x10;
 	/*
 	 * Mixing rules:
 	 * - rank configurations are the same for both DIMMs
@@ -35,7 +39,8 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	/* P9N2_MCS_PORT02_MCPERF0 (?)
 	    [22-27] = 0x20                              // AMO_LIMIT
 	*/
-	scom_and_or_for_chiplet(nest, 0x05010823, ~PPC_BITMASK(22,27), PPC_SHIFT(0x20, 27));
+	scom_and_or_for_chiplet(nest, 0x05010823 + mca_i * mca_mul,
+	                        ~PPC_BITMASK(22,27), PPC_SHIFT(0x20, 27));
 
 	/* P9N2_MCS_PORT02_MCPERF2 (?)
 	    [0-2]   = 1                                 // PF_DROP_VALUE0
@@ -67,7 +72,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	uint64_t en_ref_blk = (log_ranks <= 1 || log_ranks > 8) ? 0 :
 	                      (n_dimms == 1 && mranks == 4 && log_ranks == 8) ? 0 : 3;
 
-	scom_and_or_for_chiplet(nest, 0x05010824,
+	scom_and_or_for_chiplet(nest, 0x05010824 + mca_i * mca_mul,
 	                        /* and */
 	                        ~(PPC_BITMASK(0,11) | PPC_BITMASK(13,18) | PPC_BITMASK(28,31)
 	                          | PPC_BITMASK(28,31) | PPC_BITMASK(50,54) | PPC_BIT(61)),
@@ -82,7 +87,8 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [4-28]  = 0x19fffff                         // WRTO_AMO_COLLISION_RULES
 	    [29-31] = 1                                 // AMO_SIZE_SELECT, 128B_RW_64B_DATA
 	*/
-	scom_and_or_for_chiplet(nest, 0x05010825, ~(PPC_BIT(1) | PPC_BITMASK(4,31)),
+	scom_and_or_for_chiplet(nest, 0x05010825 + mca_i * mca_mul,
+	                        ~(PPC_BIT(1) | PPC_BITMASK(4,31)),
 	                        PPC_SHIFT(0x19FFFFF, 28) | PPC_SHIFT(1, 31));
 
 	/* P9N2_MCS_PORT02_MCEPSQ (?)
@@ -95,7 +101,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [32-39] = (ATTR_PROC_EPS_READ_CYCLES_T2 + 6) / 4        // REMOTE_NODAL_EPSILON
 	    [40-47] = (ATTR_PROC_EPS_READ_CYCLES_T2 + 6) / 4        // VECTOR_GROUP_EPSILON
 	 */
-	scom_and_or_for_chiplet(nest, 0x05010826, ~PPC_BITMASK(0,47),
+	scom_and_or_for_chiplet(nest, 0x05010826 + mca_i * mca_mul, ~PPC_BITMASK(0,47),
 	                        PPC_SHIFT(1, 7) /* FIXME: fill the rest with non-hardcoded values*/
 	                        | PPC_SHIFT(4, 15) | PPC_SHIFT(4, 23) | PPC_SHIFT(4, 31)
 	                        | PPC_SHIFT(0x19, 39) | PPC_SHIFT(0x19, 47));
@@ -109,7 +115,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [14-23] = 51                                // BUSY_COUNTER_THRESHOLD1
 	    [24-33] = 64                                // BUSY_COUNTER_THRESHOLD2
 	*/
-	scom_and_or_for_chiplet(nest, 0x05010827, ~PPC_BITMASK(0,33),
+	scom_and_or_for_chiplet(nest, 0x05010827 + mca_i * mca_mul, ~PPC_BITMASK(0,33),
 	                        PPC_BIT(0) | PPC_SHIFT(1, 3) | PPC_SHIFT(38, 13)
 	                        | PPC_SHIFT(51, 23) | PPC_SHIFT(64, 33));
 
@@ -120,7 +126,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	    [44] = 1                                    // DISABLE_WRTO_IG
 	    [45] = 1                                    // AMO_LIMIT_SEL
 	*/
-	scom_and_or_for_chiplet(nest, 0x0501082B, ~PPC_BIT(43),
+	scom_and_or_for_chiplet(nest, 0x0501082B + mca_i * mca_mul, ~PPC_BIT(43),
 	                        PPC_BIT(31) | PPC_BIT(41) | PPC_BIT(44) | PPC_BIT(45));
 
 	/* MC01.PORT0.SRQ.MBA_DSM0Q =

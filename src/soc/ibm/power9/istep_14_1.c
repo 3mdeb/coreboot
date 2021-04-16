@@ -264,7 +264,7 @@ struct constraints
     {
     }
 
-    constraints( const uint64_t i_pattern ):
+    constraints(const uint64_t i_pattern):
         constraints()
     {
         iv_pattern = i_pattern;
@@ -297,27 +297,19 @@ struct constraints
     mcbist::address iv_end_address;
 };
 
-template<mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = portTraits<mss::mc_type::NIMBUS>>
 inline fapi2::ReturnCode configure_wrq(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
 {
-    for(const auto& l_port : mss::find_targets<TT::PORT_TYPE>(i_target))
+    for(const auto& l_port : mss::find_targets<portTraits<mss::mc_type::NIMBUS>>::PORT_TYPE>(i_target))
     {
-        fapi2::buffer<uint64_t> l_data;
-        mss::getScom(l_port, portTraits<mss::mc_type::NIMBUS>::WRQ_REG, l_data);
-        l_data.writeBit<portTraits<mss::mc_type::NIMBUS>::WRQ_FIFO_MODE>(1);
-        mss::putScom(l_port, portTraits<mss::mc_type::NIMBUS>::WRQ_REG, l_data);
+        scom_or_for_chiplet(l_port, WRQ0Q_REG, WRQ_FIFO_MODE)
     }
 }
 
-template< mss::mc_type MC = DEFAULT_MC_TYPE, fapi2::TargetType T, typename TT = portTraits<mss::mc_type::NIMBUS>>
 inline fapi2::ReturnCode configure_rrq(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
 {
-    for(const auto& l_port : mss::find_targets<TT::PORT_TYPE>(i_target))
+    for(const auto& l_port : mss::find_targets<portTraits<mss::mc_type::NIMBUS>>::PORT_TYPE>(i_target))
     {
-        fapi2::buffer<uint64_t> l_data;
-        mss::getScom(l_port, portTraits<mss::mc_type::NIMBUS>::RRQ_REG, l_data);
-        l_data.writeBit<portTraits<mss::mc_type::NIMBUS>::RRQ_FIFO_MODE>(1);
-        mss::putScom(l_port, portTraits<mss::mc_type::NIMBUS>::RRQ_REG, l_data);
+        scom_or_for_chiplet(l_port, RRQ0Q_REG, RRQ_FIFO_MODE)
     }
 }
 
@@ -356,6 +348,84 @@ class operation
     uint64_t iv_address; // class address
     constraints<mss::mc_type::NIMBUS> iv_const;
 
+    template<
+        mss::mc_type MC = mss::mc_type::NIMBUS,
+        fapi2::TargetType T = fapi2::Target<fapi2::TARGET_TYPE_MCBIST>,
+        typename TT = mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>
+    inline fapi2::ReturnCode load_config(const fapi2::Target<T>& i_target, const mcbist::program<MC>& i_program)
+    {
+        uint64_t l_config = i_program.iv_config;
+        l_config &= ~(CFG_ENABLE_HOST_ATTN | CFG_ENABLE_SPEC_ATTN);
+        fapi2::putScom(i_target, CFGQ_REG, l_config);
+    }
+
+    template<
+        mss::mc_type MC = mss::mc_type::NIMBUS,
+        fapi2::TargetType fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>,
+        typename TT = mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>>
+    inline fapi2::ReturnCode load_data_config( const fapi2::Target<fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>& i_target, const mcbist::program<mss::mc_type::NIMBUS>& i_program )
+    {
+        // First load the data pattern registers
+        mss::mcbist::load_pattern(i_target, i_program.iv_pattern);
+
+        // Load the 24b random data pattern seeds registers
+        mss::mcbist::load_random24b_seeds(i_target, i_program.iv_random24_data_seed,
+                i_program.iv_random24_seed_map);
+
+        // Load the maint data pattern into the Maint entry in the RMW buffer
+        // TK Might want to only load the RMW buffer if maint commands are present in the program
+        // The load takes 33 Putscoms to load 16 64B registers, might slow down mcbist programs that
+        // don't need the RMW buffer maint entry loaded
+        mss::mcbist::load_maint_pattern(i_target, i_program.iv_pattern);
+
+        fapi2::putScom(i_target, DATA_ROTATE_CNFG_REG, i_program.iv_data_rotate_cnfg);
+        fapi2::putScom(i_target, DATA_ROTATE_SEED_REG, i_program.iv_data_rotate_seed);
+    }
+
+    template<
+        mss::mc_type MC = mss::mc_type::NIMBUS,
+        fapi2::TargetType fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>,
+        typename TT = mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>>
+    void load_mcbmr(
+        const fapi2::Target<fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>>& i_target,
+        const mcbist::program<mss::mc_type::NIMBUS>& i_program)
+    {
+        if (0 == i_program.iv_subtests.size())
+        {
+            return;
+        }
+
+        std::vector<uint64_t> l_memory_register_buffers = {0,0,0,0,0,0,0,0};
+        ssize_t l_bin = -1;
+        size_t l_register_shift = 0;
+        const uint64_t l_done_bit = PPC_BIT(13);
+        const auto l_program_size = i_program.iv_subtests.size();
+
+        // Distribute the program over the 8 MCBIST subtest registers
+        // We need the index, so increment thru i_program.iv_subtests.size()
+        for (size_t l_index = 0; l_index < l_program_size; ++l_index)
+        {
+            l_bin = (l_index % 4) == 0 ? l_bin+1 : l_bin;
+            l_register_shift = (l_index % 4) * 16;
+            l_memory_register_buffers[l_bin] |=
+                (uint64_t(i_program.iv_subtests[l_index].iv_mcbmr) << 48) >> l_register_shift;
+        }
+
+        // l_bin and l_register_shift are the values for the last subtest we'll tell the MCBIST about.
+        // We need to set that subtest's done-bit so the MCBIST knows it's the end of the line
+        l_memory_register_buffers[l_bin] |= l_done_bit >> l_register_shift;
+
+        const uint64_t l_memory_registers[] =
+        {
+            MCBMR0_REG, MCBMR1_REG, MCBMR2_REG, MCBMR3_REG,
+            MCBMR4_REG, MCBMR5_REG, MCBMR6_REG, MCBMR7_REG,
+        };
+        for (auto l_index = 0; l_index <= l_bin; ++l_index)
+        {
+            fapi2::putScom(i_target, l_memory_registers[l_index], l_memory_register_buffers[l_index]);
+        }
+    }
+
     inline fapi2::ReturnCode execute(const fapi2::Target<const fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>& i_target)
     {
         fapi2::buffer<uint64_t> l_status;
@@ -363,33 +433,29 @@ class operation
 
         fapi2::current_err = fapi2::FAPI2_RC_SUCCESS;
 
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBSTATQ_REG, 0);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::SRERR0_REG, 0);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::SRERR1_REG, 0);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::FIRQ_REG, 0);
+        fapi2::putScom(i_target, MCBSTATQ_REG, 0);
+        fapi2::putScom(i_target, SRERR0_REG, 0);
+        fapi2::putScom(i_target, SRERR1_REG, 0);
+        fapi2::putScom(i_target, FIRQ_REG, 0);
 
         load_fifo_mode<mss::mc_type::NIMBUS>(i_target, ic_program);
 
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAGRAQ_REG, iv_program.iv_addr_gen);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBPARMQ_REG, iv_program.iv_parameters);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR0A0Q_REG, iv_program.iv_addr_map0);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR1A0Q_REG, iv_program.iv_addr_map1);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR2A0Q_REG, iv_program.iv_addr_map2);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBAMR3A0Q_REG, iv_program.iv_addr_map3);
+        fapi2::putScom(i_target, MCBAGRAQ_REG, iv_program.iv_addr_gen);
+        fapi2::putScom(i_target, MCBPARMQ_REG, iv_program.iv_parameters);
+        fapi2::putScom(i_target, MCBAMR0A0Q_REG, iv_program.iv_addr_map0);
+        fapi2::putScom(i_target, MCBAMR1A0Q_REG, iv_program.iv_addr_map1);
+        fapi2::putScom(i_target, MCBAMR2A0Q_REG, iv_program.iv_addr_map2);
+        fapi2::putScom(i_target, MCBAMR3A0Q_REG, iv_program.iv_addr_map3);
 
         load_config<mss::mc_type::NIMBUS>(i_target, iv_program);
 
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, iv_program.iv_control);
-
+        fapi2::putScom(i_target, CNTLQ_REG, iv_program.iv_control);
         load_data_config<mss::mc_type::NIMBUS>(i_target, iv_program);
-
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::THRESHOLD_REG, iv_program);
+        fapi2::putScom(i_target, THRESHOLD_REG, iv_program);
 
         load_mcbmr<mss::mc_type::NIMBUS>(i_target, iv_program);
 
-        fapi2::buffer<uint64_t> l_buf;
-        fapi2::getScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, l_buf);
-        fapi2::putScom(i_target, mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::CNTLQ_REG, l_buf.setBit<TT::MCBIST_START>());
+        scom_or(CNTLQ_REG, MCBIST_START);
 
         mss::poll(
             i_target,
@@ -398,8 +464,7 @@ class operation
             [&l_status](const size_t poll_remaining, const fapi2::buffer<uint64_t>& stat_reg) -> bool
             {
                 l_status = stat_reg;
-                return (l_status.getBit<mcbistTraits<mss::mc_type::NIMBUS, fapi2::Target<fapi2::TARGET_TYPE_MCBIST>>::MCBIST_IN_PROGRESS>() == true)
-                    || (l_status.getBit<TT::MCBIST_DONE>() == true);
+                return (l_status & PPC_BIT(0)) || (l_status & PPC_BIT(1));
             });
         return mcbist::poll(i_target, iv_program);
     }
@@ -510,19 +575,104 @@ class operation
     }
 }
 
-template<>
-uint32_t mssRestoreDramRepairs<TYPE_MCA>( TargetHandle_t i_target,
-                                          uint8_t & o_repairedRankMask,
-                                          uint8_t & o_badDimmMask )
-{
-    errlHndl_t errl = NULL;
-    fapi2::buffer<uint8_t> tmpRepairedRankMask, tmpBadDimmMask;
-    restore_repairs(
-        fapi2::Target<fapi2::TARGET_TYPE_MCA>(i_target),
-        tmpRepairedRankMask, tmpBadDimmMask);
 
-    o_repairedRankMask = (uint8_t)tmpRepairedRankMask;
-    o_badDimmMask = (uint8_t)tmpBadDimmMask;
+template<>
+fapi2::ReturnCode ranks(
+    const fapi2::Target<TARGET_TYPE_DIMM>& i_target,
+    std::vector<uint64_t>& o_ranks)
+{
+    uint8_t l_ranks = 0;
+    eff_num_master_ranks_per_dimm(i_target, l_ranks);
+    o_ranks = single_dimm_ranks[mss::index(i_target)][l_ranks];
+}
+
+template<>
+fapi2::ReturnCode ranks(
+    const fapi2::Target<TARGET_TYPE_MCA>& i_target,
+    std::vector<uint64_t>& o_ranks)
+{
+    std::vector<uint64_t> l_ranks;
+    o_ranks.clear();
+
+    for(const auto& dimm : mss::find_targets<fapi2::TARGET_TYPE_DIMM>(i_target))
+    {
+        ranks(dimm, l_ranks);
+        o_ranks.insert(o_ranks.end(), l_ranks.begin(), l_ranks.end());
+    }
+    std::sort(o_ranks.begin(), o_ranks.end());
+}
+
+template<mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType T = fapi2::TARGET_TYPE_DIMM>
+void restore_repairs_helper(
+    const fapi2::Target<fapi2::TARGET_TYPE_DIMM>& i_target,
+    const uint8_t i_bad_bits[4][10],
+    fapi2::buffer<uint8_t>& io_repairs_applied,
+    fapi2::buffer<uint8_t>& io_repairs_exceeded)
+{
+    std::vector<uint64_t> l_ranks;
+    const auto l_dimm_idx = index(i_target);
+    uint8_t l_dimm_spare[MAX_RANK_PER_DIMM_ATTR] = {0};
+
+    // gets spare availability
+    mss::dimm_spare<mss::mc_type::NIMBUS>(i_target, l_dimm_spare);
+    // gets all of the ranks to loop over
+    mss::rank::ranks(i_target, l_rank);
+
+    // loop through ranks
+    for (const auto l_rank : l_ranks)
+    {
+        const auto l_rank_idx = index(l_rank);
+        // don't process last byte if it's a non-existent spare. Non-existent spare bits are marked 'bad' in the attribute
+        const auto l_total_bytes = get_total_bytes<mss::mc_type::NIMBUS>(l_dimm_spare[l_rank]);
+        repair_state_machine<mss::mc_type::NIMBUS, fapi2::TARGET_TYPE_DIMM> l_machine;
+        for (uint64_t l_byte = 0; l_byte < l_total_bytes; ++l_byte)
+        {
+            for (size_t l_nibble = 0; l_nibble < 2; ++l_nibble)
+            {
+                const auto l_bad_dq_vector = mss::bad_dq_attr_to_vector(i_bad_bits[l_rank_idx][l_byte], l_nibble);
+
+                // apply repairs and update repair machine state
+                // if there are no bad bits (l_bad_dq_vector.size() == 0) no action is necessary
+                if(l_bad_dq_vector.size() == 1)
+                {
+                    // l_bad_dq_vector is per byte, so multiply up to get the bad dq's index
+                    const uint64_t l_dq = l_bad_dq_vector[0] + (l_byte * BITS_PER_BYTE);
+                    l_machine.one_bad_dq(i_target, l_rank, l_dq, io_repairs_applied, io_repairs_exceeded);
+                }
+                else if(l_bad_dq_vector.size() > 1)
+                {
+                    // l_bad_dq_vector is per byte, so multiply up to get the bad dq's index
+                    const uint64_t l_dq = l_bad_dq_vector[0] + (l_byte * BITS_PER_BYTE);
+                    l_machine.multiple_bad_dq(i_target, l_rank, l_dq, io_repairs_applied, io_repairs_exceeded);
+                }
+
+                // if repairs have been exceeded, we're done
+                if (io_repairs_exceeded.getBit(l_dimm_idx))
+                {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+template< mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType T = fapi2::Target<fapi2::TARGET_TYPE_MCA>>
+fapi2::ReturnCode restore_repairs(
+    const fapi2::Target<fapi2::TARGET_TYPE_MCA>& i_target,
+    fapi2::buffer<uint8_t>& io_repairs_applied,
+    fapi2::buffer<uint8_t>& io_repairs_exceeded)
+{
+    uint8_t l_bad_bits[BAD_BITS_RANKS][BAD_DQ_BYTE_COUNT] = {};
+
+    io_repairs_applied = 0;
+    io_repairs_exceeded = 0;
+
+    for (const auto& l_dimm : mss::find_targets<fapi2::TARGET_TYPE_DIMM>(i_target))
+    {
+        mss::get_bad_dq_bitmap<mss::mc_type::NIMBUS>(l_dimm, l_bad_bits);
+        restore_repairs_helper<mss::mc_type::NIMBUS, fapi2::TARGET_TYPE_DIMM>(
+            l_dimm, l_bad_bits, io_repairs_applied, io_repairs_exceeded);
+    }
 }
 
 inline void eff_dram_width(const fapi2::Target<fapi2::TARGET_TYPE_DIMM>& i_target, uint8_t& l_width)
@@ -557,7 +707,7 @@ void reset_dqs_disable(
         return;
     }
     // Due to plug rules check, we should be a x4 now, so let's reset some DQS bits
-    for(uint64_t l_nibble = 0; l_nibble < NIBBLES_PER_DP; ++l_nibble)
+    for(uint64_t l_nibble = 0; l_nibble < 4; ++l_nibble)
     {
         // If we have a whole nibble bad, set the bad DQS bits
         const auto DQ_START = 48 + (l_nibble * 4);
@@ -574,7 +724,9 @@ void reset_dqs_disable(
     mss::putScom(l_mca, i_reg, l_dqs_disable);
 }
 
-inline std::vector<uint64_t> bad_dq_attr_to_vector(const uint8_t i_bad_bits, const size_t i_nibble /*can only be 0 or 1*/)
+inline std::vector<uint64_t> bad_dq_attr_to_vector(
+    const uint8_t i_bad_bits,
+    const size_t i_nibble /*can only be 0 or 1*/)
 {
     std::vector<uint64_t> l_output;
     const fapi2::buffer<uint8_t> l_bit_buffer(i_bad_bits);
@@ -592,76 +744,18 @@ inline std::vector<uint64_t> bad_dq_attr_to_vector(const uint8_t i_bad_bits, con
 }
 
 template<>
-inline fapi2::ReturnCode dimm_spare< mss::mc_type::NIMBUS >(
+inline fapi2::ReturnCode dimm_spare<mss::mc_type::NIMBUS>(
     const fapi2::Target<fapi2::TARGET_TYPE_DIMM>& i_target,
-    uint8_t (&o_array)[mss::MAX_RANK_PER_DIMM_ATTR])
+    uint8_t (&o_array)[MAX_RANK_PER_DIMM_ATTR])
 {
-    uint8_t l_value[mss::MAX_RANK_PER_DIMM_ATTR] = {fapi2::ENUM_ATTR_MEM_EFF_DIMM_SPARE_NO_SPARE};
-    memcpy(o_array, &l_value, mss::MAX_RANK_PER_DIMM_ATTR);
-}
-
-template< mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType T>
-void restore_repairs_helper( const fapi2::Target<T>& i_target,
-        const uint8_t i_bad_bits[4][10],
-        fapi2::buffer<uint8_t>& io_repairs_applied,
-        fapi2::buffer<uint8_t>& io_repairs_exceeded)
-{
-    std::vector<uint64_t> l_ranks;
-    const auto l_dimm_idx = index(i_target);
-    uint8_t l_dimm_spare[MAX_RANK_PER_DIMM_ATTR] = {0};
-
-    // gets spare availability
-    mss::dimm_spare<mss::mc_type::NIMBUS>(i_target, l_dimm_spare);
-    // gets all of the ranks to loop over
-    mss::rank::ranks_on_dimm_helper<mss::mc_type::NIMBUS>(i_target, l_ranks);
-
-    // loop through ranks
-    for (const auto l_rank : l_ranks)
-    {
-        const auto l_rank_idx = index(l_rank);
-        // don't process last byte if it's a non-existent spare. Non-existent spare bits are marked 'bad' in the attribute
-        const auto l_total_bytes = get_total_bytes<mss::mc_type::NIMBUS>(l_dimm_spare[l_rank]);
-        repair_state_machine<mss::mc_type::NIMBUS, fapi2::TARGET_TYPE_DIMM> l_machine;
-        for (uint64_t l_byte = 0; l_byte < l_total_bytes; ++l_byte)
-        {
-            for (size_t l_nibble = 0; l_nibble < 2; ++l_nibble)
-            {
-                // don't process non-existent spare nibble because all non-existent spare bits are marked 'bad' in the attribute
-                if (skip_dne_spare_nibble<mss::mc_type::NIMBUS>(l_dimm_spare[l_rank], l_byte, l_nibble))
-                {
-                    continue;
-                }
-
-                const auto l_bad_dq_vector = mss::bad_dq_attr_to_vector(i_bad_bits[l_rank_idx][l_byte], l_nibble);
-
-                // apply repairs and update repair machine state
-                // if there are no bad bits (l_bad_dq_vector.size() == 0) no action is necessary
-                if (l_bad_dq_vector.size() == 1)
-                {
-                    // l_bad_dq_vector is per byte, so multiply up to get the bad dq's index
-                    const uint64_t l_dq = l_bad_dq_vector[0] + (l_byte * BITS_PER_BYTE);
-                    l_machine.one_bad_dq(i_target, l_rank, l_dq, io_repairs_applied, io_repairs_exceeded);
-                }
-                else if (l_bad_dq_vector.size() > 1)
-                {
-                    // l_bad_dq_vector is per byte, so multiply up to get the bad dq's index
-                    const uint64_t l_dq = l_bad_dq_vector[0] + (l_byte * BITS_PER_BYTE);
-                    l_machine.multiple_bad_dq(i_target, l_rank, l_dq, io_repairs_applied, io_repairs_exceeded);
-                }
-
-                // if repairs have been exceeded, we're done
-                if (io_repairs_exceeded.getBit(l_dimm_idx))
-                {
-                    return;
-                }
-            }
-        }
-    }
+    uint8_t l_value[MAX_RANK_PER_DIMM_ATTR] = {fapi2::ENUM_ATTR_MEM_EFF_DIMM_SPARE_NO_SPARE};
+    memcpy(o_array, &l_value, MAX_RANK_PER_DIMM_ATTR);
 }
 
 
-fapi2::ReturnCode reset_bad_bits_helper( const fapi2::Target<fapi2::TARGET_TYPE_DIMM>& i_target,
-        const uint8_t (&i_bad_dq)[BAD_BITS_RANKS][BAD_DQ_BYTE_COUNT])
+fapi2::ReturnCode reset_bad_bits_helper(
+    const fapi2::Target<fapi2::TARGET_TYPE_DIMM>& i_target,
+    const uint8_t (&i_bad_dq)[BAD_BITS_RANKS][BAD_DQ_BYTE_COUNT])
 {
     std::vector<uint64_t> l_ranks;
 
@@ -691,21 +785,30 @@ fapi2::ReturnCode reset_bad_bits_helper( const fapi2::Target<fapi2::TARGET_TYPE_
     }
 }
 
-template< mss::mc_type MC = mss::mc_type::NIMBUS, fapi2::TargetType fapi2::TARGET_TYPE_MCA>
-fapi2::ReturnCode restore_repairs( const fapi2::Target<fapi2::TARGET_TYPE_MCA>& i_target,
-                                   fapi2::buffer<uint8_t>& o_repairs_applied,
-                                   fapi2::buffer<uint8_t>& o_repairs_exceeded)
+void Util::__Util_ThreadPool_Impl::ThreadPoolImpl::insert(void* i_workItem)
 {
-    uint8_t l_bad_bits[4][10] = {};
-    o_repairs_applied = 0;
-    o_repairs_exceeded = 0;
+    iv_worklist.push_back(i_workItem);
+    sync_cond_signal(&iv_condvar);
+}
 
-    for (const auto& l_dimm : mss::find_targets<fapi2::TARGET_TYPE_DIMM>(i_target))
-    {
-        FAPI_ATTR_GET(fapi2::ATTR_BAD_DQ_BITMAP, i_target, l_bad_bits);
-        restore_repairs_helper<mss::mc_type::NIMBUS, fapi2::TARGET_TYPE_DIMM>(
-                       l_dimm, l_bad_bits, o_repairs_applied, o_repairs_exceeded);
-    }
+void sync_cond_signal(sync_cond_t* i_cond)
+{
+    __sync_fetch_and_add(&(i_cond->sequence),1);
+    futex_wake(&(i_cond->sequence), 1);
+}
+
+template<>
+uint32_t mssRestoreDramRepairs<fapi2::TARGET_TYPE_MCA>(
+    TargetHandle_t i_target,
+    uint8_t & o_repairedRankMask,
+    uint8_t & o_badDimmMask)
+{
+    fapi2::buffer<uint8_t> tmpRepairedRankMask, tmpBadDimmMask;
+    restore_repairs(
+        fapi2::Target<fapi2::TARGET_TYPE_MCA>(i_target),
+        tmpRepairedRankMask, tmpBadDimmMask);
+    o_repairedRankMask = (uint8_t)tmpRepairedRankMask;
+    o_badDimmMask = (uint8_t)tmpBadDimmMask;
 }
 
 void restoreDramRepairs(TargetHandle_t i_trgt)
@@ -716,152 +819,138 @@ void restoreDramRepairs(TargetHandle_t i_trgt)
     {
         noLock_initialize();
     }
-
     std::vector<MemRank> ranks;
     getMasterRanks<fapi2::TARGET_TYPE_MCA>(i_trgt, ranks);
 
     uint8_t rankMask = 0, dimmMask = 0;
     mssRestoreDramRepairs<fapi2::TARGET_TYPE_MCA>(i_trgt, rankMask, dimmMask);
-
-    // Callout DIMMs with too many bad bits and not enough repairs available
     RDR::processBadDimms<fapi2::TARGET_TYPE_MCA>(i_trgt, dimmMask)
-
-    // Check repaired ranks for RAS policy violations.
     RDR::processRepairedRanks<fapi2::TARGET_TYPE_MCA>(i_trgt, rankMask)
 }
 
-void Util::__Util_ThreadPool_Impl::ThreadPoolImpl::insert(void* i_workItem)
+class StateMachine
 {
-    iv_worklist.push_back(i_workItem);
-    sync_cond_signal(&iv_condvar);
-}
-
-void sync_cond_signal(sync_cond_t * i_cond)
-{
-    __sync_fetch_and_add(&(i_cond->sequence),1);
-    futex_wake(&(i_cond->sequence), 1);
-}
-
-bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
-{
-    switch(*i_wfp->workItem)
+    bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
     {
-        case RESTORE_DRAM_REPAIRS:
-            // Get the connected MCAs.
-            TargetHandleList mcaList;
-            getChildAffinityTargets(mcaList, i_wfp.assoc->first, CLASS_UNIT, fapi2::TARGET_TYPE_MCA);
-            for (auto & mca : mcaList)
+        switch(*i_wfp->workItem)
+        {
+            case RESTORE_DRAM_REPAIRS:
+                // Get the connected MCAs.
+                TargetHandleList mcaList;
+                getChildAffinityTargets(mcaList, i_wfp.assoc->first, CLASS_UNIT, fapi2::TARGET_TYPE_MCA);
+                for (auto & mca : mcaList)
+                {
+                    PRDF::restoreDramRepairs<fapi2::TARGET_TYPE_MCA>(mca);
+                }
+                break;
+            case START_PATTERN_0:
+            case START_SCRUB:
+                doMaintCommand(*i_wfp);
+                break;
+        }
+        ++i_wfp->workItem;
+        scheduleWorkItem(*i_wfp);
+    }
+
+    void StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
+    {
+        if(i_wfp.workItem == getWorkFlow(i_wfp).end())
+        {
+            i_wfp.status = COMPLETE;
+        }
+        else if(i_wfp.status != IN_PROGRESS && allWorkFlowsComplete())
+        {
+            // Clear BAD_DQ_BIT_SET bit
+            TargetHandle_t top = NULL;
+            targetService().getTopLevelTarget(top);
+            ATTR_RECONFIGURE_LOOP_type reconfigAttr = top->getAttr<TARGETING::ATTR_RECONFIGURE_LOOP>();
+            reconfigAttr &= ~RECONFIGURE_LOOP_BAD_DQ_BIT_SET;
+            top->setAttr<TARGETING::ATTR_RECONFIGURE_LOOP>(reconfigAttr);
+            iv_done = true;
+            sync_cond_broadcast(&iv_cond);
+        }
+        else if(i_wfp.status == IN_PROGRESS)
+        {
+            uint64_t priority = getRemainingWorkItems(i_wfp);
+            if(!iv_tp)
             {
-                PRDF::restoreDramRepairs<fapi2::TARGET_TYPE_MCA>(mca);
+                // create same number of tasks in the pool as there are cpu threads
+                Util::ThreadPoolManager::setThreadCount(cpu_thread_count());
+                iv_tp = new Util::ThreadPool<WorkItem>();
+                iv_tp->start();
             }
-            break;
-        case START_PATTERN_0:
-        case START_SCRUB:
-            doMaintCommand(*i_wfp);
-            break;
-    }
-    ++i_wfp->workItem;
-    scheduleWorkItem(*i_wfp);
-}
-
-void StateMachine::scheduleWorkItem(WorkFlowProperties & i_wfp)
-{
-    if(i_wfp.workItem == getWorkFlow(i_wfp).end())
-    {
-        i_wfp.status = COMPLETE;
-    }
-    else if(i_wfp.status != IN_PROGRESS && allWorkFlowsComplete())
-    {
-        // Clear BAD_DQ_BIT_SET bit
-        TargetHandle_t top = NULL;
-        targetService().getTopLevelTarget(top);
-        ATTR_RECONFIGURE_LOOP_type reconfigAttr = top->getAttr<TARGETING::ATTR_RECONFIGURE_LOOP>();
-        reconfigAttr &= ~RECONFIGURE_LOOP_BAD_DQ_BIT_SET;
-        top->setAttr<TARGETING::ATTR_RECONFIGURE_LOOP>(reconfigAttr);
-        iv_done = true;
-        sync_cond_broadcast(&iv_cond);
-    }
-    else if(i_wfp.status == IN_PROGRESS)
-    {
-        uint64_t priority = getRemainingWorkItems(i_wfp);
-        if(!iv_tp)
-        {
-            // create same number of tasks in the pool as there are cpu threads
-            Util::ThreadPoolManager::setThreadCount(cpu_thread_count());
-            iv_tp = new Util::ThreadPool<WorkItem>();
-            iv_tp->start();
+            iv_tp->insert(new WorkItem(*this, &i_wfp, priority, i_wfp.chipUnit));
         }
-        iv_tp->insert(new WorkItem(*this, &i_wfp, priority, i_wfp.chipUnit));
     }
-}
 
-void StateMachine::start()
-{
-    // schedule the first work items for all target / workFlow associations
-    for(WorkFlowPropertiesIterator wit = iv_workFlowProperties.begin();
-        wit != iv_workFlowProperties.end(); ++wit)
+    void StateMachine::start()
     {
-        // bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
-        // this is probably later called on it
-        scheduleWorkItem(**wit);
-    }
-}
-
-void StateMachine::reset()
-{
-    for(WorkFlowPropertiesIterator wit = iv_workFlowProperties.begin();
-        wit != iv_workFlowProperties.end(); ++wit)
-    {
-        if((**wit).log)
+        // schedule the first work items for all target / workFlow associations
+        for(WorkFlowPropertiesIterator wit = iv_workFlowProperties.begin();
+            wit != iv_workFlowProperties.end(); ++wit)
         {
-            delete (**wit).log;
+            // bool StateMachine::executeWorkItem(WorkFlowProperties * i_wfp)
+            // this is probably later called on it
+            scheduleWorkItem(**wit);
         }
-        delete *wit;
     }
-    iv_workFlowProperties.clear();
-}
 
-void StateMachine::setup(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST */ )
-{
-    // clear out any properties from a previous run
-    reset();
-    WorkFlowProperties * wfp = 0;
-    for(WorkFlowAssoc it = i_list.begin(); it != i_list.end(); ++it)
+    void StateMachine::reset()
     {
-        // for each target / workFlow assoc,
-        // initialize the workFlow progress indicator
-        // to indicate that no work has been done yet
-        // for the target
-        wfp = new WorkFlowProperties();
-        wfp->assoc = it;
-        wfp->workItem = getWorkFlow(it).begin();
-        wfp->status = IN_PROGRESS;
-        wfp->log = 0;
-        wfp->timer = 0;
-        wfp->timeoutCnt = 0;
-        wfp->data = NULL;
-        wfp->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
-        iv_workFlowProperties.push_back(wfp);
+        for(WorkFlowPropertiesIterator wit = iv_workFlowProperties.begin();
+            wit != iv_workFlowProperties.end(); ++wit)
+        {
+            if((**wit).log)
+            {
+                delete (**wit).log;
+            }
+            delete *wit;
+        }
+        iv_workFlowProperties.clear();
     }
-    iv_done = false;
-}
 
-void StateMachine::wait()
-{
-    while(!iv_done && !iv_shutdown)
+    void StateMachine::setup(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST */ )
     {
-        sync_cond_wait(&iv_cond, &iv_mutex);
+        // clear out any properties from a previous run
+        reset();
+        WorkFlowProperties * wfp = 0;
+        for(WorkFlowAssoc it = i_list.begin(); it != i_list.end(); ++it)
+        {
+            // for each target / workFlow assoc,
+            // initialize the workFlow progress indicator
+            // to indicate that no work has been done yet
+            // for the target
+            wfp = new WorkFlowProperties();
+            wfp->assoc = it;
+            wfp->workItem = getWorkFlow(it).begin();
+            wfp->status = IN_PROGRESS;
+            wfp->log = 0;
+            wfp->timer = 0;
+            wfp->timeoutCnt = 0;
+            wfp->data = NULL;
+            wfp->chipUnit = it->first->getAttr<ATTR_CHIP_UNIT>();
+            iv_workFlowProperties.push_back(wfp);
+        }
+        iv_done = false;
     }
-}
 
-void StateMachine::run(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST*/)
-{
-    // load the workflow properties
-    setup(i_list);
-    // start work items
-    start();
-    // wait for all work items to finish
-    wait();
+    void StateMachine::wait()
+    {
+        while(!iv_done && !iv_shutdown)
+        {
+            sync_cond_wait(&iv_cond, &iv_mutex);
+        }
+    }
+
+    void StateMachine::run(const WorkFlowAssocMap & i_list /* target type is TYPE_MCBIST*/)
+    {
+        // load the workflow properties
+        setup(i_list);
+        // start work items
+        start();
+        // wait for all work items to finish
+        wait();
+    }
 }
 
 void sync_cond_wait(sync_cond_t * i_cond, mutex_t * i_mutex)

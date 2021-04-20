@@ -86,10 +86,10 @@ static uint8_t syndrome_matrix[] = {
 	E0, UE, UE, 55, UE, 45, 43, UE, UE, 56, 38, UE,  1, UE, UE, UE,
 	UE, 25, 26, UE,  2, UE, UE, UE, 24, UE, UE, UE, UE, UE, 28, UE,
 	UE, 59, 54, UE, 42, UE, UE, 44,  6, UE, UE, UE, UE, UE, UE, UE,
-	5, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
+	 5, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
 	UE, 63, 53, UE,  0, UE, UE, UE, 33, UE, UE, UE, UE, UE, UE, UE,
-	3, UE, UE, 52, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
-	7, UE, UE, UE, UE, UE, UE, UE, UE, 60, UE, UE, UE, UE, UE, UE,
+	 3, UE, UE, 52, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
+	 7, UE, UE, UE, UE, UE, UE, UE, UE, 60, UE, UE, UE, UE, UE, UE,
 	UE, UE, UE, UE,  4, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE, UE,
 };
 
@@ -342,11 +342,6 @@ static void mount_part_from_pnor(const char *part_name,
 		uint8_t buffer[ALIGN(FFS_HDR_SIZE, 8)];
 		struct ffs_hdr *hdr = (struct ffs_hdr *)buffer;
 
-		if (pnor_base != NULL) {
-			hdr_pnor = (struct ffs_hdr *)pnor_base;
-			break;
-		}
-
 		/* Assume block_size = 4K */
 		hdr_pnor = (struct ffs_hdr *)(((char *)hdr_pnor) - 0x1000);
 
@@ -436,6 +431,8 @@ static void mount_part_from_pnor(const char *part_name,
 	}
 }
 
+static int cache_in_use;
+
 static struct mmap_helper_region_device memd_mdev = MMAP_HELPER_REGION_INIT(
 	&no_ecc_rdev_ops, 0, CONFIG_ROM_SIZE);
 
@@ -445,6 +442,10 @@ void memd_device_init(void)
 	if (init_done)
 		return;
 
+	if (cache_in_use)
+		die("mmap_helper cache already in use\n");
+
+	cache_in_use = 1;
 	mount_part_from_pnor(MEMD_PARTITION_NAME, &memd_mdev, _cbfs_cache,
 	                     REGION_SIZE(cbfs_cache));
 
@@ -454,6 +455,8 @@ void memd_device_init(void)
 void memd_device_unmount(void)
 {
 	memd_mdev.rdev.ops = &no_rdev_ops;
+
+	cache_in_use = 0;
 }
 
 const struct region_device *memd_device_ro(void)
@@ -470,13 +473,10 @@ void boot_device_init(void)
 	if (init_done)
 		return;
 
-	/*
-	 * Make sure that every partition has its own cache, either by using
-	 * different region (or buffer in code if it is small enough and used in
-	 * just one stage) or making sure that data from the first mounted partition
-	 * won't be needed after another partition is mounted (e.g. by adding umount
-	 * function that changes rdev_ops).
-	 */
+	if (cache_in_use)
+		die("mmap_helper cache already in use\n");
+
+	cache_in_use = 1;
 	mount_part_from_pnor(CBFS_PARTITION_NAME, &boot_mdev, _cbfs_cache,
 	                     REGION_SIZE(cbfs_cache));
 

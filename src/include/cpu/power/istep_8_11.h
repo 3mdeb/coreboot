@@ -11,11 +11,10 @@ void p9_fbc_ioo_dl_scom(void);
 #define CHIP_EC (0x20)
 #define SECURE_MEMORY (CHIP_EC >= 0x22)
 
-// WRONG VALUE
 #define ATTR_FREQ_PB_MHZ (1866)
 #define ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG ()
 #define ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG ()
-#define ATTR_PROC_NPU_REGION_ENABLED ()
+#define ATTR_PROC_NPU_REGION_ENABLED (1)
 #define ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE ()
 
 #define LO_LIMIT_R (ATTR_FREQ_PB_MHZ > 6400)
@@ -24,7 +23,7 @@ void p9_fbc_ioo_dl_scom(void);
 #define OBUS2_LO_LIMIT_N (ATTR_FREQ_PB_MHZ * 74)
 #define OBUS3_LO_LIMIT_N (ATTR_FREQ_PB_MHZ * 95)
 
-#define LO_LIMIT_R ATTR_FREQ_PB_MHZ > 6400
+#define LO_LIMIT_R (ATTR_FREQ_PB_MHZ > 6400)
 
 #define LEN(a) (sizeof(a)/sizeof(*a))
 uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID}

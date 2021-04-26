@@ -475,13 +475,13 @@ static void fir_unmask(int mcs_i)
 		  [10]  MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE =  0     // attention (1,0,0)
 	 */
 	scom_and_or_for_chiplet(id, 0x07012306,
-	                        ~PPC_BIT(10),
+	                        ~(PPC_BIT(3) | PPC_BIT(10)),
 	                        PPC_BIT(10));
 	scom_and_or_for_chiplet(id, 0x07012307,
-	                        ~PPC_BIT(10),
-	                        0);
+	                        ~(PPC_BIT(3) | PPC_BIT(10)),
+	                        PPC_BIT(3));
 	scom_and_or_for_chiplet(id, 0x07012303,
-	                        ~PPC_BIT(10),
+	                        ~(PPC_BIT(3) | PPC_BIT(10)),
 	                        0);
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {

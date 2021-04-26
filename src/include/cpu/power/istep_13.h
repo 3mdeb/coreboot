@@ -160,8 +160,6 @@ static inline void delay_nck(uint64_t nck)
 	udelay(nck_to_us(nck));
 }
 
-#define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - (lsb)))
-
 /* TODO: discover which MCAs are used on second MCS (0,1,6,7? 0,1,4,5?) */
 /* TODO: consider non-RMW variants */
 static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom,

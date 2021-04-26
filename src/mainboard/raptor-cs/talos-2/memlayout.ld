@@ -23,6 +23,8 @@ SECTIONS
 	BOOTBLOCK(0x203000, 20K)
 #endif
 
+	TIMESTAMP(0x208000, 1K)
+
 	// TODO: maybe we should change HRMOR again before jumping into ramstage?
 	// In that case the address may be overlapping previous stages because it
 	// would be in different address space, but current macros forbid it.

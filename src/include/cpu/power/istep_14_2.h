@@ -12,3 +12,5 @@
 #define MAX_MC_SIDES_PER_PROC (2)
 #define MCS_MCMODE0_DISABLE_MC_SYNC (27)
 #define MCS_MCMODE0_DISABLE_MC_PAIR_SYNC (28)
+
+void istep_14_2(void);

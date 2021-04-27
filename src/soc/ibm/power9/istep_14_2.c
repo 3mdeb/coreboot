@@ -88,18 +88,14 @@ fapi2::ReturnCode throttleSync(chiplet_id_t MCSTarget)
 //     fapi2::Target<T> masterMc;   // Master MC for this MC side
 // };
 //
-// template< fapi2::TargetType T>
-// fapi2::ReturnCode progMaster(const fapi2::Target<T>& i_mcTarget)
-// {
-//     scom_and_for_chiplet(i_mcTarget, MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
-//     scom_and_or_for_chiplet(i_mcTarget, MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
-//     scom_and_for_chiplet(i_mcTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
-// }
-//
-template< fapi2::TargetType T>
-fapi2::ReturnCode progMCMODE0(
-    chiplet_id_t MCSTTarget,
-    chiplet_id_t MCSTTargets[])
+void progMaster(chiplet_id_t MCSTTarget)
+{
+    scom_and_for_chiplet(MCSTTarget, MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
+    scom_and_or_for_chiplet(MCSTTarget, MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
+    scom_and_for_chiplet(MCSTTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
+}
+
+void progMCMODE0(chiplet_id_t MCSTTarget, chiplet_id_t MCSTTargets[])
 {
     uint64_t l_scomMask =
         PPC_BIT(MCS_MCMODE0_DISABLE_MC_SYNC)

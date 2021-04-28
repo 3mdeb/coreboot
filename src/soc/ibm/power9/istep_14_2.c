@@ -18,7 +18,7 @@ void thermalInit(void)
 		scom_and_for_chiplet(MCSTarget, MCS_MCMODE0, PPC_BIT(21));
 	}
 }
-void throttleSync(chiplet_id_t MCSTarget)
+void throttleSync(void)
 {
 	for(size_t MCSIndex = 0; MCSIndex < LEN(MCSTargets); ++MCSIndex)
 	{
@@ -34,7 +34,7 @@ void progMaster(chiplet_id_t MCSTTarget)
 	scom_and_for_chiplet(MCSTTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
 }
 
-void progMCSMode0(chiplet_id_t MCSTTarget)
+void progMCSMode0(chiplet_id_t MCSTarget)
 {
 	uint64_t l_scomMask =
 		PPC_BIT(MCS_MCMODE0_DISABLE_MC_SYNC)
@@ -43,6 +43,6 @@ void progMCSMode0(chiplet_id_t MCSTTarget)
 		PPC_BIT(MCS_MCMODE0_DISABLE_MC_SYNC)
 		| PPC_BIT(MCS_MCMODE0_DISABLE_MC_PAIR_SYNC);
 	scom_and_or_for_chiplet(
-		i_mcTarget, MCS_MCMODE0,
-		~l_scomMask, l_scomData & l_scomMask)
+		MCSTarget, MCS_MCMODE0,
+		~l_scomMask, l_scomData & l_scomMask);
 }

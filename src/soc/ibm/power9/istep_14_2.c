@@ -2,6 +2,7 @@
 
 void istep_14_2(void)
 {
+	report_istep(14, 2);
 	thermalInit();
 	throttleSync();
 }

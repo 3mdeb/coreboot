@@ -1,5 +1,5 @@
-#ifndef ISTEP_14_2
-#define ISTEP_14_2
+#ifndef ISTEP_14_2_H
+#define ISTEP_14_2_H
 
 #include <cpu/power/scom.h>
 

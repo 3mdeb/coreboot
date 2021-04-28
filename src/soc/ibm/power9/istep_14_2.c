@@ -1,5 +1,8 @@
 #include <cpu/power/istep_14_2.h>
 
+#define LEN(a) (sizeof(a)/sizeof(*a))
+chiplet_id_t MCSTargets[] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
+
 void istep_14_2(void)
 {
 	report_istep(14, 2);

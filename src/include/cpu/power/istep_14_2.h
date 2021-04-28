@@ -24,5 +24,7 @@ chiplet_id_t MCSTargets[] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
 
 void istep_14_2(void);
 void thermalInit(void);
-
+void throttleSync(void);
+void progMaster(chiplet_id_t MCSTTarget);
+void progMCSMode0(chiplet_id_t MCSTTarget);
 #endif

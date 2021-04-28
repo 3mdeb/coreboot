@@ -19,9 +19,6 @@
 #define MCS_MCMODE0_DISABLE_MC_SYNC (27)
 #define MCS_MCMODE0_DISABLE_MC_PAIR_SYNC (28)
 
-#define LEN(a) (sizeof(a)/sizeof(*a))
-chiplet_id_t MCSTargets[] = {MC01_CHIPLET_ID, MC23_CHIPLET_ID};
-
 void istep_14_2(void);
 void thermalInit(void);
 void throttleSync(void);

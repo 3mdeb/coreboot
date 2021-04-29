@@ -5,10 +5,12 @@ static void thermalInit(void)
 {
 	for (size_t MCSIndex = 0; MCSIndex < MCS_PER_PROC; ++MCSIndex) {
 		for (size_t MCAIndex = 0; MCAIndex < MCA_PER_MCS; ++MCAIndex) {
-				mca_and_or(
-					mcs_ids[MCSIndex], MCAIndex, MCA_MBA_FARB3Q,
-					~PPC_BITMASK(0, 45),
-					PPC_BIT(10) | PPC_BIT(25) | PPC_BIT(37));
+				if(mem_data.mcs[MCSIndex].functional) {
+					mca_and_or(
+						mcs_ids[MCSIndex], MCAIndex, MCA_MBA_FARB3Q,
+						~PPC_BITMASK(0, 45),
+						PPC_BIT(10) | PPC_BIT(25) | PPC_BIT(37));
+				}
 		}
 		scom_and_for_chiplet(mcs_ids[MCSIndex], MCS_MCMODE0, PPC_BIT(21));
 	}
@@ -38,7 +40,9 @@ static void throttleSync(void)
 {
 	for(size_t MCSIndex = 0; MCSIndex < MCS_PER_PROC; ++MCSIndex)
 	{
-		progMCMode0(mcs_ids[MCSIndex]);
+		if(mem_data.mcs[MCSIndex].functional) {
+			progMCMode0(mcs_ids[MCSIndex]);
+		}
 	}
 	progMaster(mcs_ids[0]);
 }

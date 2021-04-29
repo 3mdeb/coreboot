@@ -3,7 +3,7 @@
 #include <console/console.h>
 #include <cpu/power/vpd.h>
 #include <cpu/power/istep_13.h>
-#include <cpu/power/istep_14_2.h>
+#include <cpu/power/istep_14.h>
 #include <program_loading.h>
 #include <lib.h>	// hexdump
 #include <spd_bin.h>

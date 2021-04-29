@@ -1,5 +1,5 @@
-#ifndef ISTEP_14_2_H
-#define ISTEP_14_2_H
+#ifndef ISTEP_14_H
+#define ISTEP_14_H
 
 #include <cpu/power/scom.h>
 
@@ -20,8 +20,4 @@
 #define MCS_MCMODE0_DISABLE_MC_PAIR_SYNC (28)
 
 void istep_14_2(void);
-void thermalInit(void);
-void throttleSync(void);
-void progMaster(chiplet_id_t MCSTTarget);
-void progMCSMode0(chiplet_id_t MCSTTarget);
 #endif

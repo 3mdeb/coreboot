@@ -31,6 +31,9 @@ static void progMCMode0(chiplet_id_t MCSTTarget)
 
 static void progMaster(chiplet_id_t MCSTarget)
 {
+	// NOTE: Access to MCS_MCSYNC in hostboot has no delayes between
+	// because our implementation is faster, it may be required to ad
+	// some artificial delay between
 	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
 	scom_and_or_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
 	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));

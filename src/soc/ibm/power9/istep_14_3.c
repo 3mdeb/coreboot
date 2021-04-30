@@ -13,12 +13,12 @@ void* call_proc_pcie_config (void *io_pArgs)
 void p9_pcie_config(chiplet_id_t i_target)
 {
   // variables should be stored in non-volatile memory
-	fapi2::ATTR_PROC_PCIE_MMIO_BAR0_BASE_ADDR_OFFSET_Type l_mmio_bar0_offsets = 0;
-	fapi2::ATTR_PROC_PCIE_MMIO_BAR1_BASE_ADDR_OFFSET_Type l_mmio_bar1_offsets = 0;
-	fapi2::ATTR_PROC_PCIE_REGISTER_BAR_BASE_ADDR_OFFSET_Type l_register_bar_offsets = 0;
-  FAPI_ATTR_GET(fapi2::ATTR_PROC_PCIE_BAR_SIZE, FAPI_SYSTEM, l_bar_sizes);
+	uint64_t l_mmio_bar0_offsets[6] = {0, 0, 0, 0, 0, 0};
+	uint64_t l_mmio_bar1_offsets[6] = {0, 0, 0, 0, 0, 0};
+	uint64_t l_register_bar_offsets[6] = {0, 0, 0, 0, 0, 0};
+	// NOTE 0 values doesn't seem right, but seem to be the default
+	fapi2::ATTR_PROC_PCIE_BAR_SIZE_Type l_bar_sizes[3] = {0, 0, 0};
 
-	fapi2::ATTR_PROC_PCIE_BAR_SIZE_Type l_bar_sizes;
 	fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
 
 	fapi2::buffer<uint64_t> l_buf = 0;
@@ -32,19 +32,16 @@ void p9_pcie_config(chiplet_id_t i_target)
 
 	// determine base address of chip MMIO range
 	p9_fbc_utils_get_chip_base_address(i_target, l_base_addr_nm0, l_base_addr_nm1, l_base_addr_m, l_base_addr_mmio);
-	// initialize functional PEC chiplets
 	for (auto l_pec_chiplet : l_pec_chiplets_vec)
 	{
 		fapi2::getScom(l_pec_chiplet, P9N2_PEC_ADDREXTMASK_REG, l_buf);
 		l_buf.insertFromRight<0,7>((fapi2::ATTR_FABRIC_ADDR_EXTENSION_GROUP_ID << 3) | fapi2::ATTR_FABRIC_ADDR_EXTENSION_CHIP_ID);
 		fapi2::putScom(l_pec_chiplet, P9N2_PEC_ADDREXTMASK_REG, l_buf);
 
-		fapi2::getScom(l_pec_chiplet, PEC_PBCQHWCFG_REG, l_buf);
-		l_buf.insertFromRight<0,4>(1);
-		l_buf.insertFromRight<4,4>(1);
-		l_buf.insertFromRight<8,4>(1);
-		l_buf |=
-				PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE)
+		scom_or_for_chiplet(
+			l_pec_chiplet, PEC_PBCQHWCFG_REG,
+			PPC_BIT(3) | PPC_BIT(7) | PPC_BIT(11)
+			|	PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_CHANNEL_STREAMING_EN)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_WR_VG)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_WR_SCOPE_GROUP)
@@ -53,13 +50,17 @@ void p9_pcie_config(chiplet_id_t i_target)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_RD_VG)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_RD_SCOPE_GROUP)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP)
-			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG);
-		fapi2::getScom(l_pec_chiplet, PEC_NESTTRC_REG, l_buf);
-		l_buf.insertFromRight<0,4>(9);
-		fapi2::putScom(l_pec_chiplet, PEC_NESTTRC_REG, l_buf);
-		l_buf = PPC_BIT(PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN);
-		l_buf.insertFromRight<0x28,3>(7);
-		fapi2::putScom(l_pec_chiplet, PEC_PBAIBHWCFG_REG, l_buf);
+			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG))
+
+		scom_or_for_chiplet(
+			l_pec_chiplet,
+			PEC_NESTTRC_REG,
+			PPC_BIT(0) | PPC_BIT(3));
+
+		write_scom_for_chiplet(
+			l_pec_chiplet,
+			PEC_PBAIBHWCFG_REG,
+			0xe00000 | PPC_BIT(PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN))
 	}
 
 	for (auto l_phb_chiplet : l_phb_chiplets_vec)
@@ -74,20 +75,20 @@ void p9_pcie_config(chiplet_id_t i_target)
 		{
 			continue;
 		}
-		fapi2::putScom(l_phb_chiplet, PHB_CERR_RPT0_REG, 0xFFFFFFFFFFFFFFFF);
-		fapi2::putScom(l_phb_chiplet, PHB_CERR_RPT1_REG, 0xFFFFFFFFFFFFFFFF);
-		fapi2::putScom(l_phb_chiplet, PHB_NFIR_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_NFIRWOF_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_NFIRACTION0_REG, 0x5b0f81e000000000);
-		fapi2::putScom(l_phb_chiplet, PHB_NFIRACTION1_REG, 0x7f0f81e000000000);
-		fapi2::putScom(l_phb_chiplet, PHB_NFIRMASK_REG, 0x30001c00000000);
-		fapi2::putScom(l_phb_chiplet, PHB_PE_DFREEZE_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PBAIB_CERR_RPT_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PFIR_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PFIRWOF_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PFIRACTION0_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PFIRACTION1_REG, 0);
-		fapi2::putScom(l_phb_chiplet, PHB_PFIRMASK_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_CERR_RPT0_REG, 0xFFFFFFFFFFFFFFFF);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_CERR_RPT1_REG, 0xFFFFFFFFFFFFFFFF);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_NFIR_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_NFIRWOF_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_NFIRACTION0_REG, 0x5b0f81e000000000);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_NFIRACTION1_REG, 0x7f0f81e000000000);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_NFIRMASK_REG, 0x30001c00000000);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PE_DFREEZE_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PBAIB_CERR_RPT_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PFIR_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PFIRWOF_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PFIRACTION0_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PFIRACTION1_REG, 0);
+		write_scom_for_chiplet(l_phb_chiplet, PHB_PFIRMASK_REG, 0);
 		FAPI_ATTR_GET(fapi2::ATTR_PROC_PCIE_BAR_ENABLE, l_phb_chiplet, l_bar_enables);
 		l_mmio0_bar += l_mmio_bar0_offsets[l_phb_id];
 		l_mmio0_bar = l_mmio0_bar << P9_PCIE_CONFIG_BAR_SHIFT;

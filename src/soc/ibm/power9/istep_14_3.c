@@ -122,61 +122,145 @@ void p9_pcie_config(chiplet_id_t i_target)
 	}
 }
 
-void p9_fbc_utils_get_chip_base_address(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-	std::vector<uint64_t>& o_base_address_nm0,
-	std::vector<uint64_t>& o_base_address_nm1,
-	std::vector<uint64_t>& o_base_address_m,
-	uint64_t& o_base_address_mmio)
+void check_proc0_memory_config(void)
 {
-	uint64_t l_base_address_nm0 = 0;
-	uint64_t l_base_address_nm1 = 0;
-	uint64_t l_base_address_m = 0;
-	fapi2::buffer<uint64_t> l_addr_extension_enable = 0;
-	uint8_t l_regions_per_msel = 1;
-	std::vector<uint8_t> l_alias_bit_positions;
-	fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
-	uint8_t l_fabric_group_id = 0;
-	uint8_t l_fabric_chip_id = 0;
-	uint64_t l_base_address = 0;
+    TargetHandleList l_procsList;
+    getAllChips(l_procsList, TYPE_PROC);
 
-	l_base_address.insertFromRight<15, 4>(fapi2::ATTR_PROC_EFF_FABRIC_GROUP_ID[i_target]);
-	l_base_address.insertFromRight<19, 3>(fapi2::ATTR_PROC_EFF_FABRIC_CHIP_ID[i_target]);
-	o_base_address_nm0 = l_base_address;
-	o_base_address_nm1 = l_base_address | PPC_BIT(FABRIC_ADDR_MSEL_END_BIT);
-	o_base_address_m = l_base_address | PPC_BIT(FABRIC_ADDR_MSEL_START_BIT);
-	o_base_address_mmio = l_base_address | PPC_BIT(FABRIC_ADDR_MSEL_END_BIT) | PPC_BIT(FABRIC_ADDR_MSEL_START_BIT);
-	l_addr_extension_enable.insertFromRight<15,4>(fapi2::ATTR_FABRIC_ADDR_EXTENSION_GROUP_ID);
-	l_addr_extension_enable.insertFromRight<19,3>(fapi2::ATTR_FABRIC_ADDR_EXTENSION_CHIP_ID & 0x01);
+    procIds_t l_procIds[l_procsList.size()];
+    uint8_t i = 0;
+    uint8_t l_proc0 = INVALID_PROC;
+    uint8_t l_victim = INVALID_PROC;
+    for (const auto & l_procChip : l_procsList)
+    {
+        l_procIds[i].proc = l_procChip;
 
-	// walk across bits set in enable bit field, count number of bits set
-	// to determine permutations
-	if (l_addr_extension_enable)
-	{
-		for (uint8_t bitIndex = FABRIC_ADDR_LS_GROUP_ID_START_BIT; bitIndex <= FABRIC_ADDR_LS_CHIP_ID_END_BIT; ++bitIndex)
-		{
-			if (l_addr_extension_enable & PPC_BIT(bitIndex))
-			{
-				l_regions_per_msel *= 2;
-				l_alias_bit_positions.push_back(bitIndex);
-			}
-		}
-	}
-	for (uint8_t l_region = 0; l_region < l_regions_per_msel; l_region++)
-	{
-		fapi2::buffer<uint64_t> l_alias_mask = 0;
-		if (l_region)
-		{
-			uint8_t l_value = l_region;
-			for (int jj = l_alias_bit_positions.size()-1; jj >= 0; jj--)
-			{
-				l_alias_mask.writeBit(l_value & 1, l_alias_bit_positions[jj]);
-				l_value = l_value >> 1;
-			}
-		}
-		o_base_address_nm0.push_back(l_base_address_nm0 | l_alias_mask());
-		o_base_address_m.push_back(l_base_address_m | l_alias_mask());
-		o_base_address_m.push_back((l_base_address_m | l_alias_mask()) + MAX_INTERLEAVE_GROUP_SIZE / 2);
-		o_base_address_nm1.push_back(l_base_address_nm1 | l_alias_mask());
-	}
+        l_procIds[i].groupIdDflt = l_procChip->getAttr<ATTR_FABRIC_GROUP_ID>();
+        l_procIds[i].groupIdEff = l_procChip->getAttr<ATTR_PROC_EFF_FABRIC_GROUP_ID>();
+        l_procIds[i].groupId = l_procIds[i].groupIdDflt;
+
+        l_procIds[i].chipIdDflt = l_procChip->getAttr<ATTR_FABRIC_CHIP_ID>();
+        l_procIds[i].chipIdEff = l_procChip->getAttr<ATTR_PROC_EFF_FABRIC_CHIP_ID>();
+        l_procIds[i].chipId = l_procIds[i].chipIdDflt;
+
+        if(l_proc0 == INVALID_PROC)
+        {
+            l_proc0 = i;
+        }
+        else if (
+          PIR_t::createChipId(l_procIds[i].groupId, l_procIds[i].chipId)
+          < PIR_t::createChipId(l_procIds[l_proc0].groupId, l_procIds[l_proc0].chipId))
+        {
+            l_proc0 = i;
+        }
+        i++;
+    }
+
+    // Get the functional DIMMs for proc0
+    PredicateHwas l_functional;
+    l_functional.functional(true);
+    TargetHandleList l_dimms;
+    PredicateCTM l_dimm(CLASS_LOGICAL_CARD, TYPE_DIMM);
+    PredicatePostfixExpr l_checkExprFunctional;
+    l_checkExprFunctional.push(&l_dimm).push(&l_functional).And();
+    targetService().getAssociated(
+      l_dimms, l_procIds[l_proc0].proc, TargetService::CHILD_BY_AFFINITY,
+      TargetService::ALL, &l_checkExprFunctional);
+
+    if(l_dimms.empty())
+    {
+        for (i = 0; i < l_procsList.size(); i++)
+        {
+            if(i == l_proc0)
+            {
+                continue;
+            }
+
+            targetService().getAssociated(
+              l_dimms, l_procIds[i].proc, TargetService::CHILD_BY_AFFINITY,
+              TargetService::ALL, &l_checkExprFunctional);
+
+            if(l_dimms.empty())
+            {
+                continue;
+            }
+            l_victim = i;
+
+            l_procIds[l_proc0].groupId = l_procIds[l_victim].groupIdDflt;
+            l_procIds[l_proc0].chipId = l_procIds[l_victim].chipIdDflt;
+
+            l_procIds[l_victim].groupId = l_procIds[l_proc0].groupIdDflt;
+            l_procIds[l_victim].chipId = l_procIds[l_proc0].chipIdDflt;
+            break;
+        }
+    }
+    for (i = 0; i < l_procsList.size(); i++)
+    {
+        if((l_procIds[i].groupId != l_procIds[i].groupIdEff) ||
+           (l_procIds[i].chipId != l_procIds[i].chipIdEff) )
+        {
+            (l_procIds[i].proc)->setAttr<ATTR_PROC_EFF_FABRIC_GROUP_ID>(l_procIds[i].groupId);
+            (l_procIds[i].proc)->setAttr<ATTR_PROC_EFF_FABRIC_CHIP_ID>(l_procIds[i].chipId);
+        }
+    }
+}
+
+void p9_fbc_utils_get_chip_base_address_no_aliases(
+    const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+    uint64_t& o_base_address_nm0,
+    uint64_t& o_base_address_nm1,
+    uint64_t& o_base_address_m,
+    uint64_t& o_base_address_mmio)
+{
+    uint32_t l_fabric_system_id;
+    uint8_t l_fabric_group_id;
+    uint8_t l_fabric_chip_id;
+    uint8_t l_mirror_policy;
+    fapi2::buffer<uint64_t> l_base_address;
+    fapi2::buffer<uint8_t> l_proc_chip_mem_to_use = 0;
+    const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
+
+    FAPI_ATTR_GET(fapi2::ATTR_PROC_EFF_FABRIC_GROUP_ID, i_target, l_fabric_group_id);
+    FAPI_ATTR_GET(fapi2::ATTR_PROC_EFF_FABRIC_CHIP_ID, i_target, l_fabric_chip_id);
+
+    l_base_address.insertFromRight<8,5>(0);
+    l_base_address.insertFromRight<15,4>(l_fabric_group_id);
+    l_base_address.insertFromRight<19,3>(l_fabric_chip_id);
+    o_base_address_nm0 = l_base_address;
+
+    l_base_address |= PPC_BIT(FABRIC_ADDR_MSEL_END_BIT>();
+    o_base_address_nm1 = l_base_address;
+
+    l_base_address |= PPC_BIT(FABRIC_ADDR_MSEL_START_BIT);
+    l_base_address &= ~PPC_BIT(FABRIC_ADDR_MSEL_END_BIT>);
+    o_base_address_m = l_base_address;
+
+    l_base_address |= PPC_BIT(FABRIC_ADDR_MSEL_END_BIT);
+    o_base_address_mmio = l_base_address;
+}
+
+void p9_fbc_utils_get_chip_base_address(
+    const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+    std::vector<uint64_t>& o_base_address_nm0,
+    std::vector<uint64_t>& o_base_address_nm1,
+    std::vector<uint64_t>& o_base_address_m,
+    uint64_t& o_base_address_mmio)
+{
+    uint64_t l_base_address_nm0 = 0;
+    uint64_t l_base_address_nm1 = 0;
+    uint64_t l_base_address_m = 0;
+    uint8_t l_addr_extension_group_id;
+    std::vector<uint8_t> l_alias_bit_positions;
+    fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
+
+    p9_fbc_utils_get_chip_base_address_no_aliases(i_target,
+             l_base_address_nm0,
+             l_base_address_nm1,
+             l_base_address_m,
+             o_base_address_mmio);
+
+    o_base_address_nm0.push_back(l_base_address_nm0;
+    o_base_address_m.push_back(l_base_address_m);
+    o_base_address_m.push_back(l_base_address_m + MAX_INTERLEAVE_GROUP_SIZE / 2);
+    o_base_address_nm1.push_back(l_base_address_nm1);
 }

@@ -60,6 +60,11 @@
 #define PEC_PBAIBHWCFG_REG (0xd010800)
 #define FABRIC_ADDR_MSEL_END_BIT (14)
 #define FABRIC_ADDR_MSEL_START_BIT (13)
+#define PEC_PBCQHWCFG_REG (0x4010C00)
+
+// Not sure about this
+#define ATTR_PROC_PCIE_BAR_ENABLE(index) (false)
 
 void istep_14_2(void);
+void istep_14_3(void)
 #endif

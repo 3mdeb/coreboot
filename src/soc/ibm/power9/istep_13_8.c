@@ -34,7 +34,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	int mranks = mca->dimm[0].mranks | mca->dimm[1].mranks;
 	int log_ranks = mca->dimm[0].log_ranks | mca->dimm[1].log_ranks;
 	bool is_8H = (log_ranks / mranks) == 8;
-	chiplet_id_t nest = id == MC01_CHIPLET_ID ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	chiplet_id_t nest = mcs_to_nest[id];
 
 	/* P9N2_MCS_PORT02_MCPERF0 (?)
 	    [22-27] = 0x20                              // AMO_LIMIT

@@ -12,7 +12,7 @@ static void thermalInit(void)
 						PPC_BIT(10) | PPC_BIT(25) | PPC_BIT(37));
 				}
 		}
-		scom_and_for_chiplet(mcs_ids[MCSIndex], MCS_MCMODE0, PPC_BIT(21));
+		scom_and_for_chiplet(mcs_to_nest[mcs_ids[MCSIndex]], MCS_MCMODE0, PPC_BIT(21));
 	}
 }
 
@@ -34,9 +34,9 @@ static void progMaster(chiplet_id_t MCSTarget)
 	// NOTE: Access to MCS_MCSYNC in hostboot has no delayes between
 	// because our implementation is faster, it may be required to ad
 	// some artificial delay between
-	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
-	scom_and_or_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
-	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
+	scom_and_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
+	scom_and_or_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
+	scom_and_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
 }
 
 static void throttleSync(void)
@@ -44,7 +44,7 @@ static void throttleSync(void)
 	for(size_t MCSIndex = 0; MCSIndex < MCS_PER_PROC; ++MCSIndex)
 	{
 		if(mem_data.mcs[MCSIndex].functional) {
-			progMCMode0(mcs_ids[MCSIndex]);
+			progMCMode0(mcs_to_nest[mcs_ids[MCSIndex]]);
 		}
 	}
 	progMaster(mcs_ids[0]);

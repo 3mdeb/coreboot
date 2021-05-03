@@ -363,7 +363,7 @@ static void setup_xlate_map(int mcs_i, int mca_i)
 	int log_ranks = mca->dimm[0].log_ranks | mca->dimm[1].log_ranks;
 	int is_3DS = (log_ranks / mranks) != 1;
 	int update_d = log_ranks != 1;	// Logically the same as '(mranks != 1) | is_3DS'
-	chiplet_id_t nest = id == MC01_CHIPLET_ID ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	chiplet_id_t nest = mcs_to_nest[id];
 	enum mc_rank_config cfg = M1H1_ONE_DIMM;
 
 	if (is_3DS) {

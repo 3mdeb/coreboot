@@ -62,8 +62,10 @@
 #define FABRIC_ADDR_MSEL_START_BIT (13)
 #define PEC_PBCQHWCFG_REG (0x4010C00)
 
-// Not sure about this
-#define ATTR_PROC_PCIE_BAR_ENABLE(index) (false)
+#define PEC_PER_PROC (3)
+static const chiplet_id_t pec_ids[MCS_PER_PROC] = {
+  PCI0_CHIPLET_ID, PCI1_CHIPLET_ID, PCI2_CHIPLET_ID
+};
 
 void istep_14_2(void);
 void istep_14_3(void)

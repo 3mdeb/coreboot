@@ -1,9 +1,7 @@
 #include <cpu/power/istep_14.h>
 
-static void p9_pcie_config(chiplet_id_t i_target)
+static void p9_pcie_config()
 {
-<<<<<<< HEAD
-=======
 	TARGETING::TargetHandleList l_procChips;
 	getAllChips(l_procChips, TYPE_PROC);
 	for (const auto & l_procChip: l_procChips)
@@ -48,12 +46,11 @@ void p9_pcie_config(chiplet_id_t i_target)
 
 	// determine base address of chip MMIO range
 	p9_fbc_utils_get_chip_base_address(i_target, l_base_addr_nm0, l_base_addr_nm1, l_base_addr_m, l_base_addr_mmio);
->>>>>>> src/soc/ibm/power9/istep_14_3.c: Simplify p9_fbc_utils_get_chip_base_address() function
-	for (auto l_pec_chiplet : l_pec_chiplets_vec)
+	for(size_t PECIndex = 0; PECIndex < PEC_PER_PROC; ++PECIndex)
 	{
-		scom_and_for_chiplet(l_pec_chiplet, P9N2_PEC_ADDREXTMASK_REG, ~PPC_BITMASK(0, 6))
+		scom_and_for_chiplet(pec_ids[PECIndex], P9N2_PEC_ADDREXTMASK_REG, ~PPC_BITMASK(0, 6))
 		scom_or_for_chiplet(
-			l_pec_chiplet, PEC_PBCQHWCFG_REG,
+			pec_ids[PECIndex], PEC_PBCQHWCFG_REG,
 			PPC_BIT(3) | PPC_BIT(7) | PPC_BIT(11)
 			|	PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_CHANNEL_STREAMING_EN)
@@ -66,12 +63,10 @@ void p9_pcie_config(chiplet_id_t i_target)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG))
 		scom_or_for_chiplet(
-			l_pec_chiplet,
-			PEC_NESTTRC_REG,
+			pec_ids[PECIndex], PEC_NESTTRC_REG,
 			PPC_BIT(0) | PPC_BIT(3));
 		write_scom_for_chiplet(
-			l_pec_chiplet,
-			PEC_PBAIBHWCFG_REG,
+			pec_ids[PECIndex], PEC_PBAIBHWCFG_REG,
 			0xe00000 | PPC_BIT(PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN))
 	}
 
@@ -108,7 +103,6 @@ void p9_pcie_config(chiplet_id_t i_target)
 
 		l_mmio0_bar = l_mmio0_bar << P9_PCIE_CONFIG_BAR_SHIFT;
 		write_scom_for_chiplet(l_phb_chiplet, PHB_MMIOBAR0_REG, l_mmio0_bar);
-<<<<<<< HEAD
 		write_scom_for_chiplet(l_phb_chiplet, PHB_MMIOBAR0_MASK_REG, 0);
 		l_mmio1_bar = l_mmio1_bar << P9_PCIE_CONFIG_BAR_SHIFT;
 		write_scom_for_chiplet(l_phb_chiplet, PHB_MMIOBAR1_REG, l_mmio1_bar);
@@ -118,7 +112,6 @@ void p9_pcie_config(chiplet_id_t i_target)
 
 		uint64_t l_buf = 0;
 		if (ATTR_PROC_PCIE_BAR_ENABLE[0])
-=======
 		write_scom_for_chiplet(l_phb_chiplet, PHB_MMIOBAR0_MASK_REG, l_bar_sizes[0]);
 		l_mmio1_bar += l_mmio_bar1_offsets[l_phb_id];
 		l_mmio1_bar = l_mmio1_bar << P9_PCIE_CONFIG_BAR_SHIFT;
@@ -129,7 +122,6 @@ void p9_pcie_config(chiplet_id_t i_target)
 		write_scom_for_chiplet(l_phb_chiplet, PHB_PHBBAR_REG, l_register_bar);
 		l_buf = 0;
 		if (l_bar_enables[0])
->>>>>>> src/soc/ibm/power9/istep_14_3.c: Simplify p9_fbc_utils_get_chip_base_address() function
 		{
 			l_buf |= PPC_BIT(PHB_BARE_REG_PE_MMIO_BAR0_EN);
 		}
@@ -148,15 +140,9 @@ void p9_pcie_config(chiplet_id_t i_target)
 		write_scom_for_chiplet(l_phb_chiplet, PHB_MASK_REG, 0xFFFFFFFFFFFFFFFF);
 	}
 }
-<<<<<<< HEAD
 
 void istep_14_3(void)
 {
-	getAllChips(l_procChips, TYPE_PROC);
-	for (const auto & l_procChip: l_procChips)
-	{
-		p9_pcie_config(l_fapi_cpu_target);
-	}
+	report_istep(14, 3);
+	p9_pcie_config();
 }
-=======
->>>>>>> src/soc/ibm/power9/istep_14_3.c: Simplify p9_fbc_utils_get_chip_base_address() function

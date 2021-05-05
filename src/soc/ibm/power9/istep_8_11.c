@@ -2070,17 +2070,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
         // Advance                                                                               POWER9 Registers
-        fapi2::getScom(TGT0, 0x8000A00609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A00709010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
-        fapi2::getScom(TGT0, 0x8000A00709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A00809010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2088,10 +2082,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00809010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00809010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00809010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A00909010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2117,10 +2108,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00A09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00A09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00A09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A00B09010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2128,10 +2116,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00B09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00B09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00B09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A00C09010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2139,10 +2124,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00C09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00C09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00C09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A00D09010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2150,17 +2132,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00D09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00D09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00D09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A00E09010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
-        fapi2::getScom(TGT0, 0x8000A00E09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00E09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00E09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A00F09010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2168,10 +2144,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A00F09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A00F09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A00F09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A01009010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2179,10 +2152,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A01109010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2190,10 +2160,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A01209010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2201,10 +2168,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A01309010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2212,10 +2176,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A01409010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
@@ -2223,17 +2184,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address                8000A01509010C3F (SCOM)
         //  Description            This register contains the fifth set of O controls.
-        fapi2::getScom(TGT0, 0x8000A01509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A01609010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2241,10 +2196,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
         //  Address          8000A01709010C3F (SCOM)
         //  Description      This register contains the fifth set of O controls.
@@ -2252,10 +2204,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_B_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000A01709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000A01709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000A01709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00009010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2263,11 +2212,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00009010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00109010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2275,19 +2220,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00109010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00209010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C00209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00209010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00309010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2295,11 +2232,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00309010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00409010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2307,11 +2240,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00409010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00509010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2319,11 +2248,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00509010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00609010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2331,11 +2256,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00609010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00709010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2343,11 +2264,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00709010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00809010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2355,31 +2272,19 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00809010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00809010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00809010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00909010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
         //  Bits     SCOM    Field Mnemonic: Description
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
+        scom_and_or_for_chiplet(TGT0, 0x8000C00909010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00909010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00909010C3F, l_scom_buffer);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00A09010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C00A09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00A09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00A09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00B09010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2387,11 +2292,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00B09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00B09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00B09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C00C09010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2399,11 +2300,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C00C09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00C09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00C09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00D09010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2411,11 +2308,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00D09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00D09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00D09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00E09010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2423,11 +2316,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00E09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00E09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00E09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C00F09010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2435,11 +2324,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C00F09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C00F09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C00F09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01009010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2447,11 +2332,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C01009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01009010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01109010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2459,19 +2340,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C01109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01109010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01209010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C01209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01209010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C01309010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2479,11 +2352,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C01309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01309010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address          8000C01409010C3F (SCOM)
         //  Description      This register contains the ninth set of O controls.
@@ -2491,11 +2360,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                   adjustments.
-        fapi2::getScom(TGT0, 0x8000C01409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01409010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01509010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2503,11 +2368,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C01509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01509010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01609010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2515,11 +2376,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C01609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01609010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
         //  Address                8000C01709010C3F (SCOM)
         //  Description            This register contains the ninth set of O controls.
@@ -2527,11 +2384,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
         //                         adjustments.
-        fapi2::getScom(TGT0, 0x8000C01709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<57, 5, 59, uint64_t>(0x10);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0xB);
-        fapi2::putScom(TGT0, 0x8000C01709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C01709010C3F, ~PPC_BITMASK(48, 61), 0x17080);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80009010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2539,10 +2392,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80109010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2550,10 +2400,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80209010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2561,10 +2408,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80309010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2572,17 +2416,15 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        if((l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
+        if(l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x14);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80309010C3F, ~PPC_BITMASK(48, 56), 0x6780);
         }
         else
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80309010C3F, ~PPC_BITMASK(48, 56), 0x1F80);
         }
-        fapi2::putScom(TGT0, 0x8000C80309010C3F, l_scom_buffer);
+
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80409010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2590,10 +2432,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80509010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2601,24 +2440,18 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        if((l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
+        if(l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x14);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x9500);
         }
         else
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         }
-        fapi2::putScom(TGT0, 0x8000C80509010C3F, l_scom_buffer);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80609010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C80609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80709010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2626,10 +2459,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80809010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2637,10 +2467,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80809010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80809010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80809010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80909010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2648,17 +2475,14 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80909010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
         if((l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x14);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80909010C3F, ~PPC_BITMASK(48, 52), 0x9710);
         }
         else
         {
-            l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
+            scom_and_or_for_chiplet(TGT0, 0x8000C80909010C3F, ~PPC_BITMASK(48, 52), 0x1F10);
         }
-        fapi2::putScom(TGT0, 0x8000C80909010C3F, l_scom_buffer);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80A09010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2666,10 +2490,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80A09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80A09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80A09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80B09010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2677,10 +2498,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80B09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80B09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80B09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80C09010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2688,17 +2506,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80C09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80C09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80C09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C80D09010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C80D09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80D09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80D09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80E09010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2706,10 +2518,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80E09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80E09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80E09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C80F09010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2717,10 +2526,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C80F09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C80F09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C80F09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C81009010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2728,10 +2534,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C81009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C81109010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2739,10 +2542,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C81109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C81209010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2750,10 +2550,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        fapi2::putScom(TGT0, 0x8000C81209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C81309010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
@@ -2761,17 +2558,11 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55       RWX         RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        fapi2::putScom(TGT0, 0x8000C81309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address                8000C81409010C3F (SCOM)
         //  Description            This register contains the tenth set of O controls.
-        fapi2::getScom(TGT0, 0x8000C81409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        fapi2::putScom(TGT0, 0x8000C81409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C81509010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2779,10 +2570,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        fapi2::putScom(TGT0, 0x8000C81509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C81609010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2790,10 +2578,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        fapi2::putScom(TGT0, 0x8000C81609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
         //  Address          8000C81709010C3F (SCOM)
         //  Description      This register contains the tenth set of O controls.
@@ -2801,10 +2586,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
         // 52:55     RWX     RX_E_CTLE_GAIN: This is the CTLE gain setting.
-        fapi2::getScom(TGT0, 0x8000C81709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-        l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-        fapi2::putScom(TGT0, 0x8000C81709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8000C81709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280009010C3F (SCOM)
@@ -2813,10 +2595,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the phase-rotator (PR) accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280009010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280109010C3F (SCOM)
@@ -2825,10 +2604,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280109010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280209010C3F (SCOM)
@@ -2837,10 +2613,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280209010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280309010C3F (SCOM)
@@ -2849,10 +2622,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280309010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280409010C3F (SCOM)
@@ -2861,10 +2631,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280409010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280509010C3F (SCOM)
@@ -2873,10 +2640,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280509010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280609010C3F (SCOM)
@@ -2885,10 +2649,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280609010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280709010C3F (SCOM)
@@ -2897,10 +2658,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280709010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280809010C3F (SCOM)
@@ -2909,10 +2667,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280809010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280809010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280809010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280909010C3F (SCOM)
@@ -2921,10 +2676,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280909010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280909010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280909010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280A09010C3F (SCOM)
@@ -2933,10 +2685,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280A09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280A09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280A09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280B09010C3F (SCOM)
@@ -2945,10 +2694,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280B09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280B09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280B09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280C09010C3F (SCOM)
@@ -2957,10 +2703,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280C09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280C09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280C09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280D09010C3F (SCOM)
@@ -2969,10 +2712,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280D09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280D09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280D09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002280E09010C3F (SCOM)
@@ -2981,11 +2721,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280E09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-
-        fapi2::putScom(TGT0, 0x8002280E09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280E09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002280F09010C3F (SCOM)
@@ -2994,10 +2730,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002280F09010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002280F09010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002280F09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002281009010C3F (SCOM)
@@ -3006,10 +2739,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281009010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002281109010C3F (SCOM)
@@ -3018,10 +2748,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281109010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281109010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281109010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002281209010C3F (SCOM)
@@ -3030,10 +2757,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281209010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281209010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281209010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002281309010C3F (SCOM)
@@ -3042,10 +2766,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281309010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281309010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281309010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002281409010C3F (SCOM)
@@ -3054,10 +2775,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281409010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281409010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281409010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002281509010C3F (SCOM)
@@ -3066,10 +2784,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281509010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281509010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281509010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name          Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address                8002281609010C3F (SCOM)
@@ -3078,10 +2793,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55        RO          constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56          RWX         RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                         Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281609010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281609010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(TGT0, 0x8002281609010C3F, ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Bit Mode 2 EO Per-Lane Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
         //  Address          8002281709010C3F (SCOM)
@@ -3090,10 +2802,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:55      RO      constant = 0b00000000000000000000000000000000000000000000000000000000
         // 56        RWX     RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
         //                   Note: This is not the same as setting the inertia amount to zero.
-        fapi2::getScom(TGT0, 0x8002281709010C3F, l_scom_buffer);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(0x4);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(0xC);
-        fapi2::putScom(TGT0, 0x8002281709010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8002281709010C3F,
+          ~PPC_BITMASK(57, 63), 0x4C);
         //  Register Name    Receive Spare Mode Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_SPARE_MODE_PG
         //  Address          8008000009010C3F (SCOM)
@@ -3102,9 +2813,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48        RWX     RX_PG_SPARE_MODE_0: Per-group spare mode latch.
         // 49        RWX     RX_PG_SPARE_MODE_1: Per-group spare mode latch.
-        fapi2::getScom(TGT0, 0x8008000009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<52, 1, 63, uint64_t>(0); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_PG_SPARE_MODE_4_OFF
-        fapi2::putScom(TGT0, 0x8008000009010C3F, l_scom_buffer);
+        scom_and_for_chiplet(TGT0, 0x8008000009010C3F, ~PPC_BIT(52));
         //  Register Name          Receive ID1 Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_ID1_PG
         //  Address                8008080009010C3F (SCOM)
@@ -3113,9 +2822,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:53       RWX         RX_BUS_ID: This field is used to programmatically set the bus number that a clock group belongs to.
         // 54:63       RO          constant = 0b0000000000
-        fapi2::getScom(TGT0, 0x8008080009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 6, 58, uint64_t>(0);
-        fapi2::putScom(TGT0, 0x8008080009010C3F, l_scom_buffer);
+        scom_and_for_chiplet(TGT0, 0x8008080009010C3F, ~PPC_BITMASK(48, 53));
         //  Register Name    Receive CTL Mode 2 EO Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE2_EO_PG
         //  Address          8008180009010C3F (SCOM)
@@ -3124,35 +2831,21 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:49     RWX     RX_DFE_CA_CFG: Receive DFE clock adjustment settings. This 2-bit field contains an encoded value for K
         //                   as follows:
-        fapi2::getScom(TGT0, 0x8008180009010C3F, l_scom_buffer);
         if(l_TGT0_ATTR_IO_O_CHANNEL_TYPE == fapi2::ENUM_ATTR_IO_O_CHANNEL_TYPE_CABLE && l_chip_ec != 0x20)
         {
-            l_scom_buffer.insert<54, 1, 63, uint64_t>(1); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RECAL_REQ_DL_MASK_ON
+            scom_and_for_chiplet(TGT0, 0x8008180009010C3F, PPC_BIT(54) | PPC_BIT(57));
         }
         else
         {
-            l_scom_buffer.insert<54, 1, 63, uint64_t>(0); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RECAL_REQ_DL_MASK_OFF
+            scom_and_for_chiplet(TGT0, 0x8008180009010C3F, ~(PPC_BIT(54) | PPC_BIT(57)));
         }
-        if(l_TGT0_ATTR_IO_O_CHANNEL_TYPE == fapi2::ENUM_ATTR_IO_O_CHANNEL_TYPE_CABLE && l_chip_ec != 0x20)
-        {
-            l_scom_buffer.insert<57, 1, 63, uint64_t>(1); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RECAL_ABORT_DL_MASK_ON
-        }
-        else
-        {
-            l_scom_buffer.insert<57, 1, 63, uint64_t>(0); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RECAL_ABORT_DL_MASK_OFF
-        }
-        fapi2::putScom(TGT0, 0x8008180009010C3F, l_scom_buffer);
         //  Register Name          Receive CTL Mode 10 EO Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE10_EO_PG
         //  Address                8008580009010C3F (SCOM)
         //  Description            This register contains the tenth set of receive CTL EO mode fields.
-        fapi2::getScom(TGT0, 0x8008580009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 3, 61, uint64_t>(2);
-        l_scom_buffer.insert<51, 3, 61, uint64_t>(2);
-        l_scom_buffer.insert<54, 3, 61, uint64_t>(5);
-        l_scom_buffer.insert<57, 3, 61, uint64_t>(5);
-        l_scom_buffer.insert<60, 4, 60, uint64_t>(2);
-        fapi2::putScom(TGT0, 0x8008580009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008580009010C3F,
+          ~PPC_BITMASK(48, 63), 0x4AD2);
         //  Register Name    Receive CTL Mode 11 EO Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE11_EO_PG
         //  Address          8008600009010C3F (SCOM)
@@ -3161,11 +2854,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:50     RWX     RX_OFF_INIT_CFG: This register controls the servo filter for offset measurements during initialization.
         // 51:53     RWX     RX_OFF_RECAL_CFG: This register controls the servo filter for offset measurements during recalibration.
-        fapi2::getScom(TGT0, 0x8008600009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 3, 61, uint64_t>(2);
-        l_scom_buffer.insert<51, 3, 61, uint64_t>(2);
-        l_scom_buffer.insert<54, 3, 61, uint64_t>(2);
-        fapi2::putScom(TGT0, 0x8008600009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008600009010C3F,
+          ~PPC_BITMASK(48, 56), 0x4900);
         //  Register Name    Receive CTL Mode 12 EO Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE12_EO_PG
         //  Address          8008680009010C3F (SCOM)
@@ -3174,9 +2865,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:51     RWX     RX_SERVO_CHG_CFG: This register controls the minimum acceptable changes of the accumulator for a
         //                   valid servo operation. It is used to assure that we have reached a stable point.
-        fapi2::getScom(TGT0, 0x8008680009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<60, 3, 61, uint64_t>(0x4);
-        fapi2::putScom(TGT0, 0x8008680009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008680009010C3F,
+          ~PPC_BITMASK(60, 62), 0x10);
         //  Register Name          Receive CTL Mode 13 EO Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE13_EO_PG
         //  Address                8008700009010C3F (SCOM)
@@ -3185,9 +2876,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:48        RO          constant = 0b0000000000000000000000000000000000000000000000000
         // 49:55       RWX         RX_CM_OFFSET_VAL: This field contains the value used to offset the amp DAC when running common
         //                         mode.
-        fapi2::getScom(TGT0, 0x8008700009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<49, 7, 57, uint64_t>(0x46);
-        fapi2::putScom(TGT0, 0x8008700009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008700009010C3F,
+          ~PPC_BITMASK(49, 55), 0x4600);
         //  Register Name          Receive CTL Mode 14 EO Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE14_EO_PG
         //  Address                8008780009010C3F (SCOM)
@@ -3196,10 +2887,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_AMP_INIT_TIMEOUT: This field is used for amplitude measurements during initialization.
         // 52:55       RWX         RX_AMP_RECAL_TIMEOUT: This field is used for amplitude measurements during recalibration.
-        fapi2::getScom(TGT0, 0x8008780009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0x6);
-        l_scom_buffer.insert<52, 4, 60, uint64_t>(0x6);
-        fapi2::putScom(TGT0, 0x8008780009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008780009010C3F,
+          ~PPC_BITMASK(48, 55), 0x6600);
         //  Register Name          Receive CTL Mode 15 EO Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE15_EO_PG
         //  Address                8008800009010C3F (SCOM)
@@ -3208,10 +2898,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:51       RWX         RX_OFF_INIT_TIMEOUT: This field is used for offset measurements during initialization.
         // 52:55       RWX         RX_OFF_RECAL_TIMEOUT: This field is used for offset measurements during recalibration.
-        fapi2::getScom(TGT0, 0x8008800009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 4, 60, uint64_t>(0x6);
-        l_scom_buffer.insert<52, 4, 60, uint64_t>(0x6);
-        fapi2::putScom(TGT0, 0x8008800009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008800009010C3F,
+          ~PPC_BITMASK(48, 55), 0x6600);
         //  Register Name          Receive CTL Mode 29 EO Per-Group Register
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE29_EO_PG
         //  Address                8008D00009010C3F (SCOM)
@@ -3220,10 +2909,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:55       RWX         RX_APX111_HIGH: This field contains the receive Amax high target, in amplitude DAC steps (as measured
         //                         by ap_x111 and an_x000). The default is d102.
-        fapi2::getScom(TGT0, 0x8008D00009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 8, 56, uint64_t>(0x78);
-        l_scom_buffer.insert<56, 8, 56, uint64_t>(0x5A);
-        fapi2::putScom(TGT0, 0x8008D00009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8008D00009010C3F,
+          ~PPC_BITMASK(48, 63), 0x785A);
         //  Register Name    Receive CTL Mode 27 EO Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE27_EO_PG
         //  Address          8009700009010C3F (SCOM)
@@ -3232,17 +2920,14 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48        RWX     RX_RC_ENABLE_CTLE_1ST_LATCH_OFFSET_CAL: Receive recalibration; first latch offset adjustment
         //                   enable with CTLE-based disable.
-        fapi2::getScom(TGT0, 0x8009700009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 1, 63, uint64_t>(1); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RC_ENABLE_CTLE_1ST_LATCH_OFFSET_CAL_ON
         if(l_TGT0_ATTR_IO_O_CHANNEL_TYPE == fapi2::ENUM_ATTR_IO_O_CHANNEL_TYPE_CABLE && l_chip_ec != 0x20)
         {
-            l_scom_buffer.insert<51, 1, 63, uint64_t>(1); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RC_ENABLE_AUTO_RECAL_ON
+            scom_or_for_chiplet(TGT0, 0x8009700009010C3F, PPC_BIT(51));
         }
         else
         {
-            l_scom_buffer.insert<51, 1, 63, uint64_t>(0); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_RC_ENABLE_AUTO_RECAL_OFF
+            scom_and_for_chiplet(TGT0, 0x8009700009010C3F, ~PPC_BIT(51));
         }
-        fapi2::putScom(TGT0, 0x8009700009010C3F, l_scom_buffer);
         //  Register Name    Receive CTL Mode 28 EO Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE28_EO_PG
         //  Address          8009780009010C3F (SCOM)
@@ -3251,9 +2936,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48        RWX     RX_DC_ENABLE_CM_COARSE_CAL: This bit enables receive DC calibration eye-optimization common-
         //                   mode coarse calibration.
-        fapi2::getScom(TGT0, 0x8009780009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 1, 63, uint64_t>(0); // l_IOO0_IOO_CPLT_RX0_RXCTL_CTL_REGS_RX_CTL_REGS_RX_DC_ENABLE_CM_COARSE_CAL_OFF
-        fapi2::putScom(TGT0, 0x8009780009010C3F, l_scom_buffer);
+        scom_and_for_chiplet(TGT0, 0x8009780009010C3F, ~PPC_BIT(48));
         //  Register Name          Receive CTL Mode 2 O Per-Group
         //  Mnemonic               IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE2_O_PG
         //  Address                8009880009010C3F (SCOM)
@@ -3262,10 +2945,9 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:50       RWX         RX_OCTANT_SELECT: This field selects which c16 clock is used on IOO.
         // 51:52       RWX         RX_SPEED_SELECT: This field selects the IOO speed control.
-        fapi2::getScom(TGT0, 0x8009880009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 3, 61, uint64_t>(0x5);
-        l_scom_buffer.insert<51, 2, 62, uint64_t>(0);
-        fapi2::putScom(TGT0, 0x8009880009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x8009880009010C3F,
+          ~PPC_BITMASK(48, 52), 0x5000);
         //  Register Name    Transmit ID1 Per-Group Register
         //  Mnemonic         IOO0.IOO_CPLT.TX0.TXCTL.CTL_REGS.TX_CTL_REGS.TX_ID1_PG
         //  Address          800C0C0009010C3F (SCOM)
@@ -3274,9 +2956,7 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47      RO      constant = 0b000000000000000000000000000000000000000000000000
         // 48:53     RWX     TX_BUS_ID: This field is used to programmatically set the bus number that a group belongs to.
         // 54:63     RO      constant = 0b0000000000
-        fapi2::getScom(TGT0, 0x800C0C0009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 6, 58, uint64_t>(0);
-        fapi2::putScom(TGT0, 0x800C0C0009010C3F, l_scom_buffer);
+        scom_and_for_chiplet(TGT0, 0x800C0C0009010C3F, ~PPC_BITMASK(48, 53));
         //  Register Name          Transmit Impedance Calibration P 4X Per-Bus Register
         //  Mnemonic               IOO0.IOO_CPLT.BUSCTL.BUS_REG_IF.BUS_CTL_REGS.TX_IMPCAL_P_4X_PB
         //  Address                800F1C0009010C3F (SCOM)
@@ -3285,12 +2965,22 @@ fapi2::ReturnCode p9_obus_scom(
         // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
         // 48:52       RWX         TX_ZCAL_P_4X: Calibration circuit PSeg-4X enable value. This field holds the current value of the enabled
         //                         segments. It is a 2x multiple of the actual segment count. It can be read for the current calibration result set
-        fapi2::getScom(TGT0, 0x800F1C0009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 5, 59, uint64_t>(0x0E);
-        fapi2::putScom(TGT0, 0x800F1C0009010C3F, l_scom_buffer);
-        fapi2::getScom(TGT0, 0x800F2C0009010C3F, l_scom_buffer);
-        l_scom_buffer.insert<48, 7, 57, uint64_t>(0x15);
-        l_scom_buffer.insert<55, 7, 57, uint64_t>(0x46);
-        fapi2::putScom(TGT0, 0x800F2C0009010C3F, l_scom_buffer);
+        scom_and_or_for_chiplet(
+          TGT0, 0x800F1C0009010C3F,
+          ~PPC_BITMASK(48, 52), 0xE000);
+        //  Register Name          Transmit Impedance Calibration SWO2 Per-Bus Register
+        //  Mnemonic               IOO0.IOO_CPLT.BUSCTL.BUS_REG_IF.BUS_CTL_REGS.TX_IMPCAL_SWO2_PB
+        //  Address                0x800F2C0009010C3F (SCOM)
+        //  Description            This register is used for impedance calibration.
+        //  Bits       SCOM        Field Mnemonic: Description
+        // 0:47        RO          constant = 0b000000000000000000000000000000000000000000000000
+        // 48:54       RWX         TX_ZCAL_SM_MIN_VAL: Impedance calibration minimum search threshold. This low-side segment count
+        //                         limit is used in the calibration process. (binary code - 0x00 is zero slices, and 0x50 is maximum slices).
+        // 55:61       RWX         TX_ZCAL_SM_MAX_VAL: Impedance calibration maximum search threshold. This high-side segment count
+        //                         limit is used in the calibration process. (binary code - 0x00 is zero slices and 0x50 is maximum slices).
+        // 62:63       RO          constant = 0b00
+        scom_and_or_for_chiplet(
+          TGT0, 0x800F2C0009010C3F,
+          ~PPC_BITMASK(48, 61), 0x158C);
     };
 }

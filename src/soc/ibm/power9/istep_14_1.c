@@ -3,7 +3,6 @@
 #include <cpu/power/istep_13.h>
 #include <cpu/power/spr.h>
 #include <console/console.h>
-#include <timer.h>
 
 static void fir_unmask(int mcs_i)
 {

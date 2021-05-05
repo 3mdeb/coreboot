@@ -35,8 +35,7 @@ static void dump_mca_data(mca_data_t *mca)
 			if (mca->dimm[i].log_ranks != mca->dimm[i].mranks)
 				printk(BIOS_SPEW, "%dH 3DS ", mca->dimm[i].log_ranks / mca->dimm[i].mranks);
 
-			printk(BIOS_SPEW, "%dGB\n", (1 << (mca->dimm[i].density - 2)) *
-			       mca->dimm[i].log_ranks * (2 - mca->dimm[i].width));
+			printk(BIOS_SPEW, "%dGB\n", mca->dimm[i].size_gb);
 		}
 		else
 			printk(BIOS_SPEW, "\tDIMM%d: not installed\n", i);
@@ -153,9 +152,11 @@ static void prepare_dimm_data(void)
 			dimm->mranks = ((blk.spd_array[i][12] >> 3) & 0x7) + 1;
 			dimm->log_ranks = dimm->mranks * (((blk.spd_array[i][6] >> 4) & 0x7) + 1);
 			dimm->density = blk.spd_array[i][4] & 0xF;
+			dimm->size_gb = (1 << (dimm->density - 2)) * (2 - dimm->width) *
+			                dimm->log_ranks;
 
-			if ((blk.spd_array[i][5] & 0x38) > 0x20)
-				die("DIMMs with more than 16 row address bits are not supported\n");
+			if ((blk.spd_array[i][5] & 0x38) == 0x30)
+				die("DIMMs with 18 row address bits are not supported\n");
 
 			if (blk.spd_array[i][18] > tckmin)
 				tckmin = blk.spd_array[i][18];

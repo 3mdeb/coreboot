@@ -44,6 +44,7 @@ typedef struct {
 	uint8_t density;
 	uint8_t *spd;
 	uint8_t rcd_i2c_addr;
+	uint16_t size_gb;	// 2S8Rx4 8Gb DIMMs are 256GB
 } rdimm_data_t;
 
 typedef struct {

@@ -31,7 +31,7 @@ void p9_fbc_ioo_dl_scom(void);
 #define OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG_LINK1_TOO_MANY_CRC_ERRORS (47)
 #define OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG_LINK0_CORRECTABLE_ARRAY_ERROR (52)
 
-#define LEN(a) (sizeof(a)/sizeof(*a))
+#define OBUS_AMOUNT (2)
 uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID}
 
 #define PU_PB_CENT_SM0_PB_CENT_FIR_REG (0x5011C00)

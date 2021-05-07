@@ -4,29 +4,17 @@
 #include <cpu/power/scom.h>
 #include <timer.h>
 
-void call_proc_xbus_enable_ridi(void)
-{
-	p9_chiplet_scominit();;
-	p9_io_obus_firmask_save(target, i_target_chip.getChildren<fapi2::TARGET_TYPE_OBUS>(fapi2::TARGET_STATE_FUNCTIONAL));
-	p9_psi_scom();
-	for(size_t obusIndex = 0; obusIndex < OBUS_AMOUNT; ++obusIndex) {
-		p9_io_obus_scominit(obus_chiplets[obusIndex])
-	}
-	p9_npu_scominit();
-	p9_chiplet_enable_ridi();
-}
-
-void p9_chiplet_enable_ridi_net_ctrl_action_function(chiplet_id_t chiplet)
+static void p9_chiplet_enable_ridi_net_ctrl_action_function(chiplet_id_t chiplet)
 {
 	if (read_scom_for_chiplet(chiplet, PERV_NET_CTRL0) & PPC_BIT(0))
 	{
-		scom_write_for_chiplet(chiplet, PERV_NET_CTRL0_WOR, PPC_BITMASK(19, 21));
+		write_scom_for_chiplet(chiplet, PERV_NET_CTRL0_WOR, PPC_BITMASK(19, 21));
 	}
 }
 
-void p9_chiplet_enable_ridi(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> &i_target_chip)
+static void p9_chiplet_enable_ridi(chiplet_id_t proc_chip)
 {
-	for (auto l_target_cplt : i_target_chip.getChildren<fapi2::TARGET_TYPE_PERV>(
+	for (auto l_target_cplt : proc_chip.getChildren<fapi2::TARGET_TYPE_PERV>(
 		static_cast<fapi2::TargetFilter>(
 		fapi2::TARGET_FILTER_ALL_MC |
 		fapi2::TARGET_FILTER_ALL_PCI |
@@ -37,51 +25,305 @@ void p9_chiplet_enable_ridi(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> &i
 	}
 }
 
-fapi2::ReturnCode p9_npu_scominit(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> &i_target)
+static void p9_nv_ref_clk_enable(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target)
 {
+	scom_or_for_chiplet(i_target, PERV_ROOT_CTRL6_SCOM, PPC_BITMASK(20, 23));
+}
 
+static void p9_npu_scom(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP> &proc_target,
+															const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> &system_target)
+{
+	fapi2::ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_Type l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG;
+	l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG = fapi2::ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[proc_target];
+	uint64_t l_def_NUM_X_LINKS_CFG = l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[0]
+		+ l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[1]
+		+ l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[2];
+	fapi2::buffer<uint64_t> l_scom_buffer;
+
+	fapi2::getScom(proc_target, 0x5011000, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011000, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011003, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011003, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011010, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011010, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501101A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501101B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011030, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011030, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011033, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011033, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011040, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011040, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501104A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501104B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011060, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011060, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011063, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011063, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011070, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011070, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501107A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501107B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011090, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011090, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011093, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011093, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x50110A0, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x50110A0, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x50110AA, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x50110AB, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x50110C0, l_scom_buffer);
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<16, 6, 58, uint64_t>(0x04);
+	l_scom_buffer.insert<22, 6, 58, uint64_t>(0x0C);
+	l_scom_buffer.insert<28, 6, 58, uint64_t>(0x04);
+	l_scom_buffer.insert<34, 6, 58, uint64_t>(0x0C);
+	l_scom_buffer.insert<40, 4, 60, uint64_t>(0x04);
+	l_scom_buffer.insert<44, 4, 60, uint64_t>(0x04);
+	fapi2::putScom(proc_target, 0x50110C0, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011120, l_scom_buffer);
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011120, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011200, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011200, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011203, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011203, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011210, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011210, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501121A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501121B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011230, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011230, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011233, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011233, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011240, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011240, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501124A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501124B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011260, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011260, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011263, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011263, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011270, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011270, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501127A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501127B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011290, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011290, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011293, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011293, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x50112A0, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x50112A0, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x50112AA, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x50112C0, PPC_BIT(0));
+	scom_and_for_chiplet(proc_target, 0x50112C0, ~PPC_BIT(4));
+	fapi2::getScom(proc_target, 0x5011400, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011400, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011403, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011403, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011410, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011410, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501141A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501141B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011430, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG == 1)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011430, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011433, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011433, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011440, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	fapi2::putScom(proc_target, 0x5011440, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501144A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501144B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011460, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011460, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011463, l_scom_buffer);
+	l_scom_buffer.insert<26, 6, 58, uint64_t>(1);
+	l_scom_buffer.insert<32, 6, 58, uint64_t>(1);
+	fapi2::putScom(proc_target, 0x5011463, l_scom_buffer);
+	fapi2::getScom(proc_target, 0x5011470, l_scom_buffer);
+	l_scom_buffer.insert<8, 8, 56, uint64_t>(0x4B);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	fapi2::putScom(proc_target, 0x5011470, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x501147A, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x501147B, PPC_BIT(0));
+	fapi2::getScom(proc_target, 0x5011490, l_scom_buffer);
+	if(l_def_NUM_X_LINKS_CFG)
+	{
+			l_scom_buffer.insert<5, 1, 63, uint64_t>(1);
+	}
+	l_scom_buffer.insert<4, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<6, 1, 63, uint64_t>(0);
+	l_scom_buffer.insert<7, 1, 63, uint64_t>(0);
+	fapi2::putScom(proc_target, 0x5011490, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x5011493, PPC_BIT(26) | PPC_BIT(32));
+	fapi2::getScom(proc_target, 0x50114A0, l_scom_buffer);
+	l_scom_buffer.insert<24, 8, 56, uint64_t>(0x66);
+	fapi2::putScom(proc_target, 0x50114A0, l_scom_buffer);
+	scom_or_for_chiplet(proc_target, 0x50114AA, PPC_BITMASK(0, 1) | PPC_BIT(40));
+	scom_or_for_chiplet(proc_target, 0x50114AB, PPC_BIT(0));
+	scom_and_for_chiplet(proc_target, 0x50114C0, ~PPC_BIT(4));
+	scom_and_for_chiplet(proc_target, 0x5011683, ~PPC_BITMASK(0, 6));
+	scom_write_for_chiplet(proc_target, 0x5013C03, 0xFFFFFFFFFFFFFFFF);
+	fapi2::getScom(proc_target, 0x5013C0A, l_scom_buffer);
+	if(CHIP_EC >= 0x22)
+	{
+		l_scom_buffer.insert<0, 2, 62, uint64_t>(0x02);
+	}
+	fapi2::putScom(proc_target, 0x5013C0A, l_scom_buffer);
+	scom_write_for_chiplet(proc_target, 0x5013C43, 0xFFFFFFFFFFFFFFFF);
+	scom_write_for_chiplet(proc_target, 0x5013C83, 0xFFFFFFFFFFFFFFFF);
+}
+
+static void p9_npu_scominit(chiplet_id_t proc_chip)
+{
 	uint8_t l_npu_enabled;
-
 	// check to see ifNPU region in N3 chiplet is enabled
-	l_npu_enabled = fapi2::ATTR_PROC_NPU_REGION_ENABLED[i_target];
-
+	l_npu_enabled = fapi2::ATTR_PROC_NPU_REGION_ENABLED[proc_chip];
 	if(l_npu_enabled)
 	{
-		fapi2::ReturnCode l_rc;
-		fapi2::buffer<uint64_t> l_atrmiss = 0;
-
 		// apply NPU SCOM inits from initfile
-		FAPI_EXEC_HWP(l_rc, p9_npu_scom, i_target, fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>());
+		p9_npu_scom(proc_chip, fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>());
 
-		// apply additional SCOM inits
-		l_atrmiss.setBit<PU_NPU_SM2_XTS_ATRMISS_FLAG_MAP>().setBit<PU_NPU_SM2_XTS_ATRMISS_ENA>();
-
-		fapi2::putScomUnderMask(
-			i_target,
-			PU_NPU_SM2_XTS_ATRMISS_POST_P9NDD1,
-			l_atrmiss,
-			l_atrmiss);
-
-		FAPI_EXEC_HWP(l_rc, p9_nv_ref_clk_enable, i_target);
+		scom_or_for_chiplet(proc_chip, PU_NPU_SM2_XTS_ATRMISS_POST_P9NDD1, PU_NPU_SM2_XTS_ATRMISS_ENA);
+		scom_or_for_chiplet(proc_chip, PERV_ROOT_CTRL6_SCOM, PPC_BITMASK(20, 23));
 	}
 }
 
-void p9_io_obus_scominit(chiplet_id_t obus_target)
+static void p9_io_obus_scominit(chiplet_id_t obus_target)
 {
-	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> l_system_target;
 	scom_or_for_chiplet(obus_target, OPT_IORESET_HARD_BUS0, PPC_BIT(2));
 	// hostboot wats for 10ns, so it is way to long
 	wait_us(1, false);
 	scom_and_for_chiplet(obus_target, OPT_IORESET_HARD_BUS0, ~PPC_BIT(2));
 	p9_obus_scom(obus_target);
 
-	scom_write(OBUS_FIR_ACTION0_REG, OBUS_PHY_FIR_ACTION0);
-	scom_write(OBUS_FIR_ACTION1_REG, OBUS_PHY_FIR_ACTION1);
-	scom_write(OBUS_FIR_MASK_REG, OBUS_PHY_FIR_MASK);
+	write_scom(OBUS_FIR_ACTION0_REG, OBUS_PHY_FIR_ACTION0);
+	write_scom(OBUS_FIR_ACTION1_REG, OBUS_PHY_FIR_ACTION1);
+	write_scom(OBUS_FIR_MASK_REG, OBUS_PHY_FIR_MASK);
 }
 
-void p9_psi_scom()
+static void p9_psi_scom(void)
 {
 	scom_or(0x4011803, PPC_BITMASK(0, 6));
 	scom_and(0x4011806, ~PPC_BITMASK(0, 6));
@@ -92,8 +334,7 @@ void p9_psi_scom()
 	scom_and(0x501290F, ~(PPC_BITMASK(16, 27) | PPC_BITMASK(48, 52)))
 }
 
-void p9_io_obus_firmask_save(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target_chip,
-		const std::vector<fapi2::Target<fapi2::TARGET_TYPE_OBUS>> i_obus_targets)
+static void p9_io_obus_firmask_save(void)
 {
 	scom_or(PU_IOE_PB_IOO_FIR_MASK_REG, PPC_BITMASK(28, 35) | PPC_BITMASK(52, 59))
 	for (size_t obus_index = 0; obus_index < LEN(obus_chiplets); obus_index++)
@@ -128,7 +369,7 @@ void p9_io_obus_firmask_save(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& 
 	}
 }
 
-void p9_chiplet_scominit(void)
+static void p9_chiplet_scominit(void)
 {
 	std::vector<fapi2::Target<fapi2::TARGET_TYPE_MCS>> l_mcs_targets;
 	std::vector<fapi2::Target<fapi2::TARGET_TYPE_CAPP>> l_capp_targets;
@@ -157,7 +398,7 @@ void p9_chiplet_scominit(void)
 		write_scom(PU_PB_CENT_SM1_EXTFIR_MASK_REG_OR, FBC_EXT_FIR_MASK_X2_NF);
 	}
 
-	p9_fbc_ioo_tl_scom(i_target_proc_chip);
+	p9_fbc_ioo_tl_scom();
 
 	write_scom(PU_IOE_PB_IOO_FIR_ACTION0_REG, FBC_IOO_TL_FIR_ACTION0);
 	write_scom(PU_IOE_PB_IOO_FIR_ACTION1_REG, FBC_IOO_TL_FIR_ACTION1);
@@ -191,7 +432,7 @@ void p9_chiplet_scominit(void)
 		PPC_BITMASK(9, 11) | PPC_BIT(21) | PPC_BITMASK(26, 27))
 }
 
-void p9n_mcs_scom(chiplet_id_t MCSTarget)
+static void p9n_mcs_scom(chiplet_id_t MCSTarget)
 {
 	scom_and_or_for_chiplet(MCSTarget, 0x5010810, 0xFFFFFFFF01FC3E00, 0x3201C07D);
 	scom_or_for_chiplet(
@@ -212,7 +453,7 @@ void p9n_mcs_scom(chiplet_id_t MCSTarget)
 		| PPC_BIT(24) | PPC_BIT(32) | PPC_BIT(34))
 }
 
-void p9_fbc_ioo_dl_scom(chiplet_id_t obus_chiplet, chiplet_id_t proc_chiplet)
+static void p9_fbc_ioo_dl_scom(chiplet_id_t obus_chiplet, chiplet_id_t proc_chiplet)
 {
 	fapi2::ATTR_PROC_NPU_REGION_ENABLED_Type l_TGT1_ATTR_PROC_NPU_REGION_ENABLED;
 	l_TGT1_ATTR_PROC_NPU_REGION_ENABLED = fapi2::ATTR_PROC_NPU_REGION_ENABLED[proc_chiplet];
@@ -284,7 +525,7 @@ void p9_fbc_ioo_dl_scom(chiplet_id_t obus_chiplet, chiplet_id_t proc_chiplet)
 		PPC_BITMASK(1, 7) | PPC_BITMASK(14, 16));
 }
 
-void p9_vas_scom(void)
+static void p9_vas_scom(void)
 {
 	scom_and_or(0x3011803, ~PPC_BITMASK(0, 53), 0x00210102540D7FFF);
 	scom_and(0x3011806, ~PPC_BITMASK(0, 53));
@@ -318,7 +559,7 @@ void p9_vas_scom(void)
 	}
 }
 
-void p9_int_scom()
+static void p9_int_scom(void)
 {
 	if(CHIP_EC >= 0x22 && SECURE_MEMORY)
 	{
@@ -337,22 +578,22 @@ void p9_int_scom()
 	scom_or(0x5013021, PPC_BITMASK(46, 47) | PPC_BIT(49));
 	if(CHIP_EC == 0x20)
 	{
-		scom_write(0x5013033, 0x2000005C040281C3);
+		write_scom(0x5013033, 0x2000005C040281C3);
 	}
 	else
 	{
-		scom_write(0x5013033, 0x0000005C040081C3);
+		write_scom(0x5013033, 0x0000005C040081C3);
 	}
-	scom_write(0x5013036, 0);
-	scom_write(0x5013037, 0x9554021F80110E0C);
+	write_scom(0x5013036, 0);
+	write_scom(0x5013037, 0x9554021F80110E0C);
 	scom_and_or(
 		0x5013130,
 		~(PPC_BITMASK(2, 7) | ~PPC_BITMASK(10, 15)),
 		PPC_BITMASK(3, 4) | PPC_BITMASK(11, 12));
-	scom_write(0x5013140, 0x050043EF00100020);
-	scom_write(0x5013141, 0xFADFBB8CFFAFFFD7);
-	scom_write(0x5013178, 0x0002000610000000);
-	scom_write(0x501320E, 0x6262220242160000);
+	write_scom(0x5013140, 0x050043EF00100020);
+	write_scom(0x5013141, 0xFADFBB8CFFAFFFD7);
+	write_scom(0x5013178, 0x0002000610000000);
+	write_scom(0x501320E, 0x6262220242160000);
 	scom_and_or(0x5013214, ~PPC_BITMASK(16, 31), 0x00005BBF00000000);
 	scom_and_or(0x501322B, ~PPC_BITMASK(58, 63), PPC_BITMASK(59, 60));
 	if(CHIP_EC == 0x20)
@@ -363,7 +604,7 @@ void p9_int_scom()
 
 }
 
-void p9_fbc_ioo_tl_scom()
+static void p9_fbc_ioo_tl_scom(void)
 {
 	scom_or(0x501380A, 0x84000000840);
 	scom_or(0x501380B, 0x84000000840);
@@ -389,7 +630,7 @@ void p9_fbc_ioo_tl_scom()
 	write_scom(0x5013823, scom_buffer)
 }
 
-void p9_cxa_scom(chiplet_id_t capp_chiplet)
+static void p9_cxa_scom(chiplet_id_t capp_chiplet)
 {
 	// CXA FIR Mask Register
 	// Error mask register.
@@ -569,7 +810,7 @@ void p9_cxa_scom(chiplet_id_t capp_chiplet)
 		 capp_chiplet, 0x201081C, ~PPC_BITMASK(18, 20), PPC_BIT(21));
 }
 
-void p9_nx_scom(void)
+static void p9_nx_scom(void)
 {
 	// DMA Engine Enable Register
 	// [57] CH3_SYM_ENABLE: Enables channel 3 SYM engine.
@@ -817,7 +1058,7 @@ void p9_nx_scom(void)
 	}
 }
 
-void p9_obus_scom(chiplet_id_t obusTarget)
+static void p9_obus_scom(chiplet_id_t obusTarget)
 {
 	for(size_t id = 0; id < 0x17; ++id)
 	{
@@ -1037,4 +1278,22 @@ void p9_obus_scom(chiplet_id_t obusTarget)
 	// limit is used in the calibration process. (binary code - 0x00 is zero slices and 0x50 is maximum slices).
 	// 62:63 RO constant = 0b00
 	scom_and_or_for_chiplet(obusTarget, 0x800F2C0009010C3F, ~PPC_BITMASK(48, 61), 0x158C);
+}
+
+static void call_proc_xbus_enable_ridi(void)
+{
+	p9_chiplet_scominit();;
+	p9_io_obus_firmask_save(target, i_target_chip.getChildren<fapi2::TARGET_TYPE_OBUS>(fapi2::TARGET_STATE_FUNCTIONAL));
+	p9_psi_scom();
+	for(size_t obusIndex = 0; obusIndex < OBUS_AMOUNT; ++obusIndex) {
+		p9_io_obus_scominit(obus_chiplets[obusIndex])
+	}
+	p9_npu_scominit();
+	p9_chiplet_enable_ridi();
+}
+
+void istep_8_11(void)
+{
+	report_istep(8, 11);
+	call_proc_xbus_enable_ridi();
 }

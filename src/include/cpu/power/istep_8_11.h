@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <cpu/power/scom.h>
+
 void call_proc_xbus_enable_ridi(void);
 void p9_chiplet_scominit(void);
 void p9_cxa_scom(void);
@@ -11,6 +13,8 @@ void p9_fbc_ioo_dl_scom(void);
 #define CHIP_EC (0x20)
 #define SECURE_MEMORY (CHIP_EC >= 0x22)
 #define ID_OFFSET (32)
+
+#define PU_NPU_SM2_XTS_ATRMISS_ENA PPC_BIT(63)
 
 #define ATTR_LINK_TRAIN_BOTH (0)
 #define ATTR_LINK_TRAIN_EVEN_ONLY (1)
@@ -33,8 +37,9 @@ void p9_fbc_ioo_dl_scom(void);
 #define OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG_LINK0_CORRECTABLE_ARRAY_ERROR (52)
 
 #define OBUS_AMOUNT (2)
-uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID}
+uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
 
+#define PERV_ROOT_CTRL6_SCOM (0x00050016)
 #define PU_PB_CENT_SM0_PB_CENT_FIR_REG (0x5011C00)
 #define PU_PB_CENT_SM1_EXTFIR_MASK_REG_OR (0x5011C33)
 #define PU_NMMU_MM_EPSILON_COUNTER_VALUE_REG (0x5012C1D)

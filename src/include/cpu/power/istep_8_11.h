@@ -7,9 +7,10 @@ void p9_nx_scom(void);
 void p9_vas_scom(void);
 void p9_fbc_ioo_dl_scom(void);
 
-#define P9_FBC_UTILS_MAX_ELECTRICAL_LINKS 3
+#define P9_FBC_UTILS_MAX_ELECTRICAL_LINKS (3)
 #define CHIP_EC (0x20)
 #define SECURE_MEMORY (CHIP_EC >= 0x22)
+#define ID_OFFSET (32)
 
 #define ATTR_LINK_TRAIN_BOTH (0)
 #define ATTR_LINK_TRAIN_EVEN_ONLY (1)

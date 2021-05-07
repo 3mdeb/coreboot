@@ -63,7 +63,6 @@ fapi2::ReturnCode p9_npu_scominit(
 			l_atrmiss,
 			l_atrmiss);
 
-		// enable NVLINK refclocks
 		FAPI_EXEC_HWP(l_rc, p9_nv_ref_clk_enable, i_target);
 	}
 }
@@ -818,1574 +817,83 @@ void p9_nx_scom(void)
 	}
 }
 
-fapi2::ReturnCode p9_obus_scom(
-	const fapi2::Target<fapi2::TARGET_TYPE_OBUS>& obusTarget)
+void p9_obus_scom(chiplet_id_t obusTarget)
 {
-	fapi2::ATTR_OPTICS_CONFIG_MODE_Type l_obusTarget_ATTR_OPTICS_CONFIG_MODE;
-	FAPI_ATTR_GET(fapi2::ATTR_OPTICS_CONFIG_MODE, obusTarget, l_obusTarget_ATTR_OPTICS_CONFIG_MODE);
-	fapi2::ATTR_IO_O_CHANNEL_TYPE_Type l_obusTarget_ATTR_IO_O_CHANNEL_TYPE;
-	FAPI_ATTR_GET(fapi2::ATTR_IO_O_CHANNEL_TYPE, obusTarget, l_obusTarget_ATTR_IO_O_CHANNEL_TYPE);
-	uint64_t l_def_OBUS_FBC_ENABLED = (l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP);
-	fapi2::buffer<uint64_t> l_scom_buffer;
-
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000009010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000009010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000109010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000109010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000209010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000209010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000309010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000309010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000409010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000409010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000509010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000509010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000609010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000609010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000709010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000D09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000809010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000D09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000909010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000D09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000A09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000D09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000B09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000B09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000C09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000C09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000D09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000D09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000E09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000E09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000000F09010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000000F09010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001009010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	// Advance
-	scom_and_or_for_chiplet(obusTarget, 0x8000001009010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001109010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001109010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001209010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001209010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001309010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001309010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001409010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001409010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001509010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001509010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001609010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001609010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
-	// Address 8000001709010C3F (SCOM)
-	// Description This register contains per-lane spare mode latches.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
-	// 49 RWX RX_PL_DATA_DAC_SPARE_MODE_1: Per-lane spare mode latch.
-	scom_and_or_for_chiplet(obusTarget, 0x8000001709010C3F, ~PPC_BITMASK(53, 63), 3);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280009010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280009010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280109010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280109010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280209010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280209010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280309010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280309010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280409010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280409010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280509010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280509010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280609010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280609010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280709010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280709010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280809010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280809010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280909010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280909010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280A09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280A09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280B09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280B09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280C09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280C09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280D09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280D09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280E09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280E09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000280F09010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000280F09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281009010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281009010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281109010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281109010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281209010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281209010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281309010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281309010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281409010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281409010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281509010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281509010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281609010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281609010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
-	// Address 8000281709010C3F (SCOM)
-	// Description This register contains the fifth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000281709010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300009010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300109010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300209010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300309010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	if(l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
+	for(size_t id = 0; id < 0x17; ++id)
 	{
-		scom_and_for_chiplet(obusTarget, 0x8000300309010C3F, ~PPC_BITMASK(48, 56), 0xA500);
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DATA_DAC_SPARE_MODE_PL
+		// Address 8000000009010C3F (SCOM)
+		// Description This register contains per-lane spare mode latches.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
+		// 48 RWX RX_PL_DATA_DAC_SPARE_MODE_0: Per-lane spare mode latch.
+		scom_and_or_for_chiplet(obusTarget, 0x8000000009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(53, 63), 3);
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_EO_PL
+		// Address 8000280009010C3F (SCOM)
+		// Description This register contains the fifth set of EO DAC controls.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
+		// 48:51 RWX RX_A_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
+		// adjustments.
+		scom_and_or_for_chiplet(obusTarget, 0x8000280009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 61), 0xB840);
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
+		// Address 8000300009010C3F (SCOM)
+		// Description This register contains the sixth set of EO DAC controls.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
+		// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
+		// 52 RO constant = 0b0
+		if(id == 0x3 || id == 0x5 || id == 0x9) {
+			scom_and_for_chiplet(obusTarget, 0x8000300009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0xA500);
+		} else {
+			scom_and_or_for_chiplet(obusTarget, 0x8000300009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 61), 0x1D00);
+		}
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
+		// Address 8000980009010C3F (SCOM)
+		// Description This register contains the fourth set of O controls.
+		scom_and_or_for_chiplet(obusTarget, 0x8000980009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 61), 0xB840);
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
+		// Address 8000A00009010C3F (SCOM)
+		// Description This register contains the fifth set of O controls.
+		if(id == 0x3 || id == 0x5 || id == 0x9) {
+			scom_and_for_chiplet(obusTarget, 0x8000300009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0xA500);
+		} else {
+			scom_and_or_for_chiplet(obusTarget, 0x8000300009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0x1D00);
+		}
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
+		// Address 8000C00009010C3F (SCOM)
+		// Description This register contains the ninth set of O controls.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
+		// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
+		// adjustments.
+		scom_and_or_for_chiplet(obusTarget, 0x8000C00009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 61), 0x17080);
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
+		// Address 8000C80009010C3F (SCOM)
+		// Description This register contains the tenth set of O controls.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
+		// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
+		// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
+		if(id == 0x3) {
+			scom_and_for_chiplet(obusTarget, 0x8000C80009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0x6780);
+		} else if(id == 0x5) {
+			scom_and_for_chiplet(obusTarget, 0x8000C80009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0x9500);
+		} else if(id == 0x9) {
+			scom_and_for_chiplet(obusTarget, 0x8000C80009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0x9710);
+		} else {
+			scom_and_or_for_chiplet(obusTarget, 0x8000C80009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(48, 56), 0x1D00);
+		}
+		// Register Name Receive Bit Mode 2 EO Per-Lane Register
+		// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
+		// Address 8002280009010C3F (SCOM)
+		// Description This register contains the second set of EO mode fields.
+		// Bits SCOM Field Mnemonic: Description
+		// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
+		// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the phase-rotator (PR) accumulator.
+		// Note: This is not the same as setting the inertia amount to zero.
+		scom_and_or_for_chiplet(obusTarget, 0x8002280009010C3F | (id << ID_OFFSET), ~PPC_BITMASK(57, 63), 0x4C);
 	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000300309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300409010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300509010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	if(l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000300509010C3F, ~PPC_BITMASK(48, 56), 0xA500);
-	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000300509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300609010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300709010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300809010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300809010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300909010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	if((l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000300909010C3F, ~PPC_BITMASK(48, 56), 0xA500);
-	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000300909010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300A09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300A09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300B09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300B09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300C09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300C09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300D09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300D09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300E09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300E09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000300F09010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000300F09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301009010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301109010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301209010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301309010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301409010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301509010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301609010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL6_EO_PL
-	// Address 8000301709010C3F (SCOM)
-	// Description This register contains the sixth set of EO DAC controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_A_CTLE_COARSE: This is the CTLE coarse peak value. Only 4 bits are currently used.
-	// 52 RO constant = 0b0
-	scom_and_or_for_chiplet(obusTarget, 0x8000301709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980009010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980009010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980109010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980109010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980209010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980209010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980309010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980309010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980409010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980409010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980509010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980509010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980609010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980609010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980709010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980709010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980809010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980809010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980909010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980909010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980A09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980A09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980B09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980B09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980C09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980C09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980D09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980D09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980E09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980E09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000980F09010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000980F09010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981009010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981009010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981109010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981109010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981209010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981209010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981309010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981309010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981409010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981409010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981509010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981509010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981609010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981609010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL4_O_PL
-	// Address 8000981709010C3F (SCOM)
-	// Description This register contains the fourth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000981709010C3F, ~PPC_BITMASK(48, 61), 0xB840);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00009010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	scom_and_for_chiplet(obusTarget, 0x8000A00009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00109010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_for_chiplet(obusTarget, 0x8000A00109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00209010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_for_chiplet(obusTarget, 0x8000A00209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00309010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	if((l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000A00309010C3F, ~PPC_BITMASK(48, 56), 0xA500);
-	}
-	else
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000A00309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00409010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00509010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	if(l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000A00509010C3F, ~PPC_BITMASK(48, 56), 0xA500);
-	}
-	else
-	{
-		scom_and_for_chiplet(obusTarget, 0x8000A00509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00609010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	// Advance POWER9 Registers
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00709010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00809010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00809010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00909010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	fapi2::getScom(obusTarget, 0x8000A00909010C3F, l_scom_buffer);
-	l_scom_buffer.insert<53, 4, 60, uint64_t>(0xA);
-	if((l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
-	{
-		l_scom_buffer.insert<48, 5, 59, uint64_t>(0x14);
-	}
-	else
-	{
-		l_scom_buffer.insert<48, 5, 59, uint64_t>(0x3);
-	}
-	fapi2::putScom(obusTarget, 0x8000A00909010C3F, l_scom_buffer);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00A09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00A09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00B09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00B09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00C09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00C09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00D09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00D09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00E09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00E09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A00F09010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A00F09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01009010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01109010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01209010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01309010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01409010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01509010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01609010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL5_O_PL
-	// Address 8000A01709010C3F (SCOM)
-	// Description This register contains the fifth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_B_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_B_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000A01709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00009010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00009010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00109010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00109010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00209010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00209010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00309010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00309010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00409010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00409010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00509010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00509010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00609010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00609010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00709010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00709010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00809010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00809010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00909010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00909010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// adjustments.
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00A09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00A09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00B09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00B09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00C09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00C09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00D09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00D09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00E09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00E09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C00F09010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C00F09010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01009010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01009010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01109010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01109010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01209010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01209010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01309010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01309010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01409010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01409010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01509010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01509010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01609010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01609010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL9_O_PL
-	// Address 8000C01709010C3F (SCOM)
-	// Description This register contains the ninth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_INTEG_COARSE_GAIN: This is the integrator coarse-gain control used in making common mode
-	// adjustments.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C01709010C3F, ~PPC_BITMASK(48, 61), 0x17080);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80009010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80109010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80209010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80309010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	if(l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80309010C3F, ~PPC_BITMASK(48, 56), 0x6780);
-	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80309010C3F, ~PPC_BITMASK(48, 56), 0x1F80);
-	}
-
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80409010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80509010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	if(l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP)
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x9500);
-	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80609010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80709010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80809010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80809010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80909010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	if((l_obusTarget_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP))
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80909010C3F, ~PPC_BITMASK(48, 52), 0x9710);
-	}
-	else
-	{
-		scom_and_or_for_chiplet(obusTarget, 0x8000C80909010C3F, ~PPC_BITMASK(48, 52), 0x1F10);
-	}
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80A09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80A09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80B09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80B09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80C09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80C09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80D09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80D09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80E09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80E09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C80F09010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C80F09010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81009010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81009010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81109010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81109010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81209010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81209010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81309010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81309010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81409010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81409010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81509010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81509010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81609010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81609010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RX_DAC_REGS.RX_DAC_REGS.RX_DAC_CNTL10_O_PL
-	// Address 8000C81709010C3F (SCOM)
-	// Description This register contains the tenth set of O controls.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
-	// 48:51 RWX RX_E_CTLE_COARSE: This is the CTLE coarse peak value.
-	// 52:55 RWX RX_E_CTLE_GAIN: This is the CTLE gain setting.
-	scom_and_or_for_chiplet(obusTarget, 0x8000C81709010C3F, ~PPC_BITMASK(48, 56), 0x1D00);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280009010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the phase-rotator (PR) accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280009010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280109010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280109010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280209010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280209010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#0.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280309010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280309010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280409010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280409010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280509010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280509010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280609010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280609010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#1.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280709010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280709010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280809010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280809010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280909010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280909010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280A09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280A09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#2.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280B09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280B09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280C09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280C09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280D09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280D09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280E09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280E09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#3.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002280F09010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002280F09010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281009010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281009010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281109010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281109010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281209010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281209010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#4.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281309010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281309010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#0.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281409010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281409010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#1.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281509010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281509010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#2.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281609010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(obusTarget, 0x8002281609010C3F, ~PPC_BITMASK(57, 63), 0x4C);
-	// Register Name Receive Bit Mode 2 EO Per-Lane Register
-	// Mnemonic IOO0.IOO_CPLT.RX0.RXPACKS#5.RXPACK.RD.SLICE#3.RD.RX_BIT_REGS.RX_BIT_MODE2_EO_PL
-	// Address 8002281709010C3F (SCOM)
-	// Description This register contains the second set of EO mode fields.
-	// Bits SCOM Field Mnemonic: Description
-	// 0:55 RO constant = 0b00000000000000000000000000000000000000000000000000000000
-	// 56 RWX RX_PR_FW_OFF: Removes the flywheel from the PR accumulator.
-	// Note: This is not the same as setting the inertia amount to zero.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8002281709010C3F,
-	~PPC_BITMASK(57, 63), 0x4C);
 	// Register Name Receive Spare Mode Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_SPARE_MODE_PG
 	// Address 8008000009010C3F (SCOM)
@@ -2412,21 +920,12 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:49 RWX RX_DFE_CA_CFG: Receive DFE clock adjustment settings. This 2-bit field contains an encoded value for K
 	// as follows:
-	if(l_obusTarget_ATTR_IO_O_CHANNEL_TYPE == fapi2::ENUM_ATTR_IO_O_CHANNEL_TYPE_CABLE && CHIP_EC != 0x20)
-	{
-		scom_and_for_chiplet(obusTarget, 0x8008180009010C3F, PPC_BIT(54) | PPC_BIT(57));
-	}
-	else
-	{
-		scom_and_for_chiplet(obusTarget, 0x8008180009010C3F, ~(PPC_BIT(54) | PPC_BIT(57)));
-	}
+	scom_and_for_chiplet(obusTarget, 0x8008180009010C3F, ~(PPC_BIT(54) | PPC_BIT(57)));
 	// Register Name Receive CTL Mode 10 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE10_EO_PG
 	// Address 8008580009010C3F (SCOM)
 	// Description This register contains the tenth set of receive CTL EO mode fields.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008580009010C3F,
-	~PPC_BITMASK(48, 63), 0x4AD2);
+	scom_and_or_for_chiplet(obusTarget, 0x8008580009010C3F,~PPC_BITMASK(48, 63), 0x4AD2);
 	// Register Name Receive CTL Mode 11 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE11_EO_PG
 	// Address 8008600009010C3F (SCOM)
@@ -2435,9 +934,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:50 RWX RX_OFF_INIT_CFG: This register controls the servo filter for offset measurements during initialization.
 	// 51:53 RWX RX_OFF_RECAL_CFG: This register controls the servo filter for offset measurements during recalibration.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008600009010C3F,
-	~PPC_BITMASK(48, 56), 0x4900);
+	scom_and_or_for_chiplet(obusTarget, 0x8008600009010C3F, ~PPC_BITMASK(48, 56), 0x4900);
 	// Register Name Receive CTL Mode 12 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE12_EO_PG
 	// Address 8008680009010C3F (SCOM)
@@ -2446,9 +943,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:51 RWX RX_SERVO_CHG_CFG: This register controls the minimum acceptable changes of the accumulator for a
 	// valid servo operation. It is used to assure that we have reached a stable point.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008680009010C3F,
-	~PPC_BITMASK(60, 62), 0x10);
+	scom_and_or_for_chiplet(obusTarget, 0x8008680009010C3F, ~PPC_BITMASK(60, 62), 0x10);
 	// Register Name Receive CTL Mode 13 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE13_EO_PG
 	// Address 8008700009010C3F (SCOM)
@@ -2457,9 +952,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:48 RO constant = 0b0000000000000000000000000000000000000000000000000
 	// 49:55 RWX RX_CM_OFFSET_VAL: This field contains the value used to offset the amp DAC when running common
 	// mode.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008700009010C3F,
-	~PPC_BITMASK(49, 55), 0x4600);
+	scom_and_or_for_chiplet(obusTarget, 0x8008700009010C3F, ~PPC_BITMASK(49, 55), 0x4600);
 	// Register Name Receive CTL Mode 14 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE14_EO_PG
 	// Address 8008780009010C3F (SCOM)
@@ -2468,9 +961,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:51 RWX RX_AMP_INIT_TIMEOUT: This field is used for amplitude measurements during initialization.
 	// 52:55 RWX RX_AMP_RECAL_TIMEOUT: This field is used for amplitude measurements during recalibration.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008780009010C3F,
-	~PPC_BITMASK(48, 55), 0x6600);
+	scom_and_or_for_chiplet(obusTarget, 0x8008780009010C3F, ~PPC_BITMASK(48, 55), 0x6600);
 	// Register Name Receive CTL Mode 15 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE15_EO_PG
 	// Address 8008800009010C3F (SCOM)
@@ -2479,9 +970,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:51 RWX RX_OFF_INIT_TIMEOUT: This field is used for offset measurements during initialization.
 	// 52:55 RWX RX_OFF_RECAL_TIMEOUT: This field is used for offset measurements during recalibration.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008800009010C3F,
-	~PPC_BITMASK(48, 55), 0x6600);
+	scom_and_or_for_chiplet(obusTarget, 0x8008800009010C3F, ~PPC_BITMASK(48, 55), 0x6600);
 	// Register Name Receive CTL Mode 29 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE29_EO_PG
 	// Address 8008D00009010C3F (SCOM)
@@ -2490,9 +979,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:55 RWX RX_APX111_HIGH: This field contains the receive Amax high target, in amplitude DAC steps (as measured
 	// by ap_x111 and an_x000). The default is d102.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8008D00009010C3F,
-	~PPC_BITMASK(48, 63), 0x785A);
+	scom_and_or_for_chiplet(obusTarget, 0x8008D00009010C3F, ~PPC_BITMASK(48, 63), 0x785A);
 	// Register Name Receive CTL Mode 27 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE27_EO_PG
 	// Address 8009700009010C3F (SCOM)
@@ -2501,14 +988,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48 RWX RX_RC_ENABLE_CTLE_1ST_LATCH_OFFSET_CAL: Receive recalibration; first latch offset adjustment
 	// enable with CTLE-based disable.
-	if(l_obusTarget_ATTR_IO_O_CHANNEL_TYPE == fapi2::ENUM_ATTR_IO_O_CHANNEL_TYPE_CABLE && CHIP_EC != 0x20)
-	{
-		scom_or_for_chiplet(obusTarget, 0x8009700009010C3F, PPC_BIT(51));
-	}
-	else
-	{
-		scom_and_for_chiplet(obusTarget, 0x8009700009010C3F, ~PPC_BIT(51));
-	}
+	scom_and_for_chiplet(obusTarget, 0x8009700009010C3F, ~PPC_BIT(51));
 	// Register Name Receive CTL Mode 28 EO Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.RX0.RXCTL.CTL_REGS.RX_CTL_REGS.RX_CTL_MODE28_EO_PG
 	// Address 8009780009010C3F (SCOM)
@@ -2526,9 +1006,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:50 RWX RX_OCTANT_SELECT: This field selects which c16 clock is used on IOO.
 	// 51:52 RWX RX_SPEED_SELECT: This field selects the IOO speed control.
-	scom_and_or_for_chiplet(
-	obusTarget, 0x8009880009010C3F,
-	~PPC_BITMASK(48, 52), 0x5000);
+	scom_and_or_for_chiplet(obusTarget, 0x8009880009010C3F, ~PPC_BITMASK(48, 52), 0x5000);
 	// Register Name Transmit ID1 Per-Group Register
 	// Mnemonic IOO0.IOO_CPLT.TX0.TXCTL.CTL_REGS.TX_CTL_REGS.TX_ID1_PG
 	// Address 800C0C0009010C3F (SCOM)
@@ -2546,9 +1024,7 @@ fapi2::ReturnCode p9_obus_scom(
 	// 0:47 RO constant = 0b000000000000000000000000000000000000000000000000
 	// 48:52 RWX TX_ZCAL_P_4X: Calibration circuit PSeg-4X enable value. This field holds the current value of the enabled
 	// segments. It is a 2x multiple of the actual segment count. It can be read for the current calibration result set
-	scom_and_or_for_chiplet(
-	obusTarget, 0x800F1C0009010C3F,
-	~PPC_BITMASK(48, 52), 0xE000);
+	scom_and_or_for_chiplet(obusTarget, 0x800F1C0009010C3F, ~PPC_BITMASK(48, 52), 0xE000);
 	// Register Name Transmit Impedance Calibration SWO2 Per-Bus Register
 	// Mnemonic IOO0.IOO_CPLT.BUSCTL.BUS_REG_IF.BUS_CTL_REGS.TX_IMPCAL_SWO2_PB
 	// Address 0x800F2C0009010C3F (SCOM)
@@ -2560,7 +1036,5 @@ fapi2::ReturnCode p9_obus_scom(
 	// 55:61 RWX TX_ZCAL_SM_MAX_VAL: Impedance calibration maximum search threshold. This high-side segment count
 	// limit is used in the calibration process. (binary code - 0x00 is zero slices and 0x50 is maximum slices).
 	// 62:63 RO constant = 0b00
-	scom_and_or_for_chiplet(
-	obusTarget, 0x800F2C0009010C3F,
-	~PPC_BITMASK(48, 61), 0x158C);
+	scom_and_or_for_chiplet(obusTarget, 0x800F2C0009010C3F, ~PPC_BITMASK(48, 61), 0x158C);
 }

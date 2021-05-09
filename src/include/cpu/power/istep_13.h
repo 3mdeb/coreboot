@@ -190,6 +190,14 @@ static inline uint64_t mca_read(chiplet_id_t mcs, int mca, uint64_t scom)
 	return read_scom_for_chiplet(mcs, scom + mca * mul);
 }
 
+static inline void mca_write(chiplet_id_t mcs, int mca, uint64_t scom, uint64_t val)
+{
+	/* Indirect registers have different stride than the direct ones in
+	 * general, except for (only?) direct PHY registers. */
+	unsigned mul = (scom & PPC_BIT(0) ||
+	                (scom & 0xFFFFF000) == 0x07011000) ? 0x400 : 0x40;
+	write_scom_for_chiplet(mcs, scom + mca * mul, val);
+}
 static inline uint64_t dp_mca_read(chiplet_id_t mcs, int dp, int mca, uint64_t scom)
 {
 	return mca_read(mcs, mca, scom + dp * 0x40000000000);

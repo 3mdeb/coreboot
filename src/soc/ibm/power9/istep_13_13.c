@@ -184,7 +184,7 @@ static uint64_t dimms_rank_config(mca_data_t *mca, uint64_t xlt0, int update_d_b
 			 * Note: this depends on width/density having values as encoded in
 			 * SPD and istep_13.h. Please do not change them.
 			 */
-			int row_bits = 13 + mca->dimm[me].density - mca->dimm[me].width;
+			int row_bits = 12 + mca->dimm[me].density - mca->dimm[me].width;
 			if (row_bits > max_row_bits)
 				max_row_bits = row_bits;
 

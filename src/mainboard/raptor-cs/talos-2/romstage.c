@@ -105,8 +105,15 @@ static void prepare_dimm_data(void)
 	int i, mcs, mca;
 	int tckmin = 0x06;		// Platform limit
 
+	/*
+	 * DIMMs 4-7 are under a different port. This is not the same as bus, but we
+	 * need to pass that information to I2C function. As there is no easier way,
+	 * use MSB of address and mask it out at the receiving side. This will print
+	 * wrong addresses in dump_spd_info(), but that is small price to pay.
+	 */
 	struct spd_block blk = {
-		.addr_map = { DIMM0, DIMM1, DIMM2, DIMM3, DIMM4, DIMM5, DIMM6, DIMM7},
+		.addr_map = { DIMM0, DIMM1, DIMM2, DIMM3,
+		              DIMM4 | 0x80, DIMM5 | 0x80, DIMM6 | 0x80, DIMM7 | 0x80},
 	};
 
 	get_spd_smbus(&blk);

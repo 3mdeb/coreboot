@@ -79,6 +79,201 @@ static void revert_mc_hb_dcbz_config(void)
 }
 
 /*
+ * TODO: right now, every port is a separate group. This is easier to code, but
+ * will impact performance due to no interleaving.
+ *
+ * Even though documentation (POWER9 Processor User's Manual) says that only the
+ * total amount of memory behind an MCU has to be the same, Hostboot doesn't
+ * group 1Rx4 with 2Rx8 (both have 16GB), at least if they are on the different
+ * sides of CPU. Case when they are on the same side was not tested yet.
+ *
+ * If that means MCAs from different sides cannot be grouped, groups bigger than
+ * 2 ports are not possible, at least for Talos.
+ *
+ * TODO2: note that this groups _ports_, not _DIMMs_. One implication is that
+ * total amount of memory doesn't have to be a power of 2 (different densities).
+ * Group sizes written to the register however are based on log2 of size. This
+ * means that either there will be a hole or some RAM won't be mapped. We do not
+ * have a way of testing it right now, all our DIMMs have 8Gb density.
+ */
+struct mc_group {
+	/* Multiple MCAs can be in one group, but not the other way around. */
+	uint8_t port_mask;
+	/* Encoded, 4GB = 0, 8GB = 1, 16GB = 3, 32GB = 7 ... */
+	uint8_t group_size;
+};
+
+/* Without proper documentation it's hard to tell if this is correct. */
+/* The following array is MCS_MCFGP for MCA0 and MCS_MCFGPM for MCA1:
+ *	MCS_MCFGP                                       // undocumented, 0x0501080A
+ *	  [all]   0
+ *	  [0]     VALID
+ *	  [1-4]   MC_CHANNELS_PER_GROUP                           (*)
+ *	  [5-7]   CHANNEL_0_GROUP_MEMBER_IDENTIFICATION           (*)
+ *	  [8-10]  CHANNEL_1_GROUP_MEMBER_IDENTIFICATION           (*)
+ *	  [13-23] GROUP_SIZE
+ *	  [24-47] GROUP_BASE_ADDRESS
+ *
+ *	MCS_MCFGPM                                      // undocumented, 0x0501080C
+ *	  [all]   0
+ *	  [0]     VALID
+ *	  [13-23] GROUP_SIZE
+ *	  [24-47] GROUP_BASE_ADDRESS
+ *
+ * Fields marked with (*) are used only when there is more than 1 MCA in a group.
+ */
+static uint64_t mcfgp_regs[MCS_PER_PROC][MCA_PER_MCS];
+
+/* Encodes size and keeps groups[] sorted. */
+static void add_group(struct mc_group groups[MCA_PER_PROC], int size, uint8_t mask)
+{
+	int i;
+	/*
+	 * Size calculations are correct for size that is a power of 2. I have no
+	 * idea what is the proper thing to do if it isn't.
+	 */
+	struct mc_group in = {mask, (size - 1) >> 2};
+
+	if (size & (size - 1))
+		die("Size of group %#2.2x (%d GB) is not a power of 2\n", mask, size);
+
+	for (i = 0; i < MCA_PER_PROC; i++) {
+		struct mc_group tmp = groups[i];
+
+		if (tmp.group_size < in.group_size) {
+			groups[i] = in;
+			/* Shift the rest of elements */
+			in = tmp;
+		}
+
+		/* Current element was empty */
+		if (tmp.port_mask == 0)
+			break;
+	}
+
+	if (in.port_mask != 0)
+		die("Tried to add more groups than possible\n");
+}
+
+/* TODO: make groups with > 1 MCA possible */
+static void fill_groups(void)
+{
+	int mcs_i, mca_i, i;
+	struct mc_group groups[MCA_PER_PROC] = {0};
+	/* This is in 4GB units, as expected by registers. */
+	uint32_t cur_ba = 0;
+
+	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		if (!mem_data.mcs[mcs_i].functional)
+			continue;
+
+		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
+			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
+
+			if (!mca->functional)
+				continue;
+
+			/*
+			 * Use the same format as in Hostboot, in case there can be more
+			 * than 2 MCAs per MCS.
+			 * mask = (MCS0/MCA0, MCS0/MCA1, 0, 0, MCS1/MCA0, MCS1/MCA1, 0, 0)
+			 */
+			uint8_t mask = PPC_BIT(mcs_i * 4 + mca_i) >> 56;
+			/* Non-present DIMM will have a size of 0. */
+			add_group(groups, mca->dimm[0].size_gb + mca->dimm[1].size_gb, mask);
+		}
+	}
+
+	/* Now that all the groups are sorted by size, we can set base addresses. */
+	for (i = 0; i < MCA_PER_PROC; i++) {
+		uint8_t mask = groups[i].port_mask;
+		if (mask == 0)
+			break;
+
+		/* A reminder for whoever implements this in add_group() but not here. */
+		if (mask & (mask - 1))
+			die("Multiple MCs in a group are not supported yet\n");
+
+		/*
+		 * Get MCS and MCA from mask, we expect bigger groups in the future. No
+		 * else-ifs, bigger groups must set multiple registers (though that is
+		 * not enough, there are also IDs to be set in MCS_MCFGP).
+		 */
+		if (mask & 0x80) {
+			/* MCS = 0, MCA = 0 */
+			mcfgp_regs[0][0] = PPC_BIT(0) | PPC_SHIFT(groups[i].group_size, 23) |
+			                   PPC_SHIFT(cur_ba, 47);
+		}
+		if (mask & 0x40) {
+			/* MCS = 0, MCA = 1 */
+			mcfgp_regs[0][1] = PPC_BIT(0) | PPC_SHIFT(groups[i].group_size, 23) |
+			                   PPC_SHIFT(cur_ba, 47);
+		}
+		if (mask & 0x08) {
+			/* MCS = 1, MCA = 0 */
+			mcfgp_regs[1][0] = PPC_BIT(0) | PPC_SHIFT(groups[i].group_size, 23) |
+			                   PPC_SHIFT(cur_ba, 47);
+		}
+		if (mask & 0x04) {
+			/* MCS = 1, MCA = 1 */
+			mcfgp_regs[1][1] = PPC_BIT(0) | PPC_SHIFT(groups[i].group_size, 23) |
+			                   PPC_SHIFT(cur_ba, 47);
+		}
+
+		cur_ba += groups[i].group_size + 1;
+	}
+	/*
+	 * This would be a good place to check if we passed the start of PCIe MMIO
+	 * range (2TB). In that case we probably should configure this memory hole
+	 * somehow (MCFGPA?).
+	 */
+}
+
+/*
+ * This function is different than all previous FIR unmasking. It doesn't touch
+ * Action0 register. It also doesn't modify Action1, it just writes the value
+ * discarding the old one. As these registers are not documented, I can't even
+ * tell whether it sets checkstop, recoverable error or something else.
+ */
+static void fir_unmask(int mcs_i)
+{
+	/* FIXME: this will be mcs_to_nest[] after rebasing */
+	chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+
+	/* MCS_MCFIRACT1                   // undocumented, 0x05010807
+		[all]   0
+		[0]     MC_INTERNAL_RECOVERABLE_ERROR = 1
+		[8]     COMMAND_LIST_TIMEOUT =          1
+	*/
+	write_scom_for_chiplet(nest, 0x05010807, PPC_BIT(0) | PPC_BIT(8));
+
+	/* MCS_MCFIRMASK (AND)             // undocumented, 0x05010804
+		[all]   1
+		[0]     MC_INTERNAL_RECOVERABLE_ERROR =     0
+		[1]     MC_INTERNAL_NONRECOVERABLE_ERROR =  0
+		[2]     POWERBUS_PROTOCOL_ERROR =           0
+		[4]     MULTIPLE_BAR =                      0
+		[5]     INVALID_ADDRESS =                   0
+		[8]     COMMAND_LIST_TIMEOUT =              0
+	*/
+	write_scom_for_chiplet(nest, 0x05010804,
+	                       ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(2) |
+	                         PPC_BIT(4) | PPC_BIT(5) | PPC_BIT(8)));
+}
+
+static void mcd_fir_mask(void)
+{
+	/* These are set always for N1 chiplet
+	MCD1.MCD_FIR_MASK_REG
+	  [all]   1
+	MCD0.MCD_FIR_MASK_REG
+	  [all]   1
+	*/
+	write_scom_for_chiplet(N1_CHIPLET_ID, 0x03011403, ~0);
+	write_scom_for_chiplet(N1_CHIPLET_ID, 0x03011003, ~0);
+}
+
+/*
  * 14.5 proc_setup_bars: Setup Memory BARs
  *
  * a) p9_mss_setup_bars.C (proc chip) -- Nimbus
@@ -119,20 +314,29 @@ void istep_14_5(void)
 	/* Start MCS reset */
 	revert_mc_hb_dcbz_config();
 
+	fill_groups();
+
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		/* FIXME: this will be mcs_to_nest[] after rebasing */
+		chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+
 		if (!mem_data.mcs[mcs_i].functional)
 			continue;
 
-		write_scom_for_chiplet(5, 0x05010807, 0x8080000000000000);
-		write_scom_for_chiplet(5, 0x05010804, 0x137FFFFFFFFFFFFF);
-		write_scom_for_chiplet(5, 0x0501080A, 0);
-		write_scom_for_chiplet(5, 0x0501080C, 0x8000010000000000);
-		write_scom_for_chiplet(5, 0x0501080B, 0);
-		write_scom_for_chiplet(5, 0x0501080D, 0);
+		fir_unmask(mcs_i);
 
-		write_scom_for_chiplet(3, 0x03011403, ~0);
-		write_scom_for_chiplet(3, 0x03011003, ~0);
+		/*
+		 * More undocumented registers. First two are described before
+		 * 'mcfgp_regs', last two are for setting up memory hole and SMF, they
+		 * are unused now.
+		 */
+		write_scom_for_chiplet(nest, 0x0501080A, mcfgp_regs[mcs_i][0]);
+		write_scom_for_chiplet(nest, 0x0501080C, mcfgp_regs[mcs_i][1]);
+		write_scom_for_chiplet(nest, 0x0501080B, 0);
+		write_scom_for_chiplet(nest, 0x0501080D, 0);
 	}
+
+	mcd_fir_mask();
 
 	printk(BIOS_EMERG, "ending istep 14.5\n");
 }

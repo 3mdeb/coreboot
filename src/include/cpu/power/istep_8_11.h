@@ -2,12 +2,7 @@
 
 #include <cpu/power/scom.h>
 
-void call_proc_xbus_enable_ridi(void);
-void p9_chiplet_scominit(void);
-void p9_cxa_scom(void);
-void p9_nx_scom(void);
-void p9_vas_scom(void);
-void p9_fbc_ioo_dl_scom(void);
+void istep_8_11(void);
 
 #define P9_FBC_UTILS_MAX_ELECTRICAL_LINKS (3)
 #define CHIP_EC (0x20)
@@ -37,7 +32,9 @@ void p9_fbc_ioo_dl_scom(void);
 #define OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG_LINK0_CORRECTABLE_ARRAY_ERROR (52)
 
 #define OBUS_AMOUNT (2)
-uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
+uint64_t obus_chiplets[OBUS_AMOUNT] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
+#define CAPP_AMOUNT (2)
+uint64_t capp_chiplets[CAPP_AMOUNT] = {N0_CHIPLET_ID, N2_CHIPLET_ID};
 
 #define PERV_ROOT_CTRL6_SCOM (0x00050016)
 #define PU_PB_CENT_SM0_PB_CENT_FIR_REG (0x5011C00)
@@ -56,6 +53,7 @@ uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
 #define OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG (0x9010803)
 #define OBUS_LL0_PB_IOOL_FIR_ACTION0_REG (0x9010806)
 #define OBUS_LL0_PB_IOOL_FIR_ACTION1_REG (0x9010807)
+#define PU_NPU_SM2_XTS_ATRMISS_POST_P9NDD1 (0x501164A)
 
 #define FBC_IOE_TL_FIR_MASK_X2_NF (0x000300C0C0000220ULL)
 #define FBC_EXT_FIR_MASK_X2_NF (0x2000000000000000ULL)

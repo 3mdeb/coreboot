@@ -4,28 +4,29 @@
 #include <cpu/power/istep_13.h> // MCS ID's
 #include <cpu/power/scom.h>
 #include <timer.h>
+#include <commonlib/bsd/helpers.h>
 
 #define PERV_NET_CTRL0 (0x000F0040)
 #define PERV_NET_CTRL0_WOR (0x000F0042)
 
-static void p9_chiplet_enable_ridi_net_ctrl_action_function(chiplet_id_t chiplet)
-{
-	if (read_scom_for_chiplet(chiplet, PERV_NET_CTRL0) & PPC_BIT(0))
-	{
-		write_scom_for_chiplet(chiplet, PERV_NET_CTRL0_WOR, PPC_BITMASK(19, 21));
-	}
-}
-
 static void p9_chiplet_enable_ridi(void)
 {
-	for (auto l_target_cplt : proc_chip.getChildren<fapi2::TARGET_TYPE_PERV>(
-		static_cast<fapi2::TargetFilter>(
-		fapi2::TARGET_FILTER_ALL_MC |
-		fapi2::TARGET_FILTER_ALL_PCI |
-		fapi2::TARGET_FILTER_ALL_OBUS),
-		fapi2::TARGET_STATE_FUNCTIONAL))
+	chiplet_id_t target_list[] = {
+		MC01_CHIPLET_ID,
+		MC23_CHIPLET_ID,
+		OB0_CHIPLET_ID,
+		OB3_CHIPLET_ID,
+		PCI0_CHIPLET_ID,
+		PCI1_CHIPLET_ID,
+		PCI2_CHIPLET_ID,
+	};
+
+	for(size_t target_index = 0; target_index < ARRAY_SIZE(target_list); ++target_index)
 	{
-		p9_chiplet_enable_ridi_net_ctrl_action_function(l_target_cplt);
+		if (read_scom_for_chiplet(target_list[target_index], PERV_NET_CTRL0) & PPC_BIT(0))
+		{
+			write_scom_for_chiplet(target_list[target_index], PERV_NET_CTRL0_WOR, PPC_BITMASK(19, 21));
+		}
 	}
 }
 
@@ -374,7 +375,7 @@ static void p9_psi_scom(void)
 static void p9_io_obus_firmask_save(void)
 {
 	scom_or(PU_IOE_PB_IOO_FIR_MASK_REG, PPC_BITMASK(28, 35) | PPC_BITMASK(52, 59));
-	for (size_t obus_index = 0; obus_index < OBUS_AMOUNT; obus_index++)
+	for (size_t obus_index = 0; obus_index < ARRAY_SIZE(obus_chiplets); obus_index++)
 	{
 		uint64_t obus_target = obus_chiplets[obus_index];
 		uint64_t firMaskReg = read_scom_for_chiplet(obus_target, OBUS_LL0_LL0_LL0_PB_IOOL_FIR_MASK_REG);
@@ -950,32 +951,18 @@ static void p9_fbc_ioo_tl_scom(void)
 
 static void p9_fbc_ioo_dl_scom(chiplet_id_t obus_chiplet)
 {
-	fapi2::ATTR_PROC_NPU_REGION_ENABLED_Type l_TGT1_ATTR_PROC_NPU_REGION_ENABLED;
-	l_TGT1_ATTR_PROC_NPU_REGION_ENABLED = fapi2::ATTR_PROC_NPU_REGION_ENABLED[proc_chiplet];
-
 	// Power Bus OLL Configuration Register
 	// PB.IOO.LL0.IOOL_CONFIG
 	// Processor bus OLL configuration register
-	if(fapi2::ATTR_LINK_TRAIN == fapi2::ENUM_ATTR_LINK_TRAIN_BOTH)
-	{
-		scom_and_or(
-			0x901080A,
-			~(PPC_BIT(11) | PPC_BITMASK(32, 35)),
-			PPC_BIT(0) | PPC_BIT(2) | PPC_BIT(4)
-			| PPC_BITMASK(12, 15) | PPC_BITMASK(28, 31) | PPC_BITMASK(48, 51));
-	}
-	else
-	{
-		scom_and_or(
-			0x901080A,
-			~(PPC_BIT(0) | PPC_BIT(11) | PPC_BITMASK(32, 35)),
-			PPC_BIT(2) | PPC_BIT(4) | PPC_BITMASK(12, 15)
-			| PPC_BITMASK(28, 31) | PPC_BITMASK(48, 51));
-	}
+	scom_and_or(
+		0x901080A,
+		~(PPC_BIT(0) | PPC_BIT(11) | PPC_BITMASK(32, 35)),
+		PPC_BIT(2) | PPC_BIT(4) | PPC_BITMASK(12, 15)
+		| PPC_BITMASK(28, 31) | PPC_BITMASK(48, 51));
 	// Power Bus OLL PHY Training Configuration Register
 	// PB.IOO.LL0.IOOL_PHY_CONFIG
 	// Processor bus OLL PHY training configuration register
-	if(l_TGT1_ATTR_PROC_NPU_REGION_ENABLED)
+	if(ATTR_PROC_NPU_REGION_ENABLED)
 	{
 		scom_and_or(
 			0x901080C,
@@ -1051,7 +1038,7 @@ static void p9_chiplet_scominit(void)
 	write_scom(PU_IOE_PB_IOO_FIR_ACTION1_REG, FBC_IOO_TL_FIR_ACTION1);
 	write_scom(PU_IOE_PB_IOO_FIR_MASK_REG, FBC_IOO_TL_FIR_MASK);
 
-	for(size_t obus_index = 0; obus_index < OBUS_AMOUNT; ++obus_index)
+	for(size_t obus_index = 0; obus_index < ARRAY_SIZE(obus_chiplets); ++obus_index)
 	{
 		// configure action registers & unmask
 		write_scom_for_chiplet(obus_chiplets[obus_index], OBUS_LL0_PB_IOOL_FIR_ACTION0_REG, FBC_IOO_DL_FIR_ACTION0);
@@ -1062,7 +1049,7 @@ static void p9_chiplet_scominit(void)
 	// Invoke NX SCOM initfile
 	p9_nx_scom();
 	// Invoke CXA SCOM initfile
-	for(size_t capp_index = 0; capp_index < CAPP_AMOUNT; ++capp_index)
+	for(size_t capp_index = 0; capp_index < ARRAY_SIZE(capp_chiplets); ++capp_index)
 	{
 		p9_cxa_scom(capp_chiplets[capp_index]);
 	}
@@ -1083,7 +1070,7 @@ static void call_proc_xbus_enable_ridi(void)
 	p9_chiplet_scominit();
 	p9_io_obus_firmask_save();
 	p9_psi_scom();
-	for(size_t obusIndex = 0; obusIndex < OBUS_AMOUNT; ++obusIndex) {
+	for(size_t obusIndex = 0; obusIndex < ARRAY_SIZE(obus_chiplets); ++obusIndex) {
 		p9_io_obus_scominit(obus_chiplets[obusIndex]);
 	}
 	p9_npu_scominit();

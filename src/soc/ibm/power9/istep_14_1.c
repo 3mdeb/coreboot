@@ -332,7 +332,7 @@ static void init_mcbist(int mcs_i)
 	 * ALTER and the one above for WRITE. ALTER can write 128 different bytes,
 	 * while WRITE repeats a sequence of 64B twice. ALTER is ~3-4 times slower.
 	 */
-	load_maint_pattern(mcs_i, patterns[2]);
+	load_maint_pattern(mcs_i, patterns[0]);
 
 	/*
 	 * Load the data rotate config and seeds
@@ -573,7 +573,7 @@ static void mcbist_execute(int mcs_i)
 /*
  * FIXME: 0x07012300[10] MCBIST_PROGRAM_COMPLETE should be checked instead. It
  * gets set when MCBIST is paused, while 0x070123DC[0] IP stays on in that case.
- * This may become a problem for DIMMs with more than one rank.
+ * This may become a problem for 3DS DIMMs.
  */
 static int mcbist_is_done(int mcs_i)
 {
@@ -668,9 +668,11 @@ void istep_14_1(void)
 				add_fixed_pattern_write(mcs_i, mca_i*2 + dimm);
 				/*
 				 * Hostboot uses separate program for scrub due to different
-				 * pausing conditions. Lets see if this works.
+				 * pausing conditions. Having it in the same program seems to
+				 * be working.
 				 */
-				add_scrub(mcs_i, mca_i*2 + dimm);
+				if (!CONFIG(SKIP_INITIAL_ECC_SCRUB))
+					add_scrub(mcs_i, mca_i*2 + dimm);
 			}
 		}
 
@@ -701,7 +703,9 @@ void istep_14_1(void)
 
 		/*
 		 * When there is no other activity on the bus, this should take roughly
-		 * (total RAM size / transfer rate) * number of subtests.
+		 * (sum of DIMMs' rank sizes / transfer rate) * number of subtests.
+		 * 1R and 2R with the same densities take the same amount of time, even
+		 * though the size of DIMM may be different.
 		 *
 		 * TODO: for the second MCS we should subtract the time the first MCS
 		 * took to finish it's tasks.
@@ -710,7 +714,8 @@ void istep_14_1(void)
 
 		/* TODO: dump error/status registers on failure */
 		if (!time)
-			die("MCBIST times out (%#16.16llx)\n", read_scom_for_chiplet(mcs_ids[mcs_i], 0x070123DC));
+			die("MCBIST times out (%#16.16llx)\n",
+			    read_scom_for_chiplet(mcs_ids[mcs_i], 0x070123DC));
 
 		printk(BIOS_ERR, "MCBIST took %ld us\n", time);
 

@@ -179,7 +179,7 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_ERROR\n",
 	       mca_read(id, mca_i, 0x8000C0180701103F));
 
-	/* 0x8000 on success */
+	/* 0x8000 on success for first rank, 0x4000 for second */
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_STATUS\n",
 	       mca_read(id, mca_i, 0x8000C0190701103F));
 

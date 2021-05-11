@@ -76,9 +76,9 @@ static int test_bb_lock(int mcs_i)
 	return res == (PPC_BIT(48) | PPC_BIT(56));
 }
 
-static void fix_bad_voltage_settings(void)
+static void fix_bad_voltage_settings(int mcs_i)
 {
-	die("fix_bad_voltage_settings() required, but not implemented yet\n");
+	die("fix_bad_voltage_settings() required for MCS%d, but not implemented yet\n", mcs_i);
 
 	/* TODO: implement if needed */
 /*
@@ -563,7 +563,7 @@ void istep_13_9(void)
 		}
 
 		if (need_dll_workaround)
-			fix_bad_voltage_settings();
+			fix_bad_voltage_settings(mcs_i);
 
 		/* Start bang-bang-lock */
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {

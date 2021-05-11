@@ -27,10 +27,6 @@ static void revert_mc_hb_dcbz_config(void)
 		/*
 		 * Bit for MCS2/3 is documented, but for MCS0/1 it is "unused". Use what
 		 * Hostboot uses - bit 10 for MCS0/1 and bit 9 for MCS2/3.
-		 *
-		 * FIXME: numbering again. I've been assuming that MCSs are numbered 0
-		 * for MCS0/1 and 1 for MCS2/3, and unpopulated are just skipped. This
-		 * may blow up when more DIMMs are connected.
 		 */
 		val = read_scom_for_chiplet(nest, 0x05000001); // TP.TCNx.Nx.CPLT_CTRL1, x = {1,3}
 		if ((mcs_i == 0 && val & PPC_BIT(10)) ||
@@ -239,13 +235,16 @@ static void fir_unmask(int mcs_i)
 {
 	/* FIXME: this will be mcs_to_nest[] after rebasing */
 	chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	/* Stride discovered by trial and error due to lack of documentation. */
+	uint64_t mul = 0x80;
 
 	/* MCS_MCFIRACT1                   // undocumented, 0x05010807
 		[all]   0
 		[0]     MC_INTERNAL_RECOVERABLE_ERROR = 1
 		[8]     COMMAND_LIST_TIMEOUT =          1
 	*/
-	write_scom_for_chiplet(nest, 0x05010807, PPC_BIT(0) | PPC_BIT(8));
+	write_scom_for_chiplet(nest, 0x05010807 + mcs_i * mul,
+	                       PPC_BIT(0) | PPC_BIT(8));
 
 	/* MCS_MCFIRMASK (AND)             // undocumented, 0x05010804
 		[all]   1
@@ -256,7 +255,7 @@ static void fir_unmask(int mcs_i)
 		[5]     INVALID_ADDRESS =                   0
 		[8]     COMMAND_LIST_TIMEOUT =              0
 	*/
-	write_scom_for_chiplet(nest, 0x05010804,
+	write_scom_for_chiplet(nest, 0x05010804 + mcs_i * mul,
 	                       ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(2) |
 	                         PPC_BIT(4) | PPC_BIT(5) | PPC_BIT(8)));
 }

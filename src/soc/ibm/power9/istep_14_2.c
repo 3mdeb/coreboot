@@ -6,7 +6,7 @@ static void thermalInit(void)
 	for (size_t MCSIndex = 0; MCSIndex < MCS_PER_PROC; ++MCSIndex) {
 		for (size_t MCAIndex = 0; MCAIndex < MCA_PER_MCS; ++MCAIndex) {
 				mca_and_or(
-					mcs_ids[MCSIndex], MCAIndex, MCA_MBA_FARB3Q,
+					mcs_to_nest[mcs_ids[MCSIndex]], MCAIndex, MCA_MBA_FARB3Q,
 					~PPC_BITMASK(0, 45),
 					PPC_BIT(10) | PPC_BIT(25) | PPC_BIT(37));
 		}
@@ -29,16 +29,16 @@ static void progMCMode0(chiplet_id_t MCSTTarget)
 
 static void progMaster(chiplet_id_t MCSTarget)
 {
-	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
-	scom_and_or_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
-	scom_and_for_chiplet(MCSTarget, MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
+	scom_and_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(MCS_MCSYNC_SYNC_GO_CH0));
+	scom_and_or_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(SUPER_SYNC_BIT), PPC_BITMASK(0, 16));
+	scom_and_for_chiplet(mcs_to_nest[MCSTarget], MCS_MCSYNC, ~PPC_BIT(MBA_REFRESH_SYNC_BIT));
 }
 
 static void throttleSync(void)
 {
 	for(size_t MCSIndex = 0; MCSIndex < MCS_PER_PROC; ++MCSIndex)
 	{
-		progMCMode0(mcs_ids[MCSIndex]);
+		progMCMode0(mcs_to_nest[mcs_ids[MCSIndex]]);
 	}
 	progMaster(mcs_ids[0]);
 }

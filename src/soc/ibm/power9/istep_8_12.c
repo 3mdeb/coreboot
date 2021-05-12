@@ -1,3 +1,5 @@
+#include <cpu/power/istep_8.h>
+
 void* call_host_set_voltages(void *io_pArgs)
 {
 	TargetHandleList l_procList;
@@ -36,7 +38,7 @@ struct avsbus_attrs_t
 void p9_setup_evid (const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target)
 {
 	pm_pstate_parameter_block::AttributeList attrs;
-	//Instantiate PPB object
+	// Instantiate PPB object
 	PlatPmPPB l_pmPPB(i_target);
 	// Compute the boot/safe values
 	l_pmPPB.compute_boot_safe();
@@ -194,10 +196,10 @@ p9_setup_evid_voltageWrite(
 	}
 }
 
-fapi2::ReturnCode
-p9_setup_dpll_values (const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-					  const uint32_t i_freq_proc_refclock_khz,
-					  const uint32_t i_proc_dpll_divider)
+static void p9_setup_dpll_values(
+	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+	const uint32_t i_freq_proc_refclock_khz,
+	const uint32_t i_proc_dpll_divider)
 
 {
 	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
@@ -224,13 +226,10 @@ p9_setup_dpll_values (const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_targe
 		// register
 		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 1000 * i_proc_dpll_divider / i_freq_proc_refclock_khz;
 		FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, *l_itr, l_chipNum);
-		//FMax
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMAX, EQ_QPPM_DPLL_FREQ_FMAX_LEN>(l_safe_mode_dpll_value);
-		//FMin
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMIN, EQ_QPPM_DPLL_FREQ_FMIN_LEN>(l_safe_mode_dpll_value);
-		//FMult
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMULT, EQ_QPPM_DPLL_FREQ_FMULT_LEN>(l_safe_mode_dpll_value);
-		// EQ_QPPM_DPLL_FREQ = 0x100F0151
+		//
 		fapi2::putScom(*l_itr, EQ_QPPM_DPLL_FREQ, l_data64);
 		//Update VDM VID compare to safe mode value
 		//Convert same mode value to a format that needs to be written to
@@ -243,106 +242,46 @@ p9_setup_dpll_values (const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_targe
 	}
 }
 
-fapi2::ReturnCode p9_fbc_ioo_dl_scom(const fapi2::Target<fapi2::TARGET_TYPE_OBUS>& TGT0,
-									 const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& TGT1, const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>& TGT2)
+static void p9_fbc_ioo_dl_scom(chiplet_id_t obus_target)
 {
-	{
-		fapi2::ATTR_EC_Type   l_chip_ec;
-		fapi2::ATTR_NAME_Type l_chip_id;
-		l_chip_id = fapi2::ATTR_NAME[TGT1]
-		l_chip_ec = fapi2::ATTR_EC[TGT1]
-		fapi2::ATTR_LINK_TRAIN_Type l_TGT0_ATTR_LINK_TRAIN;
-		l_TGT0_ATTR_LINK_TRAIN = fapi2::ATTR_LINK_TRAIN[TGT0];
-		fapi2::ATTR_PROC_NPU_REGION_ENABLED_Type l_TGT1_ATTR_PROC_NPU_REGION_ENABLED;
-		l_TGT1_ATTR_PROC_NPU_REGION_ENABLED = fapi2::ATTR_PROC_NPU_REGION_ENABLED[TGT1];
-		fapi2::ATTR_OPTICS_CONFIG_MODE_Type l_TGT0_ATTR_OPTICS_CONFIG_MODE;
-		l_TGT0_ATTR_OPTICS_CONFIG_MODE = fapi2::ATTR_OPTICS_CONFIG_MODE[TGT0];
-		uint64_t l_def_OBUS_NV_ENABLED = l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_NV && l_TGT1_ATTR_PROC_NPU_REGION_ENABLED;
-		fapi2::ATTR_PROC_FABRIC_LINK_ACTIVE_Type l_TGT0_ATTR_PROC_FABRIC_LINK_ACTIVE;
-		l_TGT0_ATTR_PROC_FABRIC_LINK_ACTIVE = fapi2::ATTR_PROC_FABRIC_LINK_ACTIVE[TGT0];
-		uint64_t l_def_OBUS_FBC_ENABLED = l_TGT0_ATTR_OPTICS_CONFIG_MODE == fapi2::ENUM_ATTR_OPTICS_CONFIG_MODE_SMP && l_TGT0_ATTR_PROC_FABRIC_LINK_ACTIVE;
-		fapi2::buffer<uint64_t> l_scom_buffer;
-
-		// Power Bus OLL Configuration Register
-		// PB.IOO.LL0.IOOL_CONFIG
-		// Processor bus OLL configuration register
-		// l_PB_IOO_LL0_CONFIG_LINK_PAIR_OFF
-		// l_PB_IOO_LL0_CONFIG_CRC_LANE_ID_ON
-		// l_PB_IOO_LL0_CONFIG_SL_UE_CRC_ERR_ON
-		scom_and_for_chiplet(TGT0, 0x901080A, 0x7FEFFFFF0FFFFFFF, 0x280F000F0000F000)
-		// Power Bus OLL PHY Training Configuration Register
-		// PB.IOO.LL0.IOOL_PHY_CONFIG
-		// Processor bus OLL PHY training configuration register
-		fapi2::getScom(TGT0, 0x901080C, l_scom_buffer);
-		if(l_def_OBUS_NV_ENABLED)
-		{
-			l_scom_buffer.insert<61, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_NV0_NPU_ENABLED_ON
-			l_scom_buffer.insert<62, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_NV1_NPU_ENABLED_ON
-			l_scom_buffer.insert<63, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_NV2_NPU_ENABLED_ON
-		}
-		if(l_def_OBUS_FBC_ENABLED && l_TGT0_ATTR_LINK_TRAIN != fapi2::ENUM_ATTR_LINK_TRAIN_ODD_ONLY)
-		{
-			l_scom_buffer.insert<58, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_LINK0_OLL_ENABLED_ON
-		}
-		else
-		{
-			l_scom_buffer.insert<58, 1, 63, uint64_t>(0); // l_PB_IOO_LL0_CONFIG_LINK0_OLL_ENABLED_OFF
-		}
-		if(l_def_OBUS_FBC_ENABLED && l_TGT0_ATTR_LINK_TRAIN != fapi2::ENUM_ATTR_LINK_TRAIN_EVEN_ONLY)
-		{
-			l_scom_buffer.insert<59, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_LINK1_OLL_ENABLED_ON
-		}
-		else
-		{
-			l_scom_buffer.insert<59, 1, 63, uint64_t>(0); // l_PB_IOO_LL0_CONFIG_LINK1_OLL_ENABLED_OFF
-		}
-		l_scom_buffer.insert<0, 2, 62, uint64_t>(0x2); // l_PB_IOO_LL0_CONFIG_PHY_TRAIN_A_ADJ_USE4
-		l_scom_buffer.insert<2, 2, 62, uint64_t>(0x2); // l_PB_IOO_LL0_CONFIG_PHY_TRAIN_B_ADJ_USE12
-		l_scom_buffer.insert<8, 4, 60, uint64_t>(0);
-		l_scom_buffer.insert<12, 4, 60, uint64_t>(0);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(0x0F);
-		fapi2::putScom(TGT0, 0x901080C, l_scom_buffer);
-		// Power Bus OLL Optical Configuration Register
-		// PB.IOO.LL0.IOOL_OPTICAL_CONFIG
-		// Processor bus OLL optical configuration register
-		fapi2::getScom(TGT0, 0x901080F, l_scom_buffer);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(0x5);
-		l_scom_buffer.insert<9, 7, 57, uint64_t>(0x0F);
-		l_scom_buffer.insert<37, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_ELEVEN_LANE_MODE_ON
-		l_scom_buffer.insert<3, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_LINK_FAIL_CRC_ERROR_ON
-		l_scom_buffer.insert<2, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_CONFIG_LINK_FAIL_NO_SPARE_ON
-		l_scom_buffer.insert<20, 4, 60, uint64_t>(0x5);
-		l_scom_buffer.insert<25, 7, 57, uint64_t>(0x3F);
-		l_scom_buffer.insert<56, 2, 62, uint64_t>(0x2); // l_PB_IOO_LL0_CONFIG_REPLAY_BUFFER_SIZE_REPLAY
-		l_scom_buffer.insert<39, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_LINK1_ELEVEN_LANE_SHIFT_ON
-		l_scom_buffer.insert<42, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_LINK1_RX_LANE_SWAP_ON
-		l_scom_buffer.insert<43, 1, 63, uint64_t>(1); // l_PB_IOO_LL0_LINK1_TX_LANE_SWAP_ON
-		fapi2::putScom(TGT0, 0x901080F, l_scom_buffer);
-		// Power Bus OLL Replay Threshold Register
-		// PB.IOO.LL0.IOOL_REPLAY_THRESHOLD
-		// Processor bus OLL replay threshold register
-		fapi2::getScom(TGT0, 0x9010818, l_scom_buffer);
-		l_scom_buffer.insert<8, 3, 61, uint64_t>(0x7);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(0x0F);
-		l_scom_buffer.insert<0, 4, 60, uint64_t>(0x6);
-		fapi2::putScom(TGT0, 0x9010818, l_scom_buffer);
-		// Power Bus OLL SL ECC Threshold Register
-		// PB.IOO.LL0.IOOL_SL_ECC_THRESHOLD
-		// Processor bus OLL SL ECC Threshold register
-		fapi2::getScom(TGT0, 0x9010819, l_scom_buffer);
-		l_scom_buffer.insert<8, 2, 62, uint64_t>(0x7);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(0x0F);
-		l_scom_buffer.insert<0, 4, 60, uint64_t>(0x7);
-		fapi2::putScom(TGT0, 0x9010819, l_scom_buffer);
-		// Power Bus OLL Retrain Threshold Register
-		// PB.IOO.LL0.IOOL_RETRAIN_THRESHOLD
-		// Processor bus OLL retrain threshold register
-		fapi2::getScom(TGT0, 0x901081A, l_scom_buffer);
-		l_scom_buffer.insert<8, 9, 55, uint64_t>(0x7);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(0x0F);
-		l_scom_buffer.insert<0, 4, 60, uint64_t>(0x7);
-		fapi2::putScom(TGT0, 0x901081A, l_scom_buffer);
-	};
+	// Power Bus OLL Configuration Register
+	// PB.IOO.LL0.IOOL_CONFIG
+	// Processor bus OLL configuration register
+	// l_PB_IOO_LL0_CONFIG_LINK_PAIR_OFF
+	// l_PB_IOO_LL0_CONFIG_CRC_LANE_ID_ON
+	// l_PB_IOO_LL0_CONFIG_SL_UE_CRC_ERR_ON
+	scom_and_for_chiplet(obus_target, 0x901080A, ~(PPC_BIT(0) | PPC_BIT(15) | PPC_BITMASK(32, 35)), 0x280F000F0000F000)
+	// Power Bus OLL PHY Training Configuration Register
+	// PB.IOO.LL0.IOOL_PHY_CONFIG
+	// Processor bus OLL PHY training configuration register
+	// l_PB_IOO_LL0_CONFIG_PHY_TRAIN_A_ADJ_USE4
+	// l_PB_IOO_LL0_CONFIG_PHY_TRAIN_B_ADJ_USE12
+	// l_PB_IOO_LL0_CONFIG_LINK0_OLL_ENABLED_OFF
+	// l_PB_IOO_LL0_CONFIG_LINK1_OLL_ENABLED_OFF
+	scom_and_or_for_chiplet(obus_target, 0x901080C, ~(PPC_BITMASK(0, 15) | PPC_BITMASK(58, 59)), PPC_BIT(0) | PPC_BIT(2) | PPC_BITMASK(4, 7));
+	// Power Bus OLL Optical Configuration Register
+	// PB.IOO.LL0.IOOL_OPTICAL_CONFIG
+	// Processor bus OLL optical configuration register
+	// l_PB_IOO_LL0_CONFIG_ELEVEN_LANE_MODE_ON
+	// l_PB_IOO_LL0_CONFIG_LINK_FAIL_CRC_ERROR_ON
+	// l_PB_IOO_LL0_CONFIG_LINK_FAIL_NO_SPARE_ON
+	// l_PB_IOO_LL0_CONFIG_REPLAY_BUFFER_SIZE_REPLAY
+	// l_PB_IOO_LL0_LINK1_ELEVEN_LANE_SHIFT_ON
+	// l_PB_IOO_LL0_LINK1_RX_LANE_SWAP_ON
+	// l_PB_IOO_LL0_LINK1_TX_LANE_SWAP_ON
+	scom_and_or_for_chiplet(obus_target, 0x901080F, 0xF080F0FFFFFFFFBF, 0x350F057F05300080);
+	// Power Bus OLL Replay Threshold Register
+	// PB.IOO.LL0.IOOL_REPLAY_THRESHOLD
+	// Processor bus OLL replay threshold register
+	scom_and_or_for_chiplet(obus_target, 0x9010818, ~PPC_BITMASK(0, 10), PPC_BITMASK(1, 2) | PPC_BITMASK(4, 10));
+	// Power Bus OLL SL ECC Threshold Register
+	// PB.IOO.LL0.IOOL_SL_ECC_THRESHOLD
+	// Processor bus OLL SL ECC Threshold register
+	scom_and_or_for_chiplet(obus_target, 0x9010819, ~PPC_BITMASK(0, 9), PPC_BITMASK(1, 9));
+	// Power Bus OLL Retrain Threshold Register
+	// PB.IOO.LL0.IOOL_RETRAIN_THRESHOLD
+	// Processor bus OLL retrain threshold register
+	scom_and_or_for_chiplet(obus_target, 0x901081A, ~PPC_BITMASK(0, 16), PPC_BITMASK(1, 7) | PPC_BITMASK(14, 16));
 }
 
 fapi2::ReturnCode PlatPmPPB::compute_boot_safe()

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <cpu/power/istep_8_11.h>
+#include <cpu/power/istep_8.h>
 #include <cpu/power/istep_13.h> // MCS ID's
 #include <cpu/power/scom.h>
 #include <timer.h>

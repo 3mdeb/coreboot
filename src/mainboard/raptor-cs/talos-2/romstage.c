@@ -340,7 +340,7 @@ void main(void)
 	istep_13_13();
 	istep_14_1();
 	istep_14_2();
-	istep_13_3();
+	istep_14_3();
 	istep_14_5();
 
 	/* Test if SCOM still works. Maybe should check also indirect access? */

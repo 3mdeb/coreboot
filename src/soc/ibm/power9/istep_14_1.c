@@ -677,7 +677,7 @@ void istep_14_1(void)
 		}
 
 		/*
-		 * TODO: it writes whole RAM, this will take loooooong time. We could
+		 * TODO: it writes whole RAM, this will take loooooong time. We can
 		 * easily start second MCBIST while this is running. This would get more
 		 * complicated for more patterns, but it still should be doable without
 		 * interrupts reporting completion.
@@ -703,12 +703,15 @@ void istep_14_1(void)
 
 		/*
 		 * When there is no other activity on the bus, this should take roughly
-		 * (sum of DIMMs' rank sizes / transfer rate) * number of subtests.
-		 * 1R and 2R with the same densities take the same amount of time, even
-		 * though the size of DIMM may be different.
+		 * (total RAM size under MCS / transfer rate) * number of subtests.
 		 *
-		 * TODO: for the second MCS we should subtract the time the first MCS
-		 * took to finish it's tasks.
+		 * TODO: for the second MCS we should account for the time the first MCS
+		 * took to finish it's tasks. If the second MCS has less RAM (counted in
+		 * address bits used) it is possible that it finishes before the first
+		 * one does. In that case the amount of time required for second MCS
+		 * would be lost. Maybe we could get fancy and in wait_us() check for
+		 * (mcbist_is_done(0) || mcbist_is_done(1)) instead? Maybe even unmask
+		 * FIRs and set FIFO mode off inside mcbist_is_done()?
 		 */
 		long time = wait_us(1000*1000*60, mcbist_is_done(mcs_i));
 

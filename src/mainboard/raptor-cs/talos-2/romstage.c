@@ -338,9 +338,12 @@ void main(void)
 	istep_13_11();
 	report_istep(13,12);	// optional, not yet implemented
 	istep_13_13();
+
 	istep_14_1();
 	istep_14_2();
-	istep_14_3();
+	/* istep_14_3 doesn't work, probably due to missing SCOM init, skip for now. */
+	// istep_14_3();
+	report_istep(14,4);	// no-op
 	istep_14_5();
 
 	/* Test if SCOM still works. Maybe should check also indirect access? */

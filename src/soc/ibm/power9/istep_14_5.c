@@ -22,7 +22,7 @@ static void revert_mc_hb_dcbz_config(void)
 	const uint64_t mul = 0x80;
 
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
-		chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+		chiplet_id_t nest = mcs_to_nest[mcs_ids[mcs_i]];
 
 		/*
 		 * Bit for MCS2/3 is documented, but for MCS0/1 it is "unused". Use what
@@ -233,8 +233,7 @@ static void fill_groups(void)
  */
 static void fir_unmask(int mcs_i)
 {
-	/* FIXME: this will be mcs_to_nest[] after rebasing */
-	chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	chiplet_id_t nest = mcs_to_nest[mcs_ids[mcs_i]];
 	/* Stride discovered by trial and error due to lack of documentation. */
 	uint64_t mul = 0x80;
 
@@ -316,8 +315,7 @@ void istep_14_5(void)
 	fill_groups();
 
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
-		/* FIXME: this will be mcs_to_nest[] after rebasing */
-		chiplet_id_t nest = mcs_i == 0 ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+		chiplet_id_t nest = mcs_to_nest[mcs_ids[mcs_i]];
 
 		if (!mem_data.mcs[mcs_i].functional)
 			continue;

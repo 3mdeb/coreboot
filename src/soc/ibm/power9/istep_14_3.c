@@ -5,10 +5,10 @@ static void p9_pcie_config(void)
 	for(size_t PECIndex = 0; PECIndex < PEC_PER_PROC; ++PECIndex)
 	{
 		scom_and_for_chiplet(
-			pec_ids[PECIndex], P9N2_PEC_ADDREXTMASK_REG,
+			N2_CHIPLET_ID, P9N2_PEC_ADDREXTMASK_REG + 0x400 * PECIndex,
 			~PPC_BITMASK(0, 6));
 		scom_or_for_chiplet(
-			pec_ids[PECIndex], PEC_PBCQHWCFG_REG,
+			N2_CHIPLET_ID, PEC_PBCQHWCFG_REG + 0x400 * PECIndex,
 			PPC_BIT(3) | PPC_BIT(7) | PPC_BIT(11)
 			|	PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_CHANNEL_STREAMING_EN)
@@ -21,7 +21,7 @@ static void p9_pcie_config(void)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP)
 			| PPC_BIT(PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG));
 		scom_or_for_chiplet(
-			pec_ids[PECIndex], PEC_NESTTRC_REG,
+			N2_CHIPLET_ID, PEC_NESTTRC_REG + 0x400 * PECIndex,
 			PPC_BIT(0) | PPC_BIT(3));
 		write_scom_for_chiplet(
 			pec_ids[PECIndex], PEC_PBAIBHWCFG_REG,

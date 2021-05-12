@@ -35,7 +35,7 @@ static void p9n_mca_scom(int mcs_i, int mca_i)
 	int mranks = mca->dimm[0].mranks | mca->dimm[1].mranks;
 	int log_ranks = mca->dimm[0].log_ranks | mca->dimm[1].log_ranks;
 	bool is_8H = (log_ranks / mranks) == 8;
-	chiplet_id_t nest = id == MC01_CHIPLET_ID ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	chiplet_id_t nest = mcs_to_nest[id];
 	int vpd_idx = mca->dimm[0].present ? (mca->dimm[0].mranks == 2 ? 2 : 0) :
 	                                     (mca->dimm[1].mranks == 2 ? 2 : 0);
 	if (mca->dimm[0].present && mca->dimm[1].present)

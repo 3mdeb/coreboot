@@ -11,88 +11,234 @@ void* call_host_set_voltages(void *io_pArgs)
 	}
 }
 
-struct avsbus_attrs_t
-{
-	uint8_t vdd_bus_num;
-	uint8_t vdd_rail_select;
-	uint8_t vdn_bus_num;
-	uint8_t vdn_rail_select;
-	uint8_t vcs_bus_num;
-	uint8_t vcs_rail_select;
-	uint32_t vcs_voltage_mv;
-	uint32_t vdd_voltage_mv;
-	uint32_t vdn_voltage_mv;
-	uint32_t r_loadline_vdd_uohm;
-	uint32_t r_distloss_vdd_uohm;
-	uint32_t vrm_voffset_vdd_uv;
-	uint32_t r_loadline_vdn_uohm;
-	uint32_t r_distloss_vdn_uohm;
-	uint32_t vrm_voffset_vdn_uv;
-	uint32_t r_loadline_vcs_uohm;
-	uint32_t r_distloss_vcs_uohm;
-	uint32_t vrm_voffset_vcs_uv;
-	uint32_t freq_proc_refclock_khz;
-	uint32_t proc_dpll_divider;
-};
+PlatPmPPB {
+	iv_procChip (i_target), iv_pstates_enabled(0), iv_resclk_enabled(0),
+	iv_vdm_enabled(0), iv_ivrm_enabled(0), iv_wof_enabled(0), iv_safe_voltage (0),
+	iv_safe_frequency(0), iv_reference_frequency_mhz(0), iv_reference_frequency_khz(0),
+	iv_frequency_step_khz(0), iv_proc_dpll_divider(0), iv_nest_freq_mhz(0),
+	iv_wov_underv_enabled(0), iv_wov_overv_enabled(0)
+	iv_attrs.attr_dpll_bias = 0;
+	iv_attrs.attr_undervolting = 0;
+}
 
-void p9_setup_evid (const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target)
+uint32_t revle32(const uint32_t i_x)
+{
+    uint32_t rx;
+#ifndef _BIG_ENDIAN
+    uint8_t* pix = (uint8_t*)(&i_x);
+    uint8_t* prx = (uint8_t*)(&rx);
+    prx[0] = pix[3];
+    prx[1] = pix[2];
+    prx[2] = pix[1];
+    prx[3] = pix[0];
+#else
+    rx = i_x;
+#endif
+
+    return rx;
+}
+
+void PlatPmPPB::attr_init(void)
+{
+	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
+	iv_attrs.attr_tdp_rdp_current_factor = 0;
+	iv_attrs.attr_voltage_ext_vcs_bias = 0;
+	iv_attrs.attr_voltage_ext_vdn_bias = 0;
+	iv_attrs.attr_freq_bias_turbo = 0;
+	iv_attrs.attr_voltage_ext_vdd_bias_turbo = 0;
+	iv_attrs.attr_voltage_int_vdd_bias_turbo = 0;
+	iv_attrs.attr_dpll_vdm_response = 0;
+	iv_attrs.attr_system_wof_disable = 0;
+	iv_attrs.attr_freq_bias_nominal = 0;
+	iv_attrs.attr_voltage_ext_vdd_bias_nominal = 0;
+	iv_attrs.attr_voltage_int_vdd_bias_nominal = 0;
+	iv_attrs.vdd_rail_select = 0;
+	iv_attrs.vdn_rail_select = 0;
+	iv_attrs.attr_freq_bias_powersave = 0;
+	iv_attrs.attr_proc_vrm_voffset_vcs_uv = 0;
+	iv_attrs.attr_proc_vrm_voffset_vdd_uv = 0;
+	iv_attrs.attr_proc_vrm_voffset_vdn_uv = 0;
+	iv_attrs.attr_voltage_ext_vdd_bias_powersave = 0;
+	iv_attrs.attr_voltage_int_vdd_bias_powersave = 0;
+	iv_attrs.vrm_voffset_vcs_uv = 0;
+	iv_attrs.vrm_voffset_vdd_uv = 0;
+	iv_attrs.vrm_voffset_vdn_uv = 0;
+	iv_attrs.attr_freq_bias_ultraturbo = 0;
+	iv_attrs.attr_proc_r_distloss_vdd_uohm = 0;
+	iv_attrs.attr_proc_r_loadline_vcs_uohm = 0;
+	iv_attrs.attr_proc_r_loadline_vdn_uohm = 0;
+	iv_attrs.attr_voltage_ext_vdd_bias_ultraturbo = 0;
+	iv_attrs.attr_voltage_int_vdd_bias_ultraturbo = 0;
+	iv_attrs.r_distloss_vdd_uohm = 0;
+	iv_attrs.r_loadline_vcs_uohm = 0;
+	iv_attrs.r_loadline_vdn_uohm = 0;
+	iv_attrs.vcs_bus_num = 0;
+	iv_attrs.vdd_bus_num = 0;
+	iv_attrs.vcs_rail_select = 1;
+	iv_attrs.vdn_bus_num = 1;
+	iv_attrs.attr_proc_dpll_divider = 8;
+	iv_attrs.attr_proc_r_distloss_vdn_uohm = 50;
+	iv_attrs.r_distloss_vdn_uohm = 50;
+	iv_attrs.attr_proc_r_distloss_vcs_uohm = 64;
+	iv_attrs.r_distloss_vcs_uohm = 64;
+	iv_attrs.attr_proc_r_loadline_vdd_uohm = 254;
+	iv_attrs.r_loadline_vdd_uohm = 254;
+	iv_attrs.attr_ext_vrm_stabilization_time_us = 0;
+	iv_attrs.attr_ext_vrm_step_size_mv = 0;
+	iv_attrs.attr_ext_vrm_transition_rate_dec_uv_per_us = 0;
+	iv_attrs.attr_ext_vrm_transition_rate_inc_uv_per_us = 0;
+	iv_attrs.attr_ext_vrm_transition_start_ns = 0;
+	iv_attrs.attr_pstate_mode = 0;
+	iv_attrs.attr_resclk_disable = 0;
+	iv_attrs.attr_system_ivrm_disable = 0;
+	iv_attrs.attr_system_vdm_disable = 0;
+	iv_attrs.attr_wov_overv_disable = 0; // OFF
+	iv_attrs.attr_wov_underv_disable = 0; // OFF
+	iv_attrs.attr_wov_max_droop_pct = 0;
+	iv_attrs.attr_wov_overv_max_pct = 0;
+	iv_attrs.attr_wov_overv_step_decr_pct = 0; // default 5 is used
+	iv_attrs.attr_wov_overv_step_incr_pct = 0; // default 5 is used
+	iv_attrs.attr_wov_overv_vmax_mv = 0; // default 1150(1.15V) is used
+	iv_attrs.attr_wov_sample_125us = 0; // default 2(~250us) is used
+	iv_attrs.attr_wov_underv_force = 0; // OFF
+	iv_attrs.attr_wov_underv_max_pct = 0; // default 10%(100) is used
+	iv_attrs.attr_wov_underv_perf_loss_thresh_pct = 0; // default 0.5%(5) is used
+	iv_attrs.attr_wov_underv_step_decr_pct = 0; // default 0.5%(5) is used
+	iv_attrs.attr_wov_underv_step_incr_pct = 0; // default 0.5%(5) is used
+	iv_attrs.attr_wov_underv_vmin_mv = 0;
+	iv_attrs.attr_nest_leakage_percent = 0x3C;
+	iv_attrs.freq_proc_refclock_khz = 133333;
+	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_VDM_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_vdm_not_supported); // 1 if EC == 0x20
+	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_WOF_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_wof_not_supported); // 1 if EC == 0x20
+	FAPI_ATTR_GET(fapi2::FREQ_CORE_FLOOR_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_floor_mhz);
+	FAPI_ATTR_GET(fapi2::ATTR_FREQ_DPLL_REFCLOCK_KHZ, FAPI_SYSTEM, iv_attrs.attr_freq_dpll_refclock_khz);
+	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, FAPI_SYSTEM, iv_attrs.attr_nest_frequency_mhz);
+	FAPI_ATTR_GET(fapi2::ATTR_FREQ_CORE_CEILING_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_ceiling_mhz);
+	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ,iv_procChip, iv_attrs.attr_pm_safe_frequency_mhz);
+	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
+	FAPI_ATTR_GET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
+	FAPI_ATTR_GET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
+	FAPI_ATTR_GET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
+	FAPI_ATTR_GET(fapi2::ATTR_PROC_DPLL_DIVIDER, iv_procChip, iv_attrs.proc_dpll_divider);
+
+	FAPI_ATTR_SET(fapi2::ATTR_PROC_DPLL_DIVIDER, iv_procChip, 8);
+
+	// Deal with defaults if attributes are not set
+#define SET_DEFAULT(_attr_name, _attr_default) \
+	if (!(iv_attrs._attr_name)) \
+	{ \
+	   iv_attrs._attr_name = _attr_default; \
+	}
+
+	SET_DEFAULT(attr_freq_dpll_refclock_khz, 133333);
+	SET_DEFAULT(freq_proc_refclock_khz,      133333); // Future: collapse this out
+	SET_DEFAULT(attr_ext_vrm_transition_start_ns, 8000)
+	SET_DEFAULT(attr_ext_vrm_transition_rate_inc_uv_per_us, 10000)
+	SET_DEFAULT(attr_ext_vrm_transition_rate_dec_uv_per_us, 10000)
+	SET_DEFAULT(attr_ext_vrm_stabilization_time_us, 5)
+	SET_DEFAULT(attr_ext_vrm_step_size_mv, 50)
+	SET_DEFAULT(attr_wov_sample_125us, 2);
+	SET_DEFAULT(attr_wov_max_droop_pct, 125);
+	SET_DEFAULT(attr_wov_overv_step_incr_pct, 5);
+	SET_DEFAULT(attr_wov_overv_step_decr_pct, 5);
+	SET_DEFAULT(attr_wov_overv_max_pct, 0);
+	SET_DEFAULT(attr_wov_overv_vmax_mv, 1150);
+	SET_DEFAULT(attr_wov_underv_step_incr_pct, 5);
+	SET_DEFAULT(attr_wov_underv_step_decr_pct, 5);
+	SET_DEFAULT(attr_wov_underv_max_pct, 100);
+	SET_DEFAULT(attr_wov_underv_perf_loss_thresh_pct, 5);
+
+	iv_vcs_sysparam.distloss_uohm = revle32(64);
+	iv_vcs_sysparam.distoffset_uv = 0;
+	iv_vcs_sysparam.loadline_uohm = 0;
+
+	iv_vdd_sysparam.distloss_uohm = 0;
+	iv_vdd_sysparam.distoffset_uv = 0;
+	iv_vdd_sysparam.loadline_uohm = revle32(254);
+
+	iv_vdn_sysparam.distloss_uohm = revle32(50);
+	iv_vdn_sysparam.distoffset_uv = 0;
+	iv_vdn_sysparam.loadline_uohm = 0;
+
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_SMALL_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_small_override);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_LARGE_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_large_override);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_EXTREME_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_extreme_override);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_OVERVOLT_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.overvolt_override);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_FMIN_OVERRIDE_KHZ, FAPI_SYSTEM, iv_vdmpb.fmin_override_khz);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_FMAX_OVERRIDE_KHZ, FAPI_SYSTEM, iv_vdmpb.fmax_override_khz);
+	FAPI_ATTR_GET(fapi2::ATTR_VDM_VID_COMPARE_OVERRIDE_MV, FAPI_SYSTEM, iv_vdmpb.vid_compare_override_mv);
+	FAPI_ATTR_GET(api2::ATTR_DPLL_VDM_RESPONSE, FAPI_SYSTEM, iv_vdmpb.vdm_response);
+
+	SET_ATTR(fapi2::ATTR_PSTATES_ENABLED, iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_RESCLK_ENABLED,  iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_VDM_ENABLED,     iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_IVRM_ENABLED,    iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_WOF_ENABLED,     iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_WOV_UNDERV_ENABLED, iv_procChip, 0);
+	SET_ATTR(fapi2::ATTR_WOV_OVERV_ENABLED, iv_procChip, 0);
+
+	iv_pstates_enabled = true;
+	iv_resclk_enabled  = true;
+	iv_vdm_enabled     = true;
+	iv_ivrm_enabled    = true;
+	iv_wof_enabled     = true;
+	iv_wov_underv_enabled = true;
+	iv_wov_overv_enabled = true;
+	iv_frequency_step_khz = (iv_attrs.attr_freq_dpll_refclock_khz / 8);
+	iv_nest_freq_mhz      = iv_attrs.attr_nest_frequency_mhz;
+}
+
+void p9_setup_evid (chiplet_id_t proc_chip_target)
 {
 	pm_pstate_parameter_block::AttributeList attrs;
 	// Instantiate PPB object
-	PlatPmPPB l_pmPPB(i_target);
+	PlatPmPPB l_pmPPB(proc_chip_target);
+	l_pmPPB.attr_init();
 	// Compute the boot/safe values
 	l_pmPPB.compute_boot_safe();
 	memcpy(&attrs ,&iv_attrs, sizeof(iv_attrs));
 	// Set the DPLL frequency values to safe mode values
 	p9_setup_dpll_values(
-		i_target,
-		attrs.freq_proc_refclock_khz,
+		proc_chip_target,
+		133333,
 		attrs.proc_dpll_divider);
 
 	if (attrs.vdd_voltage_mv)
 	{
 		p9_setup_evid_voltageWrite(
-			i_target,
-			attrs.vdd_bus_num,
-			attrs.vdd_rail_select,
+			proc_chip_target,
+			0,
+			0,
 			attrs.vdd_voltage_mv,
-			attrs.attr_ext_vrm_step_size_mv,
 			VDD_SETUP); // VDD_SETUP = 6
 	}
 
 	if (attrs.vdn_voltage_mv)
 	{
 		p9_setup_evid_voltageWrite(
-			i_target,
-			attrs.vdn_bus_num,
-			attrs.vdn_rail_select,
+			proc_chip_target,
+			1,
+			0,
 			attrs.vdn_voltage_mv,
-			attrs.attr_ext_vrm_step_size_mv,
 			VDN_SETUP); // VDN_SETUP = 7
 	}
 
-	if(attrs.vcs_bus_num != 0xFF)
+	if (attrs.vcs_voltage_mv)
 	{
-		if (attrs.vcs_voltage_mv)
-		{
-			p9_setup_evid_voltageWrite(
-				i_target,
-				attrs.vcs_bus_num,
-				attrs.vcs_rail_select,
-				attrs.vcs_voltage_mv,
-				attrs.attr_ext_vrm_step_size_mv,
-				VCS_SETUP); // VCS_SETUP = 8
-		}
+		p9_setup_evid_voltageWrite(
+			proc_chip_target,
+			0,
+			1,
+			attrs.vcs_voltage_mv,
+			VCS_SETUP); // VCS_SETUP = 8
 	}
 }
 
-fapi2::ReturnCode
-p9_setup_evid_voltageWrite(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+void p9_setup_evid_voltageWrite(
+	chiplet_id_t proc_chip_target,
 	const uint8_t i_bus_num,
 	const uint8_t i_rail_select,
 	const uint32_t i_voltage_mv,
-	const uint32_t i_ext_vrm_step_size_mv,
 	const P9_SETUP_EVID_CONSTANTS i_evid_value)
 
 {
@@ -106,12 +252,12 @@ p9_setup_evid_voltageWrite(
 	if (i_evid_value != VCS_SETUP)
 	{
 		// Initialize the buses
-		avsInitExtVoltageControl(i_target, i_bus_num, BRIDGE_NUMBER);
+		avsInitExtVoltageControl(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 	}
 
 	// Drive AVS Bus with a frame value 0xFFFFFFFF (idle frame) to
 	// initialize the AVS slave
-	avsIdleFrame(i_target, i_bus_num, BRIDGE_NUMBER);
+	avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 
 	// Read the present voltage
 
@@ -122,22 +268,22 @@ p9_setup_evid_voltageWrite(
 		fapi2::buffer<uint64_t> l_data64;
 		// Drive a Read Command
 		avsDriveCommand(
-			i_target,
+			proc_chip_target,
 			i_bus_num,
 			BRIDGE_NUMBER,
 			i_rail_select,
 			3,
 			0xFFFF);
 		// Read returned voltage value from Read frame
-		getScom(i_target, p9avslib::OCB_O2SRD[i_bus_num][BRIDGE_NUMBER], l_data64);
+		getScom(proc_chip_target, p9avslib::OCB_O2SRD[i_bus_num][BRIDGE_NUMBER], l_data64);
 		// Extracting bits 8:23 , which contains voltage read data
 		l_present_voltage_mv = (l_data64 & 0x00FFFF0000000000) >> 40;
 		// Throw an assertion if we don't get a good response.
 		l_throwAssert = l_count >= AVSBUS_RETRY_COUNT;
-		avsValidateResponse(i_target, i_bus_num, BRIDGE_NUMBER, l_throwAssert, l_goodResponse);
+		avsValidateResponse(proc_chip_target, i_bus_num, BRIDGE_NUMBER, l_throwAssert, l_goodResponse);
 		if (!l_goodResponse)
 		{
-			avsIdleFrame(i_target, i_bus_num, BRIDGE_NUMBER);
+			avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 		}
 		l_count++;
 	}
@@ -150,15 +296,15 @@ p9_setup_evid_voltageWrite(
 	while (l_delta_mv)
 	{
 		uint32_t l_abs_delta_mv = abs(l_delta_mv);
-		if (i_ext_vrm_step_size_mv > 0 && l_abs_delta_mv > i_ext_vrm_step_size_mv)
+		if (50 > 0 && l_abs_delta_mv > 50)
 		{
 			if (l_delta_mv > 0)  // Decreasing
 			{
-				l_target_mv = l_present_voltage_mv - i_ext_vrm_step_size_mv;
+				l_target_mv = l_present_voltage_mv - 50;
 			}
 			else
 			{
-				l_target_mv = l_present_voltage_mv + i_ext_vrm_step_size_mv;
+				l_target_mv = l_present_voltage_mv + 50;
 			}
 		}
 		else
@@ -171,7 +317,7 @@ p9_setup_evid_voltageWrite(
 		{
 			// Set Boot voltage
 			avsDriveCommand(
-			i_target,
+			proc_chip_target,
 			i_bus_num,
 			BRIDGE_NUMBER,
 			i_rail_select,
@@ -181,14 +327,14 @@ p9_setup_evid_voltageWrite(
 			// Throw an assertion if we don't get a good response.
 			l_throwAssert =  l_count >= AVSBUS_RETRY_COUNT;
 			avsValidateResponse(
-				i_target,
+				proc_chip_target,
 				i_bus_num,
 				BRIDGE_NUMBER,
 				l_throwAssert,
 				l_goodResponse);
 			if (!l_goodResponse)
 			{
-				avsIdleFrame(i_target, i_bus_num, BRIDGE_NUMBER);
+				avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 			}
 			l_count++;
 		}
@@ -306,9 +452,9 @@ fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
 			uint32_t l_ics_ma = (iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma) * 100;
 			uint32_t l_ext_vcs_mv = sysparm_uplift(l_int_vcs_mv,
 					l_ics_ma,
-					revle32(iv_attrs.r_loadline_vcs_uohm),
-					revle32(iv_attrs.r_distloss_vcs_uohm),
-					revle32(iv_attrs.vrm_voffset_vcs_uv));
+					revle32(0),
+					revle32(64),
+					revle32(0));
 			iv_attrs.vcs_voltage_mv = (l_ext_vcs_mv);
 
 		}
@@ -321,9 +467,9 @@ fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
 			// Returns revle32
 			uint32_t l_ext_vdn_mv = sysparm_uplift(l_int_vdn_mv,
 					l_idn_ma,
-					revle32(iv_attrs.r_loadline_vdn_uohm),
-					revle32(iv_attrs.r_distloss_vdn_uohm),
-					revle32(iv_attrs.vrm_voffset_vdn_uv));
+					revle32(0),
+					revle32(50),
+					revle32(0));
 
 			iv_attrs.vdn_voltage_mv = (l_ext_vdn_mv);
 		}
@@ -333,7 +479,7 @@ fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
 		// Set safe frequency to the default BOOT_FREQ_MULT
 		fapi2::ATTR_BOOT_FREQ_MULT_Type l_boot_freq_mult;
 		FAPI_ATTR_GET(fapi2::ATTR_BOOT_FREQ_MULT, iv_procChip, l_boot_freq_mult);
-		uint32_t l_boot_freq_mhz = ((l_boot_freq_mult * iv_attrs.freq_proc_refclock_khz) / iv_attrs.proc_dpll_divider) / 1000;
+		uint32_t l_boot_freq_mhz = ((l_boot_freq_mult * 133333) / iv_attrs.proc_dpll_divider) / 1000;
 		FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip, l_boot_freq_mhz);
 		FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.vdd_voltage_mv);
 	}

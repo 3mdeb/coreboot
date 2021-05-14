@@ -4,6 +4,8 @@
 #include <timer.h>
 #include <endian.h>
 
+#include "istep_13_scom.h"
+
 static inline uint64_t reverse_bits(uint64_t x)
 {
 	x = swab64(x);		// reverse bytes
@@ -59,17 +61,20 @@ void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
 	      [32-33] CCS_INST_ARR0_00_CCS_DDR_CSN_0_1 =  csn[0:1]
 	      [36-37] CCS_INST_ARR0_00_CCS_DDR_CSN_2_3 =  csn[2:3]
 	*/
-	write_scom_for_chiplet(id, 0x07012315 + instr,
-	                       mrs64 | PPC_BIT(20) | PPC_SHIFT(cke & 0xF, 27) |
-	                       PPC_SHIFT((csn >> 2) & 3, 33) | PPC_SHIFT(csn & 3, 37));
+	write_scom_for_chiplet(id, CCS_INST_ARR0_00 + instr,
+	                       mrs64 | PPC_BIT(CCS_INST_ARR0_00_CCS_DDR_ACTN) |
+	                       PPC_SHIFT(cke & 0xF, CCS_INST_ARR0_00_CCS_DDR_CKE) |
+	                       PPC_SHIFT((csn >> 2) & 3, CCS_INST_ARR0_00_CCS_DDR_CSN_0_1) |
+	                       PPC_SHIFT(csn & 3, CCS_INST_ARR0_00_CCS_DDR_CSN_2_3));
 
 	/* MC01.MCBIST.CCS.CCS_INST_ARR1_n
 	      [all]   0
 	      [0-15]  CCS_INST_ARR1_00_IDLES =    idles
 	      [59-63] CCS_INST_ARR1_00_GOTO_CMD = instr + 1
 	*/
-	write_scom_for_chiplet(id, 0x07012335 + instr,
-	                       PPC_SHIFT(idles, 15) | PPC_SHIFT(instr + 1, 63));
+	write_scom_for_chiplet(id, CCS_INST_ARR1_00 + instr,
+	                       PPC_SHIFT(idles, CCS_INST_ARR1_00_IDLES) |
+	                       PPC_SHIFT(instr + 1, CCS_INST_ARR1_00_GOTO_CMD));
 
 	/*
 	 * For the last instruction in the stream we could decrease it by one (final
@@ -89,7 +94,7 @@ void ccs_add_instruction(chiplet_id_t id, mrs_cmd_t mrs, uint8_t csn,
 static void dump_cal_errors(chiplet_id_t id, int mca_i)
 {
 	/* Stop CCS so it won't mess up with the values */
-	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(1));
+	write_scom_for_chiplet(id, CCS_CNTLQ, PPC_BIT(CCS_CNTLQ_CCS_STOP));
 
 #if CONFIG(DEBUG_RAM_SETUP)
 	int dp;
@@ -97,58 +102,48 @@ static void dump_cal_errors(chiplet_id_t id, int mca_i)
 	for (dp = 0; dp < 5; dp++) {
 		printk(BIOS_ERR, "DP %d\n", dp);
 		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007A0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - DQ_BIT_DISABLE_RP0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007C0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_DQ_BIT_DISABLE_RP0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - DQS_BIT_DISABLE_RP0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007D0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_DQS_BIT_DISABLE_RP0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_ERROR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000001B0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_ERROR0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_STATUS0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000140701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_STATUS0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS2\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000100701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS2_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000000E0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000AE0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000AF0701103F));
-
-		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000300701103F));
-		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000310701103F));
-
-		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000350701103F));
-		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG2\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000360701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR1_P0_0));
 	}
 
 	printk(BIOS_ERR, "%#16.16llx - APB_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000D0010701103F));
+	       mca_read(id, mca_i, DDRPHY_APB_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - RC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C8050701103F));
+	       mca_read(id, mca_i, DDRPHY_RC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - SEQ_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C4080701103F));
+	       mca_read(id, mca_i, DDRPHY_SEQ_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - WC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000CC030701103F));
+	       mca_read(id, mca_i, DDRPHY_WC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - PC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C0120701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_ERROR\n",
-	       mca_read(id, mca_i, 0x8000C0180701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_INIT_CAL_ERROR_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_STATUS\n",
-	       mca_read(id, mca_i, 0x8000C0190701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_INIT_CAL_STATUS_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - IOM_PHY0_DDRPHY_FIR_REG\n",
-	       mca_read(id, mca_i, 0x07011000));
+	       mca_read(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG));
 #endif
 	die("CCS execution timeout\n");
 }
@@ -168,8 +163,9 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 		total_cycles = 8;
 	poll_timeout = nck_to_us((total_cycles * 7 * 4) / 8);
 
-	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(1));
-	time = wait_us(1, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
+	write_scom_for_chiplet(id, CCS_CNTLQ, PPC_BIT(CCS_CNTLQ_CCS_STOP));
+	time = wait_us(1, !(read_scom_for_chiplet(id, CCS_STATQ) &
+	                    PPC_BIT(CCS_STATQ_CCS_IP)));
 
 	/* Is it always as described below (CKE, CSN) or is it a copy of last instr? */
 	/* Final DES - CCS does not wait for IDLES for the last command before
@@ -185,23 +181,23 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	      [all]   0
 	      [58]    CCS_INST_ARR1_00_CCS_END = 1
 	*/
-	write_scom_for_chiplet(id, 0x07012315 + instr, PPC_BIT(20) | PPC_SHIFT(0xF, 27) |
-	                       PPC_SHIFT(3, 33) | PPC_SHIFT(3, 37));
-	write_scom_for_chiplet(id, 0x07012335 + instr, PPC_BIT(58));
+	write_scom_for_chiplet(id, CCS_INST_ARR0_00 + instr,
+	                       PPC_BIT(CCS_INST_ARR0_00_CCS_DDR_ACTN) |
+	                       PPC_SHIFT(0xF, CCS_INST_ARR0_00_CCS_DDR_CKE) |
+	                       PPC_SHIFT(3, CCS_INST_ARR0_00_CCS_DDR_CSN_0_1) |
+	                       PPC_SHIFT(3, CCS_INST_ARR0_00_CCS_DDR_CSN_2_3));
+	write_scom_for_chiplet(id, CCS_INST_ARR1_00 + instr,
+	                       PPC_BIT(CCS_INST_ARR1_00_CCS_END));
 
 	/* Select ports
 	MC01.MCBIST.MBA_SCOMFIR.MCB_CNTLQ
 	      // Broadcast mode is not supported, set only one bit at a time
 	      [2-5]   MCB_CNTLQ_MCBCNTL_PORT_SEL = bitmap with MCA index
 	*/
-	scom_and_or_for_chiplet(id, 0x070123DB, ~PPC_BITMASK(2, 5), PPC_BIT(2 + mca_i));
+	scom_and_or_for_chiplet(id, MCB_CNTLQ, ~PPC_BITMASK(2, 5), PPC_BIT(2 + mca_i));
 
-	/* Lets go
-	MC01.MCBIST.MBA_SCOMFIR.CCS_CNTLQ
-	      [all] 0
-	      [0]   CCS_CNTLQ_CCS_START = 1
-	*/
-	write_scom_for_chiplet(id, 0x070123A5, PPC_BIT(0));
+	/* Lets go */
+	write_scom_for_chiplet(id, CCS_CNTLQ, PPC_BIT(CCS_CNTLQ_CCS_START));
 
 	/* With microsecond resolution we are probably wasting a lot of time here. */
 	delay_nck(total_cycles/8);
@@ -211,7 +207,8 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	  delay(10ns)
 	if MC01.MCBIST.MBA_SCOMFIR.CCS_STATQ != 0x40..00: report failure  // only [1] set, others 0
 	*/
-	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, 0x070123A6) & PPC_BIT(0)));
+	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, CCS_STATQ) &
+	                               PPC_BIT(CCS_STATQ_CCS_IP)));
 
 	/* This isn't useful for anything but calibration steps, do we want it? */
 	if (!time)
@@ -221,15 +218,8 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	       time + nck_to_us(total_cycles/8),
 	       poll_timeout + nck_to_us(total_cycles/8), instr);
 
-	if (read_scom_for_chiplet(id, 0x070123A6) != PPC_BIT(1))
-		die("(%#16.16llx) CCS execution error\n", read_scom_for_chiplet(id, 0x070123A6));
-
-	/* Fill all ARR0/ARR1 registers with DES, CCS end */
-	do {
-		write_scom_for_chiplet(id, 0x07012315 + instr, PPC_BIT(20) | PPC_SHIFT(0xF, 27) |
-							   PPC_SHIFT(3, 33) | PPC_SHIFT(3, 37));
-		write_scom_for_chiplet(id, 0x07012335 + instr, PPC_BIT(58));
-	} while (instr--);
+	if (read_scom_for_chiplet(id, CCS_STATQ) != PPC_BIT(CCS_STATQ_CCS_DONE))
+		die("(%#16.16llx) CCS execution error\n", read_scom_for_chiplet(id, CCS_STATQ));
 
 	instr = 0;
 	total_cycles = 0;
@@ -322,9 +312,11 @@ void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
 		[36-37] CCS_INST_ARR0_00_CCS_DDR_CSN_2_3 =  3     // Not used by the engine for calibration?
 		[56-59] CCS_INST_ARR0_00_CCS_DDR_CAL_TYPE = 0xc
 	*/
-	write_scom_for_chiplet(id, 0x07012315 + instr,
-	                       PPC_SHIFT(0xF, 27) | PPC_SHIFT(3, 33) |
-	                       PPC_SHIFT(3, 37) | PPC_SHIFT(0xC, 59));
+	write_scom_for_chiplet(id, CCS_INST_ARR0_00 + instr,
+	                       PPC_SHIFT(0xF, CCS_INST_ARR0_00_CCS_DDR_CKE) |
+	                       PPC_SHIFT(3, CCS_INST_ARR0_00_CCS_DDR_CSN_0_1) |
+	                       PPC_SHIFT(3, CCS_INST_ARR0_00_CCS_DDR_CSN_2_3) |
+	                       PPC_SHIFT(0xC, CCS_INST_ARR0_00_CCS_DDR_CAL_TYPE));
 
 	/* MC01.MCBIST.CCS.CCS_INST_ARR1_n
 		[all]   0
@@ -332,10 +324,11 @@ void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
 		[57]    CCS_INST_ARR1_00_DDR_CALIBRATION_ENABLE = 1
 		[59-63] CCS_INST_ARR1_00_GOTO_CMD =               instr + 1
 	*/
-	write_scom_for_chiplet(id, 0x07012335 + instr,
-	                       PPC_SHIFT(rp, 56) | PPC_BIT(57) | PPC_SHIFT(instr + 1, 63));
+	write_scom_for_chiplet(id, CCS_INST_ARR1_00 + instr,
+	                       PPC_SHIFT(rp, CCS_INST_ARR1_00_DDR_CAL_RANK) |
+	                       PPC_BIT(CCS_INST_ARR1_00_DDR_CALIBRATION_ENABLE) |
+	                       PPC_SHIFT(instr + 1, CCS_INST_ARR1_00_GOTO_CMD));
 
-	/* I'm assuming we don't need separate commands for RCD sides... */
 	total_cycles += step_cycles;
 	instr++;
 
@@ -345,9 +338,9 @@ void ccs_phy_hw_step(chiplet_id_t id, int mca_i, int rp, enum cal_config conf,
 		[58]    ABORT_ON_CAL_ERROR =  0
 		[60+rp] ENA_RANK_PAIR =       1   // So, rp must be [0-3]
 	*/
-	mca_and_or(id, mca_i, 0x8000C0160701103F,
+	mca_and_or(id, mca_i, DDRPHY_PC_INIT_CAL_CONFIG0_P0,
 	           ~(PPC_BITMASK(48, 58) | PPC_BITMASK(60, 63)),
-	           conf | PPC_BIT(60 + rp));
+	           conf | PPC_BIT(ENA_RANK_PAIR_MSB + rp));
 
 	ccs_execute(id, mca_i);
 }

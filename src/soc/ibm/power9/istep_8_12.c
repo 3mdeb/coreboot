@@ -23,19 +23,19 @@ PlatPmPPB {
 
 uint32_t revle32(const uint32_t i_x)
 {
-    uint32_t rx;
+	uint32_t rx;
 #ifndef _BIG_ENDIAN
-    uint8_t* pix = (uint8_t*)(&i_x);
-    uint8_t* prx = (uint8_t*)(&rx);
-    prx[0] = pix[3];
-    prx[1] = pix[2];
-    prx[2] = pix[1];
-    prx[3] = pix[0];
+	uint8_t* pix = (uint8_t*)(&i_x);
+	uint8_t* prx = (uint8_t*)(&rx);
+	prx[0] = pix[3];
+	prx[1] = pix[2];
+	prx[2] = pix[1];
+	prx[3] = pix[0];
 #else
-    rx = i_x;
+	rx = i_x;
 #endif
 
-    return rx;
+	return rx;
 }
 
 void PlatPmPPB::attr_init(void)
@@ -108,10 +108,11 @@ void PlatPmPPB::attr_init(void)
 	iv_attrs.attr_wov_underv_vmin_mv = 0;
 	iv_attrs.attr_nest_leakage_percent = 0x3C;
 	iv_attrs.freq_proc_refclock_khz = 133333;
+	iv_attrs.attr_freq_dpll_refclock_khz = 133333
+	iv_attrs.proc_dpll_divider = 8
 	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_VDM_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_vdm_not_supported); // 1 if EC == 0x20
 	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_WOF_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_wof_not_supported); // 1 if EC == 0x20
 	FAPI_ATTR_GET(fapi2::FREQ_CORE_FLOOR_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_floor_mhz);
-	FAPI_ATTR_GET(fapi2::ATTR_FREQ_DPLL_REFCLOCK_KHZ, FAPI_SYSTEM, iv_attrs.attr_freq_dpll_refclock_khz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, FAPI_SYSTEM, iv_attrs.attr_nest_frequency_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_CORE_CEILING_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_ceiling_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ,iv_procChip, iv_attrs.attr_pm_safe_frequency_mhz);
@@ -119,19 +120,13 @@ void PlatPmPPB::attr_init(void)
 	FAPI_ATTR_GET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
 	FAPI_ATTR_GET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
 	FAPI_ATTR_GET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_DPLL_DIVIDER, iv_procChip, iv_attrs.proc_dpll_divider);
 
-	FAPI_ATTR_SET(fapi2::ATTR_PROC_DPLL_DIVIDER, iv_procChip, 8);
-
-	// Deal with defaults if attributes are not set
-#define SET_DEFAULT(_attr_name, _attr_default) \
+	#define SET_DEFAULT(_attr_name, _attr_default) \
 	if (!(iv_attrs._attr_name)) \
 	{ \
 	   iv_attrs._attr_name = _attr_default; \
 	}
 
-	SET_DEFAULT(attr_freq_dpll_refclock_khz, 133333);
-	SET_DEFAULT(freq_proc_refclock_khz,      133333); // Future: collapse this out
 	SET_DEFAULT(attr_ext_vrm_transition_start_ns, 8000)
 	SET_DEFAULT(attr_ext_vrm_transition_rate_inc_uv_per_us, 10000)
 	SET_DEFAULT(attr_ext_vrm_transition_rate_dec_uv_per_us, 10000)
@@ -160,22 +155,14 @@ void PlatPmPPB::attr_init(void)
 	iv_vdn_sysparam.distoffset_uv = 0;
 	iv_vdn_sysparam.loadline_uohm = 0;
 
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_SMALL_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_small_override);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_LARGE_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_large_override);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_DROOP_EXTREME_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.droop_extreme_override);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_OVERVOLT_OVERRIDE, FAPI_SYSTEM, iv_vdmpb.overvolt_override);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_FMIN_OVERRIDE_KHZ, FAPI_SYSTEM, iv_vdmpb.fmin_override_khz);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_FMAX_OVERRIDE_KHZ, FAPI_SYSTEM, iv_vdmpb.fmax_override_khz);
-	FAPI_ATTR_GET(fapi2::ATTR_VDM_VID_COMPARE_OVERRIDE_MV, FAPI_SYSTEM, iv_vdmpb.vid_compare_override_mv);
-	FAPI_ATTR_GET(api2::ATTR_DPLL_VDM_RESPONSE, FAPI_SYSTEM, iv_vdmpb.vdm_response);
-
-	SET_ATTR(fapi2::ATTR_PSTATES_ENABLED, iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_RESCLK_ENABLED,  iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_VDM_ENABLED,     iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_IVRM_ENABLED,    iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_WOF_ENABLED,     iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_WOV_UNDERV_ENABLED, iv_procChip, 0);
-	SET_ATTR(fapi2::ATTR_WOV_OVERV_ENABLED, iv_procChip, 0);
+	iv_vdmpb.droop_small_override = 0;
+	iv_vdmpb.droop_large_override = 0;
+	iv_vdmpb.droop_extreme_override = 0;
+	iv_vdmpb.overvolt_override = 0;
+	iv_vdmpb.fmin_override_khz = 0;
+	iv_vdmpb.fmax_override_khz = 0;
+	iv_vdmpb.vid_compare_override_mv = 0;
+	iv_vdmpb.vdm_response = 0;
 
 	iv_pstates_enabled = true;
 	iv_resclk_enabled  = true;
@@ -184,11 +171,11 @@ void PlatPmPPB::attr_init(void)
 	iv_wof_enabled     = true;
 	iv_wov_underv_enabled = true;
 	iv_wov_overv_enabled = true;
-	iv_frequency_step_khz = (iv_attrs.attr_freq_dpll_refclock_khz / 8);
+	iv_frequency_step_khz = 16666;
 	iv_nest_freq_mhz      = iv_attrs.attr_nest_frequency_mhz;
 }
 
-void p9_setup_evid (chiplet_id_t proc_chip_target)
+void p9_setup_evid(chiplet_id_t proc_chip_target)
 {
 	pm_pstate_parameter_block::AttributeList attrs;
 	// Instantiate PPB object
@@ -198,10 +185,7 @@ void p9_setup_evid (chiplet_id_t proc_chip_target)
 	l_pmPPB.compute_boot_safe();
 	memcpy(&attrs ,&iv_attrs, sizeof(iv_attrs));
 	// Set the DPLL frequency values to safe mode values
-	p9_setup_dpll_values(
-		proc_chip_target,
-		133333,
-		attrs.proc_dpll_divider);
+	p9_setup_dpll_values(proc_chip_target);
 
 	if (attrs.vdd_voltage_mv)
 	{
@@ -342,11 +326,7 @@ void p9_setup_evid_voltageWrite(
 	}
 }
 
-static void p9_setup_dpll_values(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-	const uint32_t i_freq_proc_refclock_khz,
-	const uint32_t i_proc_dpll_divider)
-
+static void p9_setup_dpll_values(chiplet_id_t i_target)
 {
 	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
 	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
@@ -354,7 +334,6 @@ static void p9_setup_dpll_values(
 	fapi2::buffer<uint64_t> l_data64;
 	fapi2::buffer<uint64_t> l_fmult;
 	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
-	uint8_t l_chipNum = 0xFF;
 	fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ_Type l_attr_safe_mode_freq;
 	fapi2::ATTR_SAFE_MODE_VOLTAGE_MV_Type l_attr_safe_mode_mv;
 	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, i_target, l_attr_safe_mode_freq);
@@ -365,13 +344,12 @@ static void p9_setup_dpll_values(
 	}
 	for (auto l_itr = l_eqChiplets.begin(); l_itr != l_eqChiplets.end(); ++l_itr)
 	{
-		l_fmult.flush<0>();
+		l_fmult = 0;
 		fapi2::getScom(*l_itr, EQ_QPPM_DPLL_FREQ , l_data64);
 		l_data64.extractToRight<EQ_QPPM_DPLL_FREQ_FMULT, EQ_QPPM_DPLL_FREQ_FMULT_LEN>(l_fmult);
 		// Convert frequency value to a format that needs to be written to the
 		// register
-		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 1000 * i_proc_dpll_divider / i_freq_proc_refclock_khz;
-		FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, *l_itr, l_chipNum);
+		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 8000 / 133333;
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMAX, EQ_QPPM_DPLL_FREQ_FMAX_LEN>(l_safe_mode_dpll_value);
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMIN, EQ_QPPM_DPLL_FREQ_FMIN_LEN>(l_safe_mode_dpll_value);
 		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMULT, EQ_QPPM_DPLL_FREQ_FMULT_LEN>(l_safe_mode_dpll_value);
@@ -388,46 +366,461 @@ static void p9_setup_dpll_values(
 	}
 }
 
-static void p9_fbc_ioo_dl_scom(chiplet_id_t obus_target)
+void PlatPmPPB::chk_valid_poundv(const bool i_biased_state)
 {
-	// Power Bus OLL Configuration Register
-	// PB.IOO.LL0.IOOL_CONFIG
-	// Processor bus OLL configuration register
-	// l_PB_IOO_LL0_CONFIG_LINK_PAIR_OFF
-	// l_PB_IOO_LL0_CONFIG_CRC_LANE_ID_ON
-	// l_PB_IOO_LL0_CONFIG_SL_UE_CRC_ERR_ON
-	scom_and_for_chiplet(obus_target, 0x901080A, ~(PPC_BIT(0) | PPC_BIT(15) | PPC_BITMASK(32, 35)), 0x280F000F0000F000)
-	// Power Bus OLL PHY Training Configuration Register
-	// PB.IOO.LL0.IOOL_PHY_CONFIG
-	// Processor bus OLL PHY training configuration register
-	// l_PB_IOO_LL0_CONFIG_PHY_TRAIN_A_ADJ_USE4
-	// l_PB_IOO_LL0_CONFIG_PHY_TRAIN_B_ADJ_USE12
-	// l_PB_IOO_LL0_CONFIG_LINK0_OLL_ENABLED_OFF
-	// l_PB_IOO_LL0_CONFIG_LINK1_OLL_ENABLED_OFF
-	scom_and_or_for_chiplet(obus_target, 0x901080C, ~(PPC_BITMASK(0, 15) | PPC_BITMASK(58, 59)), PPC_BIT(0) | PPC_BIT(2) | PPC_BITMASK(4, 7));
-	// Power Bus OLL Optical Configuration Register
-	// PB.IOO.LL0.IOOL_OPTICAL_CONFIG
-	// Processor bus OLL optical configuration register
-	// l_PB_IOO_LL0_CONFIG_ELEVEN_LANE_MODE_ON
-	// l_PB_IOO_LL0_CONFIG_LINK_FAIL_CRC_ERROR_ON
-	// l_PB_IOO_LL0_CONFIG_LINK_FAIL_NO_SPARE_ON
-	// l_PB_IOO_LL0_CONFIG_REPLAY_BUFFER_SIZE_REPLAY
-	// l_PB_IOO_LL0_LINK1_ELEVEN_LANE_SHIFT_ON
-	// l_PB_IOO_LL0_LINK1_RX_LANE_SWAP_ON
-	// l_PB_IOO_LL0_LINK1_TX_LANE_SWAP_ON
-	scom_and_or_for_chiplet(obus_target, 0x901080F, 0xF080F0FFFFFFFFBF, 0x350F057F05300080);
-	// Power Bus OLL Replay Threshold Register
-	// PB.IOO.LL0.IOOL_REPLAY_THRESHOLD
-	// Processor bus OLL replay threshold register
-	scom_and_or_for_chiplet(obus_target, 0x9010818, ~PPC_BITMASK(0, 10), PPC_BITMASK(1, 2) | PPC_BITMASK(4, 10));
-	// Power Bus OLL SL ECC Threshold Register
-	// PB.IOO.LL0.IOOL_SL_ECC_THRESHOLD
-	// Processor bus OLL SL ECC Threshold register
-	scom_and_or_for_chiplet(obus_target, 0x9010819, ~PPC_BITMASK(0, 9), PPC_BITMASK(1, 9));
-	// Power Bus OLL Retrain Threshold Register
-	// PB.IOO.LL0.IOOL_RETRAIN_THRESHOLD
-	// Processor bus OLL retrain threshold register
-	scom_and_or_for_chiplet(obus_target, 0x901081A, ~PPC_BITMASK(0, 16), PPC_BITMASK(1, 7) | PPC_BITMASK(14, 16));
+	const uint8_t   pv_op_order[4] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
+	const char*     pv_op_str[4] = {"Nominal   ","PowerSave ", "Turbo     ", "UltraTurbo"};
+	uint8_t         i = 0;
+	bool            suspend_ut_check = false;
+	uint8_t         l_chiplet_num = iv_procChip.getChipletNumber();
+
+	VpdPoint        l_attr_mvpd_data[5];
+	memcpy(l_attr_mvpd_data,iv_attr_mvpd_poundV_raw,sizeof(l_attr_mvpd_data));
+
+	if (i_biased_state)
+	{
+		memcpy(l_attr_mvpd_data,iv_attr_mvpd_poundV_biased,sizeof(l_attr_mvpd_data));
+	}
+
+	iv_valid_pdv_points = 4;
+
+	// check valid operating points' values have this relationship (power save <= nominal <= turbo <= ultraturbo)
+	for (i = 1; i < 4; i++)
+	{
+		// Only skip checkinug for WOF not enabled and UltraTurbo.
+		if !((strcmp(pv_op_str[pv_op_order[i]], "UltraTurbo") == 0))
+		{
+			if (l_attr_mvpd_data[pv_op_order[i-1]].frequency_mhz > l_attr_mvpd_data[pv_op_order[i]].frequency_mhz
+			|| l_attr_mvpd_data[pv_op_order[i-1]].vdd_mv        > l_attr_mvpd_data[pv_op_order[i]].vdd_mv
+			|| l_attr_mvpd_data[pv_op_order[i-1]].idd_100ma     > l_attr_mvpd_data[pv_op_order[i]].idd_100ma
+			|| l_attr_mvpd_data[pv_op_order[i-1]].vcs_mv        > l_attr_mvpd_data[pv_op_order[i]].vcs_mv
+			|| l_attr_mvpd_data[pv_op_order[i-1]].ics_100ma     > l_attr_mvpd_data[pv_op_order[i]].ics_100ma)
+			{
+				iv_pstates_enabled = false;
+			}
+		}
+	}
+}
+
+void PlatPmPPB::get_mvpd_poundV()
+{
+	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
+	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
+	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
+	uint8_t    j                = 0;
+	uint8_t*   l_buffer         = reinterpret_cast<uint8_t*>(malloc(sizeof(voltageBucketData_t)));
+	uint8_t*   l_buffer_inc     = NULL;
+
+	memset(&l_fstChlt_vpd_data, 0, sizeof(l_fstChlt_vpd_data));
+	iv_eq_chiplet_state = 0;
+
+	l_eqChiplets = iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
+	iv_eq_chiplet_state = l_eqChiplets.size();
+
+	for (j = 0; j < l_eqChiplets.size(); j++)
+	{
+		p9_pm_get_poundv_bucket(l_eqChiplets[j], iv_poundV_raw_data);
+
+		memset(l_buffer, 0, sizeof(iv_poundV_raw_data));
+		memcpy(l_buffer, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
+
+		l_buffer_inc = l_buffer;
+		l_buffer_inc++;
+		for (int i = 0; i <= 4; i++)
+		{
+			iv_attr_mvpd_poundV_raw[i].frequency_mhz = (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			l_buffer_inc += 2;
+			iv_attr_mvpd_poundV_raw[i].vdd_mv= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			l_buffer_inc += 2;
+			iv_attr_mvpd_poundV_raw[i].idd_100ma= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			l_buffer_inc += 2;
+			iv_attr_mvpd_poundV_raw[i].vcs_mv= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			l_buffer_inc += 2;
+			iv_attr_mvpd_poundV_raw[i].ics_100ma= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			l_buffer_inc += 2;
+		}
+
+		chk_valid_poundv(false);
+
+		l_firstEqChiplet = l_eqChiplets[j];
+		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
+		memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
+
+		if ((iv_poundV_raw_data.VddNomVltg    > l_fstChlt_vpd_data.VddNomVltg)
+		||	(iv_poundV_raw_data.VddPSVltg     > l_fstChlt_vpd_data.VddPSVltg)
+		||	(iv_poundV_raw_data.VddTurboVltg  > l_fstChlt_vpd_data.VddTurboVltg)
+		||	(iv_poundV_raw_data.VddUTurboVltg > l_fstChlt_vpd_data.VddUTurboVltg)
+		||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
+		{
+			memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
+			iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
+		}
+	}
+	free(l_buffer);
+}
+
+#define NUM_OP_POINTS      4
+#define VPD_PV_POWERSAVE   1
+#define VPD_PV_NOMINAL     0
+#define VPD_PV_TURBO       2
+#define VPD_PV_ULTRA       3
+#define VPD_PV_POWERBUS    4
+
+void PlatPmPPB::get_extint_bias()
+{
+    double freq_bias[NUM_OP_POINTS];
+    double voltage_ext_vdd_bias[NUM_OP_POINTS];
+    double voltage_ext_vcs_bias;
+    double voltage_ext_vdn_bias;
+
+	iv_bias[POWERSAVE].frequency_hp    = 0;
+	iv_bias[POWERSAVE].vdd_ext_hp      = 0;
+	iv_bias[POWERSAVE].vdd_int_hp      = 0;
+
+	iv_bias[NOMINAL].frequency_hp    = 0;
+	iv_bias[NOMINAL].vdd_ext_hp      = 0;
+	iv_bias[NOMINAL].vdd_int_hp      = 0;
+
+	iv_bias[TURBO].frequency_hp    = 0;
+	iv_bias[TURBO].vdd_ext_hp      = 0;
+	iv_bias[TURBO].vdd_int_hp      = 0;
+
+	iv_bias[ULTRA].frequency_hp    = 0;
+	iv_bias[ULTRA].vdd_ext_hp      = 0;
+	iv_bias[ULTRA].vdd_int_hp      = 0;
+
+    for (auto point = 0; point < NUM_OP_POINTS; p++)
+    {
+        iv_bias[point].vdn_ext_hp      = 0;
+        iv_bias[point].vcs_ext_hp      = 0;
+
+        freq_bias[point]                 = 1.0;
+        voltage_ext_vdd_bias[point]      = 1.0;
+    }
+
+    // VCS bias applied to all operating points
+    voltage_ext_vcs_bias = 1.0;
+
+    // VDN bias applied to all operating points
+    voltage_ext_vdn_bias = 1.0;
+
+    // Change the VPD frequency, VDD and VCS values with the bias multiplers
+    for (auto p = 0; p < NUM_OP_POINTS; p++)
+    {
+        double freq_mhz = ((double)iv_attr_mvpd_poundV_biased[p].frequency_mhz * freq_bias[p]);
+        double vdd_mv = ((double)iv_attr_mvpd_poundV_biased[p].vdd_mv * voltage_ext_vdd_bias[p]);
+        double vcs_mv = ((double)iv_attr_mvpd_poundV_biased[p].vcs_mv * voltage_ext_vcs_bias);
+
+        iv_attr_mvpd_poundV_biased[p].frequency_mhz = (uint16_t)internal_floor(freq_mhz);
+        iv_attr_mvpd_poundV_biased[p].vdd_mv        = (uint16_t)internal_ceil(vdd_mv);
+        iv_attr_mvpd_poundV_biased[p].vcs_mv        = (uint16_t)(vcs_mv);
+    }
+    double vdn_mv =
+           (( (double)iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv) * voltage_ext_vdn_bias);
+
+    iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv = (uint32_t)internal_ceil(vdn_mv);
+
+    return fapi2::FAPI2_RC_SUCCESS;
+}
+
+void PlatPmPPB::apply_biased_values()
+{
+	memcpy(iv_attr_mvpd_poundV_biased,iv_attr_mvpd_poundV_raw,sizeof(iv_attr_mvpd_poundV_raw));
+	get_extint_bias();
+	chk_valid_poundv(BIASED);
+}
+
+#define VALIDATE_THRESHOLD_VALUES(w, x, y, z, state) \
+    if ((w > 0x7 && w != 0xC) || /* overvolt */   \
+        (x == 8) ||  (x == 9) || (x > 0xF) ||     \
+        (y == 8) ||  (y == 9) || (y > 0xF) ||     \
+        (z == 8) ||  (z == 9) || (z > 0xF)   )    \
+    { state = 0; }
+
+void PlatPmPPB::get_mvpd_poundW (void)
+{
+    std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
+    fapi2::vdmData_t l_vdmBuf;
+    uint8_t    selected_eq      = 0;
+    uint8_t    bucket_id        = 0;
+    uint8_t    version_id       = 0;
+
+    const char*     pv_op_str[NUM_OP_POINTS] = PV_OP_ORDER_STR;
+
+	// Exit if both VDM and WOF is disabled
+	if ((!is_vdm_enabled() && !is_wof_enabled()))
+	{
+		iv_vdm_enabled = false;
+		iv_wof_enabled = false;
+		iv_wov_underv_enabled = false;
+		iv_wov_overv_enabled = false;
+		break;
+	}
+
+	l_eqChiplets = iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
+
+	for (selected_eq = 0; selected_eq < l_eqChiplets.size(); selected_eq++)
+	{
+		uint8_t l_chipletNum = 0xFF;
+
+		FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, l_eqChiplets[selected_eq], l_chipletNum);
+		// clear out buffer to known value before calling fapiGetMvpdField
+		memset(&l_vdmBuf, 0, sizeof(l_vdmBuf));
+		FAPI_TRY(p9_pm_get_poundw_bucket(l_eqChiplets[selected_eq], l_vdmBuf));
+
+		bucket_id   =   l_vdmBuf.bucketId;
+		version_id  =   l_vdmBuf.version;
+
+
+		if( version_id < POUNDW_VERSION_30 )
+		{
+			PoundW_data_per_quad  l_poundwPerQuad;
+			PoundW_data           l_poundw;
+			memcpy( &l_poundw, l_vdmBuf.vdmData, sizeof( PoundW_data ) );
+			memset( &l_poundwPerQuad, 0, sizeof(PoundW_data_per_quad) );
+
+			for( size_t op = 0; op <= ULTRA; op++ )
+			{
+				l_poundwPerQuad.poundw[op].ivdd_tdp_ac_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_ac_current_10ma;
+
+				l_poundwPerQuad.poundw[op].ivdd_tdp_dc_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_dc_current_10ma;
+				l_poundwPerQuad.poundw[op].vdm_overvolt_small_thresholds =   l_poundw.poundw[op].vdm_overvolt_small_thresholds;
+				l_poundwPerQuad.poundw[op].vdm_large_extreme_thresholds  =   l_poundw.poundw[op].vdm_large_extreme_thresholds;
+				l_poundwPerQuad.poundw[op].vdm_normal_freq_drop          =   l_poundw.poundw[op].vdm_normal_freq_drop;
+				l_poundwPerQuad.poundw[op].vdm_normal_freq_return        =   l_poundw.poundw[op].vdm_normal_freq_return;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[0]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[1]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[2]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[3]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[4]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[5]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
+			}
+
+			memcpy( &l_poundwPerQuad.resistance_data, &l_poundw.resistance_data , LEGACY_RESISTANCE_ENTRY_SIZE );
+			l_poundwPerQuad.resistance_data.r_undervolt_allowed =   l_poundw.undervolt_tested;
+			memset(&l_vdmBuf.vdmData, 0, sizeof(l_vdmBuf.vdmData));
+			memcpy(&l_vdmBuf.vdmData, &l_poundwPerQuad, sizeof( PoundW_data_per_quad ) );
+		}
+
+		//if we match with the bucket id, then we don't need to continue
+		if (iv_poundV_bucket_id == bucket_id)
+		{
+			break;
+		}
+	}
+
+	uint8_t l_poundw_static_data = 0;
+	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
+	FAPI_ATTR_GET(fapi2::ATTR_POUND_W_STATIC_DATA_ENABLE, FAPI_SYSTEM, l_poundw_static_data);
+
+	if (l_poundw_static_data)
+	{
+		memcpy (&iv_poundW_data, &g_vpdData, sizeof (g_vpdData));
+	}
+	else
+	{
+		memcpy (&iv_poundW_data, l_vdmBuf.vdmData, sizeof (l_vdmBuf.vdmData));
+	}
+
+	//Re-ordering to Natural order
+	// When we read the data from VPD image the order will be N,PS,T,UT.
+	// But we need the order PS,N,T,UT.. hence we are swapping the data
+	// between PS and Nominal.
+	poundw_entry_per_quad_t l_tmp_data;
+	memset( &l_tmp_data ,0, sizeof(poundw_entry_per_quad_t));
+	memcpy (&l_tmp_data,
+			&(iv_poundW_data.poundw[VPD_PV_NOMINAL]),
+			sizeof (poundw_entry_per_quad_t));
+
+	memcpy (&(iv_poundW_data.poundw[VPD_PV_NOMINAL]),
+			&(iv_poundW_data.poundw[VPD_PV_POWERSAVE]),
+			sizeof(poundw_entry_per_quad_t));
+
+	memcpy (&(iv_poundW_data.poundw[VPD_PV_POWERSAVE]),
+			&l_tmp_data,
+			sizeof(poundw_entry_per_quad_t));
+
+	// If the #W version is less than 3, validate Turbo VDM large threshold
+	// not larger than -32mV. This filters out parts that have bad VPD.  If
+	// this check fails, log a recovered error, mark the VDMs disabled and
+	// break out of the reset of the checks.
+	uint32_t turbo_vdm_large_threshhold =
+		(iv_poundW_data.poundw[TURBO].vdm_large_extreme_thresholds >> 4) & 0x0F;
+
+	if (version_id < FULLY_VALID_POUNDW_VERSION &&
+		g_GreyCodeIndexMapping[turbo_vdm_large_threshhold] > GREYCODE_INDEX_M32MV)
+	{
+		iv_vdm_enabled = false;
+		break;
+
+	}
+
+	// Validate the WOF content is non-zero if WOF is enabled
+	if (is_wof_enabled())
+	{
+		bool b_tdp_ac = true;
+		bool b_tdp_dc = true;
+		// Check that the WOF currents are non-zero
+		for (auto p = 0; p < NUM_OP_POINTS; ++p)
+		{
+			if (!iv_poundW_data.poundw[p].ivdd_tdp_ac_current_10ma)
+			{
+				b_tdp_ac = false;
+				iv_wof_enabled = false;
+
+			}
+			if (!iv_poundW_data.poundw[p].ivdd_tdp_dc_current_10ma)
+			{
+				b_tdp_dc = false;
+				iv_wof_enabled = false;
+			}
+		}
+
+		// Set the return code to success to keep going.
+		fapi2::current_err = fapi2::FAPI2_RC_SUCCESS;
+	}
+
+	// The rest of the processing here is all checking of the VDM content
+	// within #W.  If VDMs are not enabled (or supported), skip all of it
+	if (!is_vdm_enabled())
+	{
+		iv_vdm_enabled = false;
+		break;
+	}
+
+	// validate threshold values
+	bool l_threshold_value_state = 1;
+
+	validate_quad_spec_data( );
+
+	for (uint8_t p = 0; p < NUM_OP_POINTS; ++p)
+	{
+		VALIDATE_THRESHOLD_VALUES(((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F), // overvolt
+									((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F),      // small
+									((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F),  // large
+									((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F),       // extreme
+									l_threshold_value_state);
+
+		if (!l_threshold_value_state)
+		{
+			iv_vdm_enabled = false;
+		}
+	}
+
+	bool l_frequency_value_state = 1;
+
+	for (uint8_t p = 0; p < NUM_OP_POINTS; ++p)
+	{
+		VALIDATE_FREQUENCY_DROP_VALUES(((iv_poundW_data.poundw[p].vdm_normal_freq_drop) & 0x0F),        // N_L
+										((iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F),   // N_S
+										((iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F), // L_S
+										((iv_poundW_data.poundw[p].vdm_normal_freq_return) & 0x0F),      // S_N
+										l_frequency_value_state);
+
+		if (!l_frequency_value_state)
+		{
+			iv_vdm_enabled = false;
+		}
+	}
+
+	//If we have reached this point, that means VDM is ok to be enabled. Only then we try to
+	//enable wov undervolting
+	if (((iv_poundW_data.resistance_data.r_undervolt_allowed) || (iv_attrs.attr_wov_underv_force)) && is_wov_underv_enabled())
+	{
+		iv_wov_underv_enabled = true;
+	} else {
+		iv_wov_underv_enabled = false;
+	}
+
+
+fapi_try_exit:
+
+    // Given #W has both VDM and WOF content, a failure needs to disable both
+    if (fapi2::current_err != fapi2::FAPI2_RC_SUCCESS)
+    {
+        iv_vdm_enabled = false;
+        iv_wof_enabled = false;
+        iv_wov_underv_enabled = false;
+        iv_wov_overv_enabled = false;
+    }
+
+    if (!(iv_vdm_enabled))
+    {
+        large_jump_defaults();
+    }
+}
+
+bool PlatPmPPB::is_vdm_enabled()
+{
+	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
+	uint8_t attr_dd_vdm_not_supported;
+	uint8_t attr_system_vdm_disable;
+
+	FAPI_ATTR_GET(fapi2::ATTR_SYSTEM_VDM_DISABLE, FAPI_SYSTEM, attr_system_vdm_disable);
+	FAPI_ATTR_GET(fapi2::ATTR_CHIP_EC_FEATURE_VDM_NOT_SUPPORTED, iv_procChip, attr_dd_vdm_not_supported);
+
+	return (!(attr_system_vdm_disable)
+	&& !(attr_dd_vdm_not_supported)
+	&& iv_vdm_enabled);
+}
+
+bool PlatPmPPB::is_wov_underv_enabled()
+{
+    return(!(iv_attrs.attr_wov_underv_disable) &&
+         iv_wov_underv_enabled)
+         ? true : false;
+}
+
+void PlatPmPPB::vpd_init(void)
+{
+	memset(&iv_raw_vpd_pts, 0, sizeof(iv_raw_vpd_pts));
+	memset(&iv_biased_vpd_pts, 0, sizeof(iv_biased_vpd_pts));
+	memset(&iv_poundW_data, 0, sizeof(iv_poundW_data));
+	memset(&iv_iddqt, 0, sizeof(iv_iddqt));
+	memset(iv_operating_points,0,sizeof(iv_operating_points));
+	memset(&iv_attr_mvpd_poundV_raw, 0, sizeof(iv_attr_mvpd_poundV_raw));
+	memset(&iv_attr_mvpd_poundV_biased, 0, sizeof(iv_attr_mvpd_poundV_biased));
+
+	get_mvpd_poundV();
+
+	if(!iv_eq_chiplet_state)
+	{
+		break;
+	}
+	apply_biased_values();
+	get_mvpd_poundW();
+	iv_wof_enabled = false;
+	load_mvpd_operating_point();
+}
+
+#define NUM_OP_POINTS      4
+#define VPD_PV_POWERSAVE   1
+#define VPD_PV_NOMINAL     0
+#define VPD_PV_TURBO       2
+#define VPD_PV_ULTRA       3
+#define VPD_PV_POWERBUS    4
+
+void PlatPmPPB::load_mvpd_operating_point ()
+{
+	const uint8_t pv_op_order[NUM_OP_POINTS] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
+	for (uint32_t i = 0; i < NUM_OP_POINTS; i++)
+	{
+		iv_raw_vpd_pts[i].frequency_mhz  = iv_attr_mvpd_poundV_raw[pv_op_order[i]].frequency_mhz;
+		iv_raw_vpd_pts[i].vdd_mv         = iv_attr_mvpd_poundV_raw[pv_op_order[i]].vdd_mv;
+		iv_raw_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].idd_100ma;
+		iv_raw_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_raw[pv_op_order[i]].vcs_mv;
+		iv_raw_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].ics_100ma;
+		iv_raw_vpd_pts[i].pstate = iv_attr_mvpd_poundV_raw[ULTRA].frequency_mhz
+			- iv_attr_mvpd_poundV_raw[pv_op_order[i]].frequency_mhz * 1000 / 16666;
+
+		iv_biased_vpd_pts[i].frequency_mhz  = iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz;
+		iv_biased_vpd_pts[i].vdd_mv         = iv_attr_mvpd_poundV_biased[pv_op_order[i]].vdd_mv;
+		iv_biased_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].idd_100ma;
+		iv_biased_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_biased[pv_op_order[i]].vcs_mv;
+		iv_biased_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].ics_100ma;
+		iv_biased_vpd_pts[i].pstate = iv_attr_mvpd_poundV_biased[ULTRA].frequency_mhz
+			- iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz * 1000 / 16666;
+	}
 }
 
 fapi2::ReturnCode PlatPmPPB::compute_boot_safe()

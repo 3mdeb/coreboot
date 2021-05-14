@@ -5,6 +5,8 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 static void fir_unmask(int mcs_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
@@ -14,7 +16,8 @@ static void fir_unmask(int mcs_i)
 	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRACT1
 		  [3]   MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC =  0 // checkstop (0,0,0)
 	*/
-	scom_and_or_for_chiplet(id, 0x07012307, ~PPC_BIT(3), 0);
+	scom_and_or_for_chiplet(id, MCBISTFIRACT1,
+	                        ~PPC_BIT(MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC), 0);
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 		uint64_t val;
@@ -25,7 +28,7 @@ static void fir_unmask(int mcs_i)
 		MC01.PORT0.ECC64.SCOM.RECR
 			[26]  MBSECCQ_ENABLE_UE_NOISE_WINDOW =  1
 		*/
-		mca_and_or(id, mca_i, 0x07010A0A, ~0, PPC_BIT(26));
+		mca_and_or(id, mca_i, RECR, ~0, PPC_BIT(MBSECCQ_ENABLE_UE_NOISE_WINDOW));
 
 		/*
 		 * Read out the wr_done and rd_tag delays and find min and set the RCD
@@ -38,11 +41,12 @@ static void fir_unmask(int mcs_i)
 		 * MC01.PORT0.SRQ.MBA_FARB0Q
 		 *   [48-53] MBA_FARB0Q_CFG_RCD_PROTECTION_TIME
 		 */
-		val = mca_read(id, mca_i, 0x0701090A);
+		val = mca_read(id, mca_i, MBA_DSM0Q);
 		val = MIN((val & PPC_BITMASK(24, 29)) >> 29,
 		          (val & PPC_BITMASK(36, 41)) >> 41);
-		mca_and_or(id, mca_i, 0x07010913,
-		           ~PPC_BITMASK(48, 53), PPC_SHIFT(val, 53));
+		mca_and_or(id, mca_i, MBA_FARB0Q,
+		           ~PPC_BITMASK(48, 53),
+		           PPC_SHIFT(val, MBA_FARB0Q_CFG_RCD_PROTECTION_TIME));
 
 		/*
 		 * Due to hardware defect with DD2.0 certain errors are not handled
@@ -82,34 +86,37 @@ static void fir_unmask(int mcs_i)
 		 *   [17] FIR_MAINLINE_IUE =         0  // recoverable_error (0,1,0)
 		 *   [37] MCA_FIR_MAINTENANCE_IUE =  0  // recoverable_error (0,1,0)
 		 */
-		mca_and_or(id, mca_i, 0x07010A06,
-		           ~(PPC_BITMASK(13, 17) | PPC_BIT(37)),
+		mca_and_or(id, mca_i, ECC_FIR_ACTION0,
+		           ~(PPC_BITMASK(13, 17) | PPC_BIT(MCA_FIR_MAINTENANCE_IUE)),
 		           0);
-		mca_and_or(id, mca_i, 0x07010A07,
-		           ~(PPC_BITMASK(13, 17) | PPC_BIT(33) | PPC_BITMASK(36, 37)),
-		           (is_dd20 ? 0 : PPC_BIT(14)) | PPC_BIT(17) | PPC_BIT(37));
-		mca_and_or(id, mca_i, 0x07010A03,
-		           ~(PPC_BITMASK(13, 17) | PPC_BIT(37)),
-		           (is_dd20 ? 0 : PPC_BIT(15)));
+		mca_and_or(id, mca_i, ECC_FIR_ACTION1,
+		           ~(PPC_BITMASK(13, 17) | PPC_BIT(ECC_FIR_MAINTENANCE_AUE) |
+		             PPC_BITMASK(36, 37)),
+		           (is_dd20 ? 0 : PPC_BIT(FIR_MAINLINE_UE)) |
+		           PPC_BIT(FIR_MAINLINE_IUE) | PPC_BIT(MCA_FIR_MAINTENANCE_IUE));
+		mca_and_or(id, mca_i, ECC_FIR_MASK,
+		           ~(PPC_BITMASK(13, 17) |
+		           PPC_BIT(MCA_FIR_MAINTENANCE_IUE)),
+		           (is_dd20 ? 0 : PPC_BIT(FIR_MAINLINE_RCD)));
 
 		/*
 		 * WARNING: checkstop is encoded differently (1,0,0). **Do not** try to
 		 * make a function/macro that pretends to be universal.
 		 *
 		 * MC01.PORT0.SRQ.MBACALFIR_ACTION0
-		 *   [13] MBACALFIRQ_PORT_FAIL = 0*
+		 *   [13] MBACALFIR_PORT_FAIL = 0*
 		 * MC01.PORT0.SRQ.MBACALFIR_ACTION1
-		 *   [13] MBACALFIRQ_PORT_FAIL = 1*
+		 *   [13] MBACALFIR_PORT_FAIL = 1*
 		 * MC01.PORT0.SRQ.MBACALFIR_MASK
-		 *   [13] MBACALFIRQ_PORT_FAIL = 0  // *recoverable_error (0,1,0)
+		 *   [13] MBACALFIR_PORT_FAIL = 0  // *recoverable_error (0,1,0)
 		 */
-		mca_and_or(id, mca_i, 0x07010906,
+		mca_and_or(id, mca_i, MBACALFIR_ACTION0,
 		           ~PPC_BIT(13),
-		           (is_dd20 ? PPC_BIT(13) : 0));
-		mca_and_or(id, mca_i, 0x07010907,
-		           ~PPC_BIT(13),
-		           (is_dd20 ? 0 : PPC_BIT(13)));
-		mca_and_or(id, mca_i, 0x07010903, ~PPC_BIT(13), 0);
+		           (is_dd20 ? PPC_BIT(MBACALFIR_PORT_FAIL) : 0));
+		mca_and_or(id, mca_i, MBACALFIR_ACTION1,
+		           ~PPC_BIT(MBACALFIR_PORT_FAIL),
+		           (is_dd20 ? 0 : PPC_BIT(MBACALFIR_PORT_FAIL)));
+		mca_and_or(id, mca_i, MBACALFIR_MASK, ~PPC_BIT(MBACALFIR_PORT_FAIL), 0);
 
 		/*
 		 * Enable port fail and RCD recovery
@@ -119,7 +126,9 @@ static void fir_unmask(int mcs_i)
 		 *   [54] MBA_FARB0Q_CFG_DISABLE_RCD_RECOVERY = 0
 		 *   [57] MBA_FARB0Q_CFG_PORT_FAIL_DISABLE =    0
 		 */
-		mca_and_or(id, mca_i, 0x07010913, ~(PPC_BIT(54) | PPC_BIT(57)), 0);
+		mca_and_or(id, mca_i, MBA_FARB0Q,
+		           ~(PPC_BIT(MBA_FARB0Q_CFG_DISABLE_RCD_RECOVERY) |
+		             PPC_BIT(MBA_FARB0Q_CFG_PORT_FAIL_DISABLE)), 0);
 	}
 }
 
@@ -139,8 +148,10 @@ static void set_fifo_mode(int mcs_i, int fifo)
 		if (!mem_data.mcs[mcs_i].mca[mca_i].functional)
 			continue;
 
-		mca_and_or(id, mca_i, 0x0701090E, ~PPC_BIT(6), PPC_SHIFT(fifo, 6));
-		mca_and_or(id, mca_i, 0x0701090D, ~PPC_BIT(5), PPC_SHIFT(fifo, 5));
+		mca_and_or(id, mca_i, MBA_RRQ0Q, ~PPC_BIT(MBA_RRQ0Q_CFG_RRQ_FIFO_MODE),
+		           PPC_SHIFT(fifo, MBA_RRQ0Q_CFG_RRQ_FIFO_MODE));
+		mca_and_or(id, mca_i, MBA_WRQ0Q, ~PPC_BIT(MBA_WRQ0Q_CFG_WRQ_FIFO_MODE),
+		           PPC_SHIFT(fifo, MBA_WRQ0Q_CFG_WRQ_FIFO_MODE));
 	}
 }
 
@@ -167,19 +178,20 @@ static void load_maint_pattern(int mcs_i, const uint64_t pat[16])
 		 * [10]  AACR_AUTOINC = 1
 		 * [11]  AACR_ECCGEN =  1
 		 */
-		mca_write(id, mca_i, 0x07010A29,
-		          PPC_SHIFT(0x1F0, 9) | PPC_BIT(10) | PPC_BIT(11));
+		mca_write(id, mca_i, AACR,
+		          PPC_SHIFT(0x1F0, AACR_ADDRESS) | PPC_BIT(AACR_AUTOINC) |
+		          PPC_BIT(AACR_ECCGEN));
 
 		for (i = 0; i < 16; i++) {
 			/* MC01.PORT0.ECC64.SCOM.AADR - data */
-			mca_write(id, mca_i, 0x07010A2A, pat[i]);
+			mca_write(id, mca_i, AADR, pat[i]);
 			/*
 			 * Although ECC is generated by hardware, we still have to write to
 			 * this register to have address incremented. Comments say that
 			 * the data also wouldn't be written to RMW buffer without it.
 			 */
 			/* MC01.PORT0.ECC64.SCOM.AAER - ECC */
-			mca_write(id, mca_i, 0x07010A2B, 0);
+			mca_write(id, mca_i, AAER, 0);
 		}
 	}
 }
@@ -235,11 +247,11 @@ static void init_mcbist(int mcs_i)
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBSA0Q
 	 * [0-37] MCBSA0Q_CFG_START_ADDR_0
 	 */
-	write_scom_for_chiplet(id, 0x070123CC, 0);
+	write_scom_for_chiplet(id, MCBSA0Q, 0);
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBEA0Q
 	 * [0-37] MCBSA0Q_CFG_END_ADDR_0
 	 */
-	write_scom_for_chiplet(id, 0x070123CE, PPC_BITMASK(3, 37));
+	write_scom_for_chiplet(id, MCBEA0Q, PPC_BITMASK(3, 37));
 
 	/* Hostboot stops MCBIST engine, die() if it is already started instead */
 	/* TODO: check all bits (MCBIST was ever started) or just "in progress"? */
@@ -248,7 +260,7 @@ static void init_mcbist(int mcs_i)
 	 * [1] MCB_CNTLSTATQ_MCB_DONE
 	 * [2] MCB_CNTLSTATQ_MCB_FAIL
 	 */
-	if ((val = read_scom_for_chiplet(id, 0x070123DC)) != 0)
+	if ((val = read_scom_for_chiplet(id, MCB_CNTLSTATQ)) != 0)
 		die("MCBIST started already (%#16.16llx), this shouldn't happen\n", val);
 
 	/*
@@ -258,10 +270,10 @@ static void init_mcbist(int mcs_i)
 	 * - MBS Memory Scrub/Read Error Count Register 1 - MC01.MCBIST.MBA_SCOMFIR.MBSEC1Q
 	 * - MCBIST Fault Isolation Register - MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRQ
 	 */
-	write_scom_for_chiplet(id, 0x07012366, 0);
-	write_scom_for_chiplet(id, 0x07012355, 0);
-	write_scom_for_chiplet(id, 0x07012356, 0);
-	write_scom_for_chiplet(id, 0x07012300, 0);
+	write_scom_for_chiplet(id, MCBSTATQ, 0);
+	write_scom_for_chiplet(id, MBSEC0Q, 0);
+	write_scom_for_chiplet(id, MBSEC1Q, 0);
+	write_scom_for_chiplet(id, MCBISTFIR, 0);
 
 	/* Enable FIFO mode */
 	set_fifo_mode(mcs_i, 1);
@@ -279,7 +291,9 @@ static void init_mcbist(int mcs_i)
 	 * [10]  MCBAGRAQ_CFG_MAINT_ADDR_MODE_EN =            1
 	 * [12]  MCBAGRAQ_CFG_MAINT_DETECT_SRANK_BOUNDARIES = 1
 	 */
-	write_scom_for_chiplet(id, 0x070123D6, PPC_BIT(10) | PPC_BIT(12));
+	write_scom_for_chiplet(id, MCBAGRAQ,
+	                       PPC_BIT(MCBAGRAQ_CFG_MAINT_ADDR_MODE_EN) |
+	                       PPC_BIT(MCBAGRAQ_CFG_MAINT_DETECT_SRANK_BOUNDARIES));
 
 	/*
 	 * Configure MCBIST
@@ -302,25 +316,26 @@ static void init_mcbist(int mcs_i)
 	 * [57-58] MCBCFGQ_CFG_PAUSE_ON_ERROR_MODE = 0 for patterns, 0b10 for scrub
 	 * [63]    MCBCFGQ_CFG_ENABLE_HOST_ATTN =    see above
 	 */
-	write_scom_for_chiplet(id, 0x070123E0, PPC_SHIFT(0b10, 58));
+	write_scom_for_chiplet(id, MCBCFGQ,
+	                       PPC_SHIFT(0b10, MCBCFGQ_CFG_PAUSE_ON_ERROR_MODE));
 
 	/*
 	 * This sets up memory parameters, mostly gaps between commands. For as fast
 	 * as possible, gaps of 0 are configured here.
 	 */
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBPARMQ */
-	write_scom_for_chiplet(id, 0x070123AF, 0);
+	write_scom_for_chiplet(id, MCBPARMQ, 0);
 
 	/*
 	 * Steps done from this point should be moved out of this function, they
 	 * should be done with different patterns before each subtest. Right now
-	 * only a pattern of all zeroes is implemented.
+	 * only a pattern of all zeroes is used.
 	 */
 
 	/* Data pattern: 8 data registers + 1 ECC register */
 	/* TODO: different patterns can be used */
 	for (i = 0; i < 9; i++) {
-		write_scom_for_chiplet(id, 0x070123BE + i, patterns[0][i]);
+		write_scom_for_chiplet(id, MCBFD0Q + i, patterns[0][i]);
 	}
 
 	/* TODO: random seeds */
@@ -343,9 +358,9 @@ static void init_mcbist(int mcs_i)
 	 * inverting.
 	 */
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBDRCRQ */
-	write_scom_for_chiplet(id, 0x070123BD, 0);
+	write_scom_for_chiplet(id, MCBDRCRQ, 0);
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBDRSRQ */
-	write_scom_for_chiplet(id, 0x070123BC, 0);
+	write_scom_for_chiplet(id, MCBDRSRQ, 0);
 
 	/*
 	 * The following step may be done just once, as long as the same set of
@@ -373,9 +388,13 @@ static void init_mcbist(int mcs_i)
 	 * [56]   MBSTRQ_CFG_NCE_INTER_SYMBOL_COUNT_ENABLE  } counts all NCE
 	 * [57]   MBSTRQ_CFG_NCE_HARD_SYMBOL_COUNT_ENABLE  /
 	 */
-	write_scom_for_chiplet(id, 0x07012357, PPC_BITMASK(0, 31) |
-	                       PPC_BIT(34) | PPC_BIT(35) | PPC_BIT(37) |
-	                       PPC_BIT(55) | PPC_BIT(56) | PPC_BIT(57));
+	write_scom_for_chiplet(id, MBSTRQ, PPC_BITMASK(0, 31) |
+	                       PPC_BIT(MBSTRQ_CFG_PAUSE_ON_MPE) |
+	                       PPC_BIT(MBSTRQ_CFG_PAUSE_ON_UE) |
+	                       PPC_BIT(MBSTRQ_CFG_PAUSE_ON_AUE) |
+	                       PPC_BIT(MBSTRQ_CFG_NCE_SOFT_SYMBOL_COUNT_ENABLE) |
+	                       PPC_BIT(MBSTRQ_CFG_NCE_INTER_SYMBOL_COUNT_ENABLE) |
+	                       PPC_BIT(MBSTRQ_CFG_NCE_HARD_SYMBOL_COUNT_ENABLE));
 }
 
 
@@ -441,7 +460,7 @@ static void commit_mcbist_memreg_cache(int mcs_i)
 		die("Too many MCBIST instructions added\n");
 
 	/* MC01.MCBIST.MBA_SCOMFIR.MCBMR<reg>Q */
-	write_scom_for_chiplet(id, 0x070123A8 + reg, mcbist_memreg_cache);
+	write_scom_for_chiplet(id, MCBMR0Q + reg, mcbist_memreg_cache);
 	mcbist_memreg_cache = 0;
 }
 
@@ -534,7 +553,7 @@ static void mcbist_execute(int mcs_i)
 
 	/* Check if in progress */
 	/* TODO: we could force it to stop, but dying will help with debugging */
-	if ((val = read_scom_for_chiplet(id, 0x070123DC)) & PPC_BIT(0))
+	if ((val = read_scom_for_chiplet(id, MCB_CNTLSTATQ)) & PPC_BIT(MCB_CNTLSTATQ_MCB_IP))
 		die("MCBIST in progress already (%#16.16llx), this shouldn't happen\n", val);
 
 	/*
@@ -549,18 +568,18 @@ static void mcbist_execute(int mcs_i)
 	/* MC01.MCBIST.MBA_SCOMFIR.MCB_CNTLQ
 	 * [0] MCB_CNTLQ_MCB_START
 	 */
-	scom_and_or_for_chiplet(id, 0x070123DB, ~0, PPC_BIT(0));
+	scom_and_or_for_chiplet(id, MCB_CNTLQ, ~0, PPC_BIT(MCB_CNTLQ_MCB_START));
 
 	/* Wait for MCBIST to start. Test for IP and DONE, it may finish early. */
-	if (((val = read_scom_for_chiplet(id, 0x070123DC)) &
-	     (PPC_BIT(0) | PPC_BIT(1))) == 0) {
+	if (((val = read_scom_for_chiplet(id, MCB_CNTLSTATQ)) &
+	     (PPC_BIT(MCB_CNTLSTATQ_MCB_IP) | PPC_BIT(MCB_CNTLSTATQ_MCB_DONE))) == 0) {
 		/*
 		 * TODO: how long do we want to wait? Hostboot uses 10*100us polling,
 		 * but so far it seems to always be already started on the first read.
 		 */
 		udelay(1);
-		if (((val = read_scom_for_chiplet(id, 0x070123DC)) &
-		     (PPC_BIT(0) | PPC_BIT(1))) == 0)
+		if (((val = read_scom_for_chiplet(id, MCB_CNTLSTATQ)) &
+		     (PPC_BIT(MCB_CNTLSTATQ_MCB_IP) | PPC_BIT(MCB_CNTLSTATQ_MCB_DONE))) == 0)
 			die("MCBIST failed (%#16.16llx) to start twice\n", val);
 
 		/* Check if this is needed. Do not move before test, it impacts delay! */
@@ -578,18 +597,18 @@ static void mcbist_execute(int mcs_i)
 static int mcbist_is_done(int mcs_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
-	uint64_t val = val = read_scom_for_chiplet(id, 0x070123DC);
+	uint64_t val = val = read_scom_for_chiplet(id, MCB_CNTLSTATQ);
 
 	/* Still in progress */
-	if (val & PPC_BIT(0))
+	if (val & PPC_BIT(MCB_CNTLSTATQ_MCB_IP))
 		return 0;
 
 	/* Not sure if DONE and FAIL can be set at the same time, check FAIL first */
-	if ((val & PPC_BIT(2)) || val == 0)
+	if ((val & PPC_BIT(MCB_CNTLSTATQ_MCB_FAIL)) || val == 0)
 		die("MCBIST error (%#16.16llx)\n");
 
 	/* Finished */
-	if (val & PPC_BIT(1))
+	if (val & PPC_BIT(MCB_CNTLSTATQ_MCB_DONE))
 		return 1;
 
 	/* Is it even possible to get here? */
@@ -697,6 +716,8 @@ void istep_14_1(void)
 		mcbist_execute(mcs_i);
 	}
 
+	long total_time = 0;
+
 	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
 		if (!mem_data.mcs[mcs_i].functional)
 			continue;
@@ -717,10 +738,11 @@ void istep_14_1(void)
 
 		/* TODO: dump error/status registers on failure */
 		if (!time)
-			die("MCBIST times out (%#16.16llx)\n",
-			    read_scom_for_chiplet(mcs_ids[mcs_i], 0x070123DC));
+			die("MCBIST%d times out (%#16.16llx)\n", mcs_i,
+			    read_scom_for_chiplet(mcs_ids[mcs_i], MCB_CNTLSTATQ));
 
-		printk(BIOS_ERR, "MCBIST took %ld us\n", time);
+		total_time += time;
+		printk(BIOS_ERR, "MCBIST%d took %ld us\n", mcs_i, total_time);
 
 		/* Unmask mainline FIRs. */
 		fir_unmask(mcs_i);

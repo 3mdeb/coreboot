@@ -4,6 +4,8 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 #define RING_ID_1866	0x6B
 #define RING_ID_2133	0x6C
 #define RING_ID_2400	0x6D
@@ -60,7 +62,7 @@ void istep_13_3(void)
 	 * start digging here: https://github.com/open-power/hostboot/blob/master/src/usr/scan/scandd.C#L169
 	 */
 	// TP.TPCHIP.PIB.PSU.PSU_SBE_DOORBELL_REG
-	if (read_scom(0x000D0060) & PPC_BIT(0))
+	if (read_scom(PSU_SBE_DOORBELL_REG) & PPC_BIT(0))
 		die("MBOX to SBE busy, this should not happen\n");
 
 
@@ -80,16 +82,16 @@ void istep_13_3(void)
 		 * variable for it, which probably implies wrapping this into a function and
 		 * moving it to separate file.
 		 */
-		write_scom(0x000D0050, 0x000001000000D301);
+		write_scom(PSU_HOST_SBE_MBOX0_REG, 0x000001000000D301);
 
 		// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
 		/* TARGET_TYPE_PERV, chiplet ID = 0x07, ring ID, RING_MODE_SET_PULSE_NSL */
-		write_scom(0x000D0051, 0x0002000000000004 | PPC_SHIFT(ring_id, 47) |
+		write_scom(PSU_HOST_SBE_MBOX1_REG, 0x0002000000000004 | PPC_SHIFT(ring_id, 47) |
 		           PPC_SHIFT(mcs_ids[mcs_i], 31));
 
 		// Ring the host->SBE doorbell
 		// TP.TPCHIP.PIB.PSU.PSU_SBE_DOORBELL_REG_OR
-		write_scom(0x000D0062, PPC_BIT(0));
+		write_scom(PSU_SBE_DOORBELL_REG_WOR, PPC_BIT(0));
 
 		// Wait for response
 		/*
@@ -101,7 +103,7 @@ void istep_13_3(void)
 		 * thorough testing we probably should trim it.
 		 */
 		// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG
-		time = wait_ms(90 * MSECS_PER_SEC, read_scom(0x000D0063) & PPC_BIT(0));
+		time = wait_ms(90 * MSECS_PER_SEC, read_scom(PSU_HOST_DOORBELL_REG) & PPC_BIT(0));
 
 		if (!time)
 			die("Timed out while waiting for SBE response\n");
@@ -112,7 +114,7 @@ void istep_13_3(void)
 
 		// Clear SBE->host doorbell
 		// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG_AND
-		write_scom(0x000D0064, ~PPC_BIT(0));
+		write_scom(PSU_HOST_DOORBELL_REG_WAND, ~PPC_BIT(0));
 	}
 
 	printk(BIOS_EMERG, "ending istep 13.3\n");

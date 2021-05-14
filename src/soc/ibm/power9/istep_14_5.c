@@ -3,6 +3,8 @@
 #include <cpu/power/istep_13.h>
 #include <console/console.h>
 
+#include "istep_13_scom.h"
+
 /*
  * Reset memory controller configuration written by SBE.
  * Close the MCS acker before enabling the real memory bars.
@@ -28,7 +30,8 @@ static void revert_mc_hb_dcbz_config(void)
 		 * Bit for MCS2/3 is documented, but for MCS0/1 it is "unused". Use what
 		 * Hostboot uses - bit 10 for MCS0/1 and bit 9 for MCS2/3.
 		 */
-		val = read_scom_for_chiplet(nest, 0x05000001); // TP.TCNx.Nx.CPLT_CTRL1, x = {1,3}
+		/* TP.TCNx.Nx.CPLT_CTRL1, x = {1,3} */
+		val = read_scom_for_chiplet(nest, NEST_CPLT_CTRL1);
 		if ((mcs_i == 0 && val & PPC_BIT(10)) ||
 		    (mcs_i == 1 && val & PPC_BIT(9)))
 			continue;
@@ -261,14 +264,9 @@ static void fir_unmask(int mcs_i)
 
 static void mcd_fir_mask(void)
 {
-	/* These are set always for N1 chiplet
-	MCD1.MCD_FIR_MASK_REG
-	  [all]   1
-	MCD0.MCD_FIR_MASK_REG
-	  [all]   1
-	*/
-	write_scom_for_chiplet(N1_CHIPLET_ID, 0x03011403, ~0);
-	write_scom_for_chiplet(N1_CHIPLET_ID, 0x03011003, ~0);
+	/* These are set always for N1 chiplet only. */
+	write_scom_for_chiplet(N1_CHIPLET_ID, MCD1_FIR_MASK_REG, ~0);
+	write_scom_for_chiplet(N1_CHIPLET_ID, MCD0_FIR_MASK_REG, ~0);
 }
 
 /*

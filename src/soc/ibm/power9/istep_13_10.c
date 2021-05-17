@@ -6,6 +6,8 @@
 #include <timer.h>
 #include <device/dram/rcd.h>
 
+#include "istep_13_scom.h"
+
 #define SPD_I2C_BUS		3
 
 static void draminit_cke_helper(chiplet_id_t id, int mca_i)
@@ -419,10 +421,13 @@ void istep_13_10(void)
 			[8-23]  CCS_MODEQ_DDR_CAL_TIMEOUT_CNT =       0xffff
 			[30-31] CCS_MODEQ_DDR_CAL_TIMEOUT_CNT_MULT =  3
 		*/
-		scom_and_or_for_chiplet(mcs_ids[mcs_i], 0x070123A7,
-		                        ~(PPC_BIT(0) | PPC_BIT(1)),
-		                        PPC_BIT(24) | PPC_BIT(26) | PPC_SHIFT(0xFFFF, 23) |
-		                        PPC_SHIFT(3, 31));
+		scom_and_or_for_chiplet(mcs_ids[mcs_i], CCS_MODEQ,
+		                        ~(PPC_BIT(CCS_MODEQ_CCS_STOP_ON_ERR) |
+		                          PPC_BIT(CCS_MODEQ_CCS_UE_DISABLE)),
+		                        PPC_BIT(CCS_MODEQ_CFG_CCS_PARITY_AFTER_CMD) |
+		                        PPC_BIT(CCS_MODEQ_COPY_CKE_TO_SPARE_CKE) |
+		                        PPC_SHIFT(0xFFFF, CCS_MODEQ_DDR_CAL_TIMEOUT_CNT) |
+		                        PPC_SHIFT(3, CCS_MODEQ_DDR_CAL_TIMEOUT_CNT_MULT));
 
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
 			mca_data_t *mca = &mem_data.mcs[mcs_i].mca[mca_i];
@@ -440,10 +445,13 @@ void istep_13_10(void)
 				  [5]   MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL =       1                   // 1st RMW (optional, only if changes)
 				  [6]   MBA_FARB5Q_CFG_CCS_INST_RESET_ENABLE =  0                   // 1st RMW (optional, only if changes)
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~PPC_BIT(6), PPC_BIT(5));
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~PPC_BITMASK(0, 3),
-			           PPC_SHIFT(0x6, 3));
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~0, PPC_BIT(4));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q,
+			           ~PPC_BIT(MBA_FARB5Q_CFG_CCS_INST_RESET_ENABLE),
+			           PPC_BIT(MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q, ~PPC_BITMASK(0, 3),
+			           PPC_SHIFT(0x6, MBA_FARB5Q_CFG_DDR_DPHY_PCLK));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q, ~0,
+			           PPC_BIT(MBA_FARB5Q_CFG_DDR_RESETN));
 
 			udelay(500);  /* part of 3rd RMW, but delay is unconditional */
 		}
@@ -487,7 +495,8 @@ void istep_13_10(void)
 			MC01.PORT0.SRQ.MBA_FARB5Q
 			      [5]   MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL = 0
 			 */
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~PPC_BIT(5), 0);
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q,
+			           ~PPC_BIT(MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL), 0);
 		}
 
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {

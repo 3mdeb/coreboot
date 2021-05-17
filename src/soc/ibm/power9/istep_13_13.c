@@ -3,6 +3,8 @@
 #include <cpu/power/istep_13.h>
 #include <console/console.h>
 
+#include "istep_13_scom.h"
+
 /*
  * Set up the MC port <-> DIMM address translation registers.
  *
@@ -184,7 +186,7 @@ static uint64_t dimms_rank_config(mca_data_t *mca, uint64_t xlt0, int update_d_b
 			 * Note: this depends on width/density having values as encoded in
 			 * SPD and istep_13.h. Please do not change them.
 			 */
-			int row_bits = 13 + mca->dimm[me].density - mca->dimm[me].width;
+			int row_bits = 12 + mca->dimm[me].density - mca->dimm[me].width;
 			if (row_bits > max_row_bits)
 				max_row_bits = row_bits;
 
@@ -363,7 +365,7 @@ static void setup_xlate_map(int mcs_i, int mca_i)
 	int log_ranks = mca->dimm[0].log_ranks | mca->dimm[1].log_ranks;
 	int is_3DS = (log_ranks / mranks) != 1;
 	int update_d = log_ranks != 1;	// Logically the same as '(mranks != 1) | is_3DS'
-	chiplet_id_t nest = id == MC01_CHIPLET_ID ? N3_CHIPLET_ID : N1_CHIPLET_ID;
+	chiplet_id_t nest = mcs_to_nest[id];
 	enum mc_rank_config cfg = M1H1_ONE_DIMM;
 
 	if (is_3DS) {
@@ -429,7 +431,8 @@ static void enable_pm(int mcs_i, int mca_i)
 		[2] MBARPC0Q_CFG_MIN_MAX_DOMAINS_ENABLE = 1
 	*/
 	if (ATTR_MSS_MRW_POWER_CONTROL_REQUESTED)
-		mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010934, ~0, PPC_BIT(2));
+		mca_and_or(mcs_ids[mcs_i], mca_i, MBARPC0Q, ~0,
+		           PPC_BIT(MBARPC0Q_CFG_MIN_MAX_DOMAINS_ENABLE));
 }
 
 static void apply_mark_store(int mcs_i, int mca_i)
@@ -449,7 +452,7 @@ static void apply_mark_store(int mcs_i, int mca_i)
 		  [all]   0
 		  [0-22]  from ATTR_MSS_MVPD_FWMS
 		*/
-		mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010A18 + i,
+		mca_and_or(mcs_ids[mcs_i], mca_i, FWMS0 + i,
 		           0, ATTR_MSS_MVPD_FWMS[i]);
 	}
 }
@@ -474,14 +477,21 @@ static void fir_unmask(int mcs_i)
 		  [3]   MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC =  0 // recoverable_error (0,1,0)
 		  [10]  MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE =  0     // attention (1,0,0)
 	 */
-	scom_and_or_for_chiplet(id, 0x07012306,
-	                        ~PPC_BIT(10),
-	                        PPC_BIT(10));
-	scom_and_or_for_chiplet(id, 0x07012307,
-	                        ~PPC_BIT(10),
-	                        0);
-	scom_and_or_for_chiplet(id, 0x07012303,
-	                        ~PPC_BIT(10),
+	/*
+	 * TODO: check if this works with bootblock in SEEPROM too. We don't have
+	 * interrupt handlers set up in that case.
+	 */
+	scom_and_or_for_chiplet(id, MCBISTFIRACT0,
+	                        ~(PPC_BIT(MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC) |
+	                          PPC_BIT(MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE)),
+	                        PPC_BIT(MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE));
+	scom_and_or_for_chiplet(id, MCBISTFIRACT1,
+	                        ~(PPC_BIT(MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC) |
+	                          PPC_BIT(MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE)),
+	                        PPC_BIT(MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC));
+	scom_and_or_for_chiplet(id, MCBISTFIRMASK,
+	                        ~(PPC_BIT(MCBISTFIRQ_MCBIST_BRODCAST_OUT_OF_SYNC) |
+	                          PPC_BIT(MCBISTFIRQ_MCBIST_PROGRAM_COMPLETE)),
 	                        0);
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
@@ -492,10 +502,10 @@ static void fir_unmask(int mcs_i)
 		MC01.PORT0.ECC64.SCOM.RECR
 			[26]  MBSECCQ_ENABLE_UE_NOISE_WINDOW =  0
 		*/
-		mca_and_or(id, mca_i, 0x07010A0A, ~PPC_BIT(26), 0);
+		mca_and_or(id, mca_i, RECR, ~PPC_BIT(MBSECCQ_ENABLE_UE_NOISE_WINDOW), 0);
 
 		/*
-		MC01.PORT1.ECC64.SCOM.ACTION0
+		MC01.PORT0.ECC64.SCOM.ACTION0
 		  [33]  FIR_MAINTENANCE_AUE =                     0
 		  [36]  FIR_MAINTENANCE_IAUE =                    0
 		  [41]  FIR_SCOM_PARITY_CLASS_STATUS =            0
@@ -516,7 +526,7 @@ static void fir_unmask(int mcs_i)
 		  [57]  FIR_WDF_ASYNC_INTERFACE_ERROR =           0
 		  [58]  FIR_READ_ASYNC_INTERFACE_PARITY_ERROR =   0
 		  [59]  FIR_READ_ASYNC_INTERFACE_SEQUENCE_ERROR = 0
-		MC01.PORT1.ECC64.SCOM.ACTION1
+		MC01.PORT0.ECC64.SCOM.ACTION1
 		  [33]  FIR_MAINTENANCE_AUE =                     1
 		  [36]  FIR_MAINTENANCE_IAUE =                    1
 		  [41]  FIR_SCOM_PARITY_CLASS_STATUS =            1
@@ -537,7 +547,7 @@ static void fir_unmask(int mcs_i)
 		  [57]  FIR_WDF_ASYNC_INTERFACE_ERROR =           0
 		  [58]  FIR_READ_ASYNC_INTERFACE_PARITY_ERROR =   0
 		  [59]  FIR_READ_ASYNC_INTERFACE_SEQUENCE_ERROR = 0
-		MC01.PORT1.ECC64.SCOM.MASK
+		MC01.PORT0.ECC64.SCOM.MASK
 		  [33]  FIR_MAINTENANCE_AUE =                     0   // recoverable_error (0,1,0)
 		  [36]  FIR_MAINTENANCE_IAUE =                    0   // recoverable_error (0,1,0)
 		  [41]  FIR_SCOM_PARITY_CLASS_STATUS =            0   // recoverable_error (0,1,0)
@@ -559,16 +569,26 @@ static void fir_unmask(int mcs_i)
 		  [58]  FIR_READ_ASYNC_INTERFACE_PARITY_ERROR =   0   // checkstop (0,0,0)
 		  [59]  FIR_READ_ASYNC_INTERFACE_SEQUENCE_ERROR = 0   // checkstop (0,0,0)
 		*/
-		mca_and_or(id, mca_i, 0x07010A46,
-		           ~(PPC_BIT(33) | PPC_BIT(36) | PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
+		mca_and_or(id, mca_i, ECC_FIR_ACTION0,
+		           ~(PPC_BIT(ECC_FIR_MAINTENANCE_AUE) |
+		             PPC_BIT(ECC_FIR_MAINTENANCE_IAUE) |
+		             PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
 		           0);
 
-		mca_and_or(id, mca_i, 0x07010A47,
-		           ~(PPC_BIT(33) | PPC_BIT(36) | PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
-		           PPC_BIT(33) | PPC_BIT(36) | PPC_BIT(41) | PPC_BIT(42) | PPC_BIT(45));
+		mca_and_or(id, mca_i, ECC_FIR_ACTION1,
+		           ~(PPC_BIT(ECC_FIR_MAINTENANCE_AUE) |
+		             PPC_BIT(ECC_FIR_MAINTENANCE_IAUE) |
+		             PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
+		           PPC_BIT(ECC_FIR_MAINTENANCE_AUE) |
+		           PPC_BIT(ECC_FIR_MAINTENANCE_IAUE) |
+		           PPC_BIT(ECC_FIR_SCOM_PARITY_CLASS_STATUS) |
+		           PPC_BIT(ECC_FIR_SCOM_PARITY_CLASS_RECOVERABLE) |
+		           PPC_BIT(ECC_FIR_WRITE_RMW_CE));
 
-		mca_and_or(id, mca_i, 0x07010A43,
-		           ~(PPC_BIT(33) | PPC_BIT(36) | PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
+		mca_and_or(id, mca_i, ECC_FIR_MASK,
+		           ~(PPC_BIT(ECC_FIR_MAINTENANCE_AUE) |
+		             PPC_BIT(ECC_FIR_MAINTENANCE_IAUE) |
+		             PPC_BITMASK(41, 46) | PPC_BITMASK(48, 59)),
 		           0);
 	}
 }
@@ -611,9 +631,10 @@ void istep_13_13(void)
 				  // Not sure where this attr comes from or what is its default value. Assume !0 = 1 -> TCE correction enabled
 				  [27]  MBSECCQ_ENABLE_TCE_CORRECTION = !ATTR_MNFG_FLAGS.MNFG_REPAIRS_DISABLED_ATTR
 			*/
-			mca_and_or(id, mca_i, 0x07010A0A,
-			           ~(PPC_BITMASK(6, 8) | PPC_BIT(27)),
-			           PPC_SHIFT(1, 8) | PPC_BIT(27));
+			mca_and_or(id, mca_i, RECR,
+			           ~(PPC_BITMASK(6, 8) | PPC_BIT(MBSECCQ_ENABLE_TCE_CORRECTION)),
+			           PPC_SHIFT(1, MBSECCQ_READ_POINTER_DELAY) |
+			           PPC_BIT(MBSECCQ_ENABLE_TCE_CORRECTION));
 
 			enable_pm(mcs_i, mca_i);
 
@@ -626,12 +647,14 @@ void istep_13_13(void)
 			 * MC01.PORT0.SRQ.MBA_FARB5Q
 			 *	  [5]   MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL = 0
 			 */
-			mca_and_or(id, mca_i, 0x07010918, ~PPC_BIT(5), 0);
+			mca_and_or(id, mca_i, MBA_FARB5Q,
+			           ~PPC_BIT(MBA_FARB5Q_CFG_CCS_ADDR_MUX_SEL), 0);
 
 			/* MC01.PORT0.SRQ.MBA_FARB0Q
 				  [57]  MBA_FARB0Q_CFG_PORT_FAIL_DISABLE = 0
 			*/
-			mca_and_or(id, mca_i, 0x07010913, ~PPC_BIT(57), 0);
+			mca_and_or(id, mca_i, MBA_FARB0Q,
+			           ~PPC_BIT(MBA_FARB0Q_CFG_PORT_FAIL_DISABLE), 0);
 
 			/*
 			 * "MC work around for OE bug (seen in periodics + PHY)
@@ -645,19 +668,20 @@ void istep_13_13(void)
 			 * MC01.PORT0.SRQ.MBA_FARB0Q
 			 *	  [55]  MBA_FARB0Q_CFG_OE_ALWAYS_ON = 1
 			 */
-			mca_and_or(id, mca_i, 0x07010913, ~0, PPC_BIT(55));
+			mca_and_or(id, mca_i, MBA_FARB0Q, ~0,
+			           PPC_BIT(MBA_FARB0Q_CFG_OE_ALWAYS_ON));
 
-			/* MC01.PORT0.SRQ.PC.MBAREF0Q                    // 0x07010932
+			/* MC01.PORT0.SRQ.PC.MBAREF0Q
 				  [0] MBAREF0Q_CFG_REFRESH_ENABLE = 1
 			*/
-			mca_and_or(id, mca_i, 0x07010932, ~0, PPC_BIT(0));
+			mca_and_or(id, mca_i, MBAREF0Q, ~0, PPC_BIT(MBAREF0Q_CFG_REFRESH_ENABLE));
 
 			/* Enable periodic calibration */
 			/*
 			 * A large chunk of function enable_periodic_cal() in Hostboot is
 			 * disabled, protected by #ifdef TODO_166433_PERIODICS, which also
 			 * isn't mentioned anywhere else. This is what is left:
-			  MC01.PORT0.SRQ.MBA_CAL3Q                      // 0x07010912
+			  MC01.PORT0.SRQ.MBA_CAL3Q
 				  [all]   0
 				  [0-1]   MBA_CAL3Q_CFG_INTERNAL_ZQ_TB =        0x3
 				  [2-9]   MBA_CAL3Q_CFG_INTERNAL_ZQ_LENGTH =    0xff
@@ -673,7 +697,7 @@ void istep_13_13(void)
 				  [52-59] MBA_CAL3Q_CFG_ALL_PERIODIC_LENGTH =   0xff
 				  // Or simpler: 0xfffffffffffffff0
 			*/
-			mca_and_or(id, mca_i, 0x07010912, 0, PPC_BITMASK(0, 59));
+			mca_and_or(id, mca_i, MBA_CAL3Q, 0, PPC_BITMASK(0, 59));
 
 			/* Enable read ECC
 			  MC01.PORT0.ECC64.SCOM.RECR                    // 0x07010A0A
@@ -683,9 +707,10 @@ void istep_13_13(void)
 				  // Docs don't describe the encoding, code suggests this inverts data, toggles checks
 				  [30-31] MBSECCQ_DATA_INVERSION =                    3
 			*/
-			mca_and_or(id, mca_i, 0x07010A0A,
+			mca_and_or(id, mca_i, RECR,
 			           ~(PPC_BITMASK(0, 1) | PPC_BITMASK(29, 31)),
-			           PPC_BIT(29) | PPC_SHIFT(3, 31));
+			           PPC_BIT(MBSECCQ_USE_ADDRESS_HASH) |
+			           PPC_SHIFT(3, MBSECCQ_DATA_INVERSION));
 
 			apply_mark_store(mcs_i, mca_i);
 		}

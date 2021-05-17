@@ -4,6 +4,8 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 /*
  * FIXME: ATTR_PG value should come from MEMD partition, but it is empty after
  * build. Default value from talos.xml (5 for all chiplets) probably never makes
@@ -25,21 +27,23 @@ static inline void p9_mem_startclocks_cplt_ctrl_action_function(chiplet_id_t id)
 {
 	// Drop partial good fences
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL1 (WO_CLEAR)                // 0x07000021
+	TP.TCMC01.MCSLOW.CPLT_CTRL1 (WO_CLEAR)
 	  [all]   0
 	  [3]     TC_VITL_REGION_FENCE =                  ~ATTR_PG[3]
 	  [4-14]  TC_REGION{1-3}_FENCE, UNUSED_{8-14}B =  ~ATTR_PG[4-14]
 	*/
-	write_scom_for_chiplet(id, 0x07000021, ~ATTR_PG & PPC_BITMASK(3,14));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL1_WCLEAR, ~ATTR_PG & PPC_BITMASK(3,14));
 
 	// Reset abistclk_muxsel and syncclk_muxsel
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)                // 0x07000020
+	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)
 	  [all]   0
 	  [0]     CTRL_CC_ABSTCLK_MUXSEL_DC = 1
 	  [1]     TC_UNIT_SYNCCLK_MUXSEL_DC = 1
 	*/
-	write_scom_for_chiplet(id, 0x07000020, PPC_BIT(0) | PPC_BIT(1));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL0_WCLEAR,
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_ABSTCLK_MUXSEL_DC) |
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_TC_UNIT_SYNCCLK_MUXSEL_DC));
 
 }
 
@@ -47,75 +51,82 @@ static inline void p9_sbe_common_align_chiplets(chiplet_id_t id)
 {
 	// Exit flush
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)                   // 0x07000010
+	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)
 	  [all]   0
 	  [2]     CTRL_CC_FLUSHMODE_INH_DC =  1
 	*/
-	write_scom_for_chiplet(id, 0x07000010, PPC_BIT(2));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL0_WOR,
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_FLUSHMODE_INH_DC));
 
 	// Enable alignement
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)                   // 0x07000010
+	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)
 	  [all]   0
 	  [3]     CTRL_CC_FORCE_ALIGN_DC =    1
 	*/
-	write_scom_for_chiplet(id, 0x07000010, PPC_BIT(3));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL0_WOR,
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_FORCE_ALIGN_DC));
 
 	// Clear chiplet is aligned
 	/*
-	TP.TCMC01.MCSLOW.SYNC_CONFIG                          // 0x07030000
+	TP.TCMC01.MCSLOW.SYNC_CONFIG
 	  [7]     CLEAR_CHIPLET_IS_ALIGNED =  1
 	*/
-	scom_or_for_chiplet(id, 0x07030000, PPC_BIT(7));
+	scom_or_for_chiplet(id, MCSLOW_SYNC_CONFIG,
+	                    PPC_BIT(MCSLOW_SYNC_CONFIG_CLEAR_CHIPLET_IS_ALIGNED));
 
 	// Unset Clear chiplet is aligned
 	/*
-	TP.TCMC01.MCSLOW.SYNC_CONFIG                          // 0x07030000
+	TP.TCMC01.MCSLOW.SYNC_CONFIG
 	  [7]     CLEAR_CHIPLET_IS_ALIGNED =  0
 	*/
-	scom_and_for_chiplet(id, 0x07030000, ~PPC_BIT(7));
+	scom_and_for_chiplet(id, MCSLOW_SYNC_CONFIG,
+	                     ~PPC_BIT(MCSLOW_SYNC_CONFIG_CLEAR_CHIPLET_IS_ALIGNED));
 
 	udelay(100);
 
 	// Poll aligned bit
 	/*
 	timeout(10*100us):
-	TP.TCMC01.MCSLOW.CPLT_STAT0                         // 0x07000100
+	TP.TCMC01.MCSLOW.CPLT_STAT0
 	if (([9] CC_CTRL_CHIPLET_IS_ALIGNED_DC) == 1) break
 	delay(100us)
 	*/
-	if (!wait_us(10 * 100, read_scom_for_chiplet(id, 0x07000100) & PPC_BIT(9)))
+	if (!wait_us(10 * 100, read_scom_for_chiplet(id, MCSLOW_CPLT_STAT0) &
+	             PPC_BIT(MCSLOW_CPLT_STAT0_CC_CTRL_CHIPLET_IS_ALIGNED_DC)))
 		die("Timeout while waiting for chiplet alignment\n");
 
 	// Disable alignment
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)                // 0x07000020
+	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)
 	  [all]   0
 	  [3]     CTRL_CC_FORCE_ALIGN_DC =  1
 	*/
-	write_scom_for_chiplet(id, 0x07000020, PPC_BIT(3));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL0_WCLEAR,
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_FORCE_ALIGN_DC));
 }
 
 static void p9_sbe_common_clock_start_stop(chiplet_id_t id)
 {
 	// Chiplet exit flush
 	/*
-	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)                   // 0x07000010
+	TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_OR)
 	  [all]   0
 	  [2]     CTRL_CC_FLUSHMODE_INH_DC =  1
 	*/
-	write_scom_for_chiplet(id, 0x07000010, PPC_BIT(2));
+	write_scom_for_chiplet(id, MCSLOW_CPLT_CTRL0_WOR,
+	                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_FLUSHMODE_INH_DC));
 
 	// Clear Scan region type register
 	/*
-	TP.TCMC01.MCSLOW.SCAN_REGION_TYPE                     // 0x07030005
+	TP.TCMC01.MCSLOW.SCAN_REGION_TYPE
 	  [all]   0
 	*/
-	write_scom_for_chiplet(id, 0x07030005, 0);
+	write_scom_for_chiplet(id, MCSLOW_SCAN_REGION_TYPE, 0);
 
 	// Setup all Clock Domains and Clock Types
 	/*
-	TP.TCMC01.MCSLOW.CLK_REGION                           // 0x07030006
+	TP.TCMC01.MCSLOW.CLK_REGION
 	  [0-1]   CLOCK_CMD =       1     // start
 	  [2]     SLAVE_MODE =      0
 	  [3]     MASTER_MODE =     0
@@ -126,19 +137,23 @@ static void p9_sbe_common_clock_start_stop(chiplet_id_t id)
 	  [49]    SEL_THOLD_NSL =   1
 	  [50]    SEL_THOLD_ARY =   1
 	*/
-	scom_and_or_for_chiplet(id, 0x07030006,
+	scom_and_or_for_chiplet(id, MCSLOW_CLK_REGION,
 	                        ~(PPC_BITMASK(0,14) | PPC_BITMASK(48, 50)),
-	                        PPC_BIT(1) | PPC_BIT(48) | PPC_BIT(49) | PPC_BIT(50)
-	                        | (~ATTR_PG & PPC_BITMASK(4, 13)));
+	                        PPC_SHIFT(1, MCSLOW_CLK_REGION_CLOCK_CMD) |
+	                        PPC_BIT(MCSLOW_CLK_REGION_SEL_THOLD_SL) |
+	                        PPC_BIT(MCSLOW_CLK_REGION_SEL_THOLD_NSL) |
+	                        PPC_BIT(MCSLOW_CLK_REGION_SEL_THOLD_ARY) |
+	                        (~ATTR_PG & PPC_BITMASK(4, 13)));
 
 	// Poll OPCG done bit to check for completeness
 	/*
 	timeout(10*100us):
-	TP.TCMC01.MCSLOW.CPLT_STAT0                         // 0x07000100
+	TP.TCMC01.MCSLOW.CPLT_STAT0
 	if (([8] CC_CTRL_OPCG_DONE_DC) == 1) break
 	delay(100us)
 	*/
-	if (!wait_us(10 * 100, read_scom_for_chiplet(id, 0x07000100) & PPC_BIT(8)))
+	if (!wait_us(10 * 100, read_scom_for_chiplet(id, MCSLOW_CPLT_STAT0) &
+	             PPC_BIT(MCSLOW_CPLT_STAT0_CC_CTRL_OPCG_DONE_DC)))
 		die("Timeout while waiting for OPCG done bit\n");
 
 	/*
@@ -148,15 +163,15 @@ static void p9_sbe_common_clock_start_stop(chiplet_id_t id)
 	 * for those.
 	 */
 	/*
-	TP.TCMC01.MCSLOW.CLOCK_STAT_SL                        // 0x07030008
-	TP.TCMC01.MCSLOW.CLOCK_STAT_NSL                       // 0x07030009
-	TP.TCMC01.MCSLOW.CLOCK_STAT_ARY                       // 0x0703000A
+	TP.TCMC01.MCSLOW.CLOCK_STAT_SL
+	TP.TCMC01.MCSLOW.CLOCK_STAT_NSL
+	TP.TCMC01.MCSLOW.CLOCK_STAT_ARY
 	  assert(([4-14] & ATTR_PG[4-14]) == ATTR_PG[4-14])
 	*/
 	uint64_t mask = ATTR_PG & PPC_BITMASK(4, 13);
-	if ((read_scom_for_chiplet(id, 0x07030008) & PPC_BITMASK(4, 13)) != mask ||
-	    (read_scom_for_chiplet(id, 0x07030009) & PPC_BITMASK(4, 13)) != mask ||
-	    (read_scom_for_chiplet(id, 0x0703000A) & PPC_BITMASK(4, 13)) != mask)
+	if ((read_scom_for_chiplet(id, MCSLOW_CLOCK_STAT_SL) & PPC_BITMASK(4, 13)) != mask ||
+	    (read_scom_for_chiplet(id, MCSLOW_CLOCK_STAT_NSL) & PPC_BITMASK(4, 13)) != mask ||
+	    (read_scom_for_chiplet(id, MCSLOW_CLOCK_STAT_ARY) & PPC_BITMASK(4, 13)) != mask)
 		die("Unexpected clock status\n");
 }
 
@@ -179,11 +194,12 @@ static inline void p9_mem_startclocks_fence_setup_function(chiplet_id_t id)
 
 	// Drop chiplet fence
 	/*
-	TP.TPCHIP.NET.PCBSLMC01.NET_CTRL0 (WAND)            // 0x070F0041
+	TP.TPCHIP.NET.PCBSLMC01.NET_CTRL0 (WAND)
 	  [all] 1
 	  [18]  FENCE_EN =  0
 	*/
-	write_scom_for_chiplet(id, 0x070F0041, ~PPC_BIT(18));
+	write_scom_for_chiplet(id, PCBSLMC01_NET_CTRL0_WAND,
+	                       ~PPC_BIT(PCBSLMC01_NET_CTRL0_FENCE_EN));
 
 	/* }*/
 }
@@ -192,39 +208,39 @@ static void p9_sbe_common_configure_chiplet_FIR(chiplet_id_t id)
 {
 	// reset pervasive FIR
 	/*
-	TP.TCMC01.MCSLOW.LOCAL_FIR                            // 0x0704000A
+	TP.TCMC01.MCSLOW.LOCAL_FIR
 	  [all]   0
 	*/
-	write_scom_for_chiplet(id, 0x0704000A, 0);
+	write_scom_for_chiplet(id, MCSLOW_LOCAL_FIR, 0);
 
 	// configure pervasive FIR action/mask
 	/*
-	TP.TCMC01.MCSLOW.LOCAL_FIR_ACTION0                    // 0x07040010
+	TP.TCMC01.MCSLOW.LOCAL_FIR_ACTION0
 	  [all]   0
-	TP.TCMC01.MCSLOW.LOCAL_FIR_ACTION1                    // 0x07040011
+	TP.TCMC01.MCSLOW.LOCAL_FIR_ACTION1
 	  [all]   0
 	  [0-3]   0xF
-	TP.TCMC01.MCSLOW.LOCAL_FIR_MASK                       // 0x0704000D
+	TP.TCMC01.MCSLOW.LOCAL_FIR_MASK
 	  [all]   0
 	  [4-41]  0x3FFFFFFFFF (every bit set)
 	*/
-	write_scom_for_chiplet(id, 0x07040010, 0);
-	write_scom_for_chiplet(id, 0x07040011, PPC_BITMASK(0,3));
-	write_scom_for_chiplet(id, 0x0704000D, PPC_BITMASK(4,41));
+	write_scom_for_chiplet(id, MCSLOW_LOCAL_FIR_ACTION0, 0);
+	write_scom_for_chiplet(id, MCSLOW_LOCAL_FIR_ACTION1, PPC_BITMASK(0,3));
+	write_scom_for_chiplet(id, MCSLOW_LOCAL_FIR_MASK, PPC_BITMASK(4,41));
 
 	// reset XFIR
 	/*
-	TP.TCMC01.MCSLOW.XFIR                                 // 0x07040000
+	TP.TCMC01.MCSLOW.XFIR
 	  [all]   0
 	*/
-	write_scom_for_chiplet(id, 0x07040000, 0);
+	write_scom_for_chiplet(id, MCSLOW_XFIR, 0);
 
 	// configure XFIR mask
 	/*
-	TP.TCMC01.MCSLOW.FIR_MASK                             // 0x07040002
+	TP.TCMC01.MCSLOW.FIR_MASK
 	  [all]   0
 	*/
-	write_scom_for_chiplet(id, 0x07040002, 0);
+	write_scom_for_chiplet(id, MCSLOW_FIR_MASK, 0);
 }
 
 /*
@@ -264,18 +280,19 @@ void istep_13_6(void)
 
 		// Clear flush_inhibit to go in to flush mode
 		/*
-		TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)                // 0x07000020
+		TP.TCMC01.MCSLOW.CPLT_CTRL0 (WO_CLEAR)
 		  [all]   0
 		  [2]     CTRL_CC_FLUSHMODE_INH_DC =  1
 		*/
-		write_scom_for_chiplet(mcs_ids[i], 0x07000020, PPC_BIT(2));
+		write_scom_for_chiplet(mcs_ids[i], MCSLOW_CPLT_CTRL0_WCLEAR,
+		                       PPC_BIT(MCSLOW_CPLT_CTRL0_CTRL_CC_FLUSHMODE_INH_DC));
 
 		// Call p9_sbe_common_configure_chiplet_FIR for MC chiplets
 		p9_sbe_common_configure_chiplet_FIR(mcs_ids[i]);
 
 		// Reset FBC chiplet configuration
 		/*
-		TP.TCMC01.MCSLOW.CPLT_CONF0                             // 0x07000008
+		TP.TCMC01.MCSLOW.CPLT_CONF0
 		  [48-51] TC_UNIT_GROUP_ID_DC = ATTR_PROC_FABRIC_GROUP_ID   // Where do these come from?
 		  [52-54] TC_UNIT_CHIP_ID_DC =  ATTR_PROC_FABRIC_CHIP_ID
 		  [56-60] TC_UNIT_SYS_ID_DC =   ATTR_PROC_FABRIC_SYSTEM_ID  // 0 in talos.xml
@@ -285,28 +302,28 @@ void istep_13_6(void)
 		 * ATTR_FABRIC_GROUP_ID of parent PROC (same for CHIP_ID). Only
 		 * SYSTEM_ID is present in talos.xml with full name.
 		 */
-		scom_and_for_chiplet(mcs_ids[i], 0x07000008,
+		scom_and_for_chiplet(mcs_ids[i], MCSLOW_CPLT_CONF0,
 		                     ~(PPC_BITMASK(48,54) | PPC_BITMASK(56,60)));
 
 		// Add to Multicast Group
 		/* Avoid setting if register is already set, i.e. [3-5] != 7 */
 		/*
-		TP.TPCHIP.NET.PCBSLMC01.MULTICAST_GROUP_1             // 0x070F0001
+		TP.TPCHIP.NET.PCBSLMC01.MULTICAST_GROUP_1
 		  [3-5]   MULTICAST1_GROUP: if 7 then set to 0
 		  [16-23] (not described):  if [3-5] == 7 then set to 0x1C    // No clue why Hostboot modifies these bits
-		TP.TPCHIP.NET.PCBSLMC01.MULTICAST_GROUP_2             // 0x070F0002
+		TP.TPCHIP.NET.PCBSLMC01.MULTICAST_GROUP_2
 		  [3-5]   MULTICAST1_GROUP: if 7 then set to 2
 		  [16-23] (not described):  if [3-5] == 7 then set to 0x1C
 		*/
-		if ((read_scom_for_chiplet(mcs_ids[i], 0x070F0001) & PPC_BITMASK(3,5))
+		if ((read_scom_for_chiplet(mcs_ids[i], PCBSLMC01_MULTICAST_GROUP_1) & PPC_BITMASK(3,5))
 		    == PPC_BITMASK(3,5))
-			scom_and_or_for_chiplet(mcs_ids[i], 0x070F0001,
+			scom_and_or_for_chiplet(mcs_ids[i], PCBSLMC01_MULTICAST_GROUP_1,
 			                        ~(PPC_BITMASK(3,5) | PPC_BITMASK(16,23)),
 			                        PPC_BITMASK(19,21));
 
-		if ((read_scom_for_chiplet(mcs_ids[i], 0x070F0002) & PPC_BITMASK(3,5))
+		if ((read_scom_for_chiplet(mcs_ids[i], PCBSLMC01_MULTICAST_GROUP_2) & PPC_BITMASK(3,5))
 		    == PPC_BITMASK(3,5))
-			scom_and_or_for_chiplet(mcs_ids[i], 0x070F0002,
+			scom_and_or_for_chiplet(mcs_ids[i], PCBSLMC01_MULTICAST_GROUP_2,
 			                        ~(PPC_BITMASK(3,5) | PPC_BITMASK(16,23)),
 			                        PPC_BIT(4) | PPC_BITMASK(19,21));
 	}

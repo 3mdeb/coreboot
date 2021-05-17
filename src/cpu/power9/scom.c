@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
+#include <cpu/power/scom.h>
+#include <cpu/power/spr.h>		// HMER
+#include <console/console.h>
+
+#define XSCOM_DATA_IND_READ			PPC_BIT(0)
+#define XSCOM_DATA_IND_COMPLETE		PPC_BIT(32)
+#define XSCOM_DATA_IND_ERR			PPC_BITMASK(33,35)
+#define XSCOM_DATA_IND_DATA			PPC_BITMASK(48,63)
+#define XSCOM_DATA_IND_FORM1_DATA	PPC_BITMASK(12,63)
+#define XSCOM_IND_MAX_RETRIES		10
+
+/*
+ * WARNING:
+ * Indirect access uses the same approach as Hostboot, yet all our tests so far
+ * were unsuccessful. It is possible that the devices we were trying to access
+ * must be initialized or otherwise enabled first. Because of that we decided to
+ * leave it as it is for now, with heavy debugging, and return to this when we
+ * are sure that it doesn't work because of error in implementation.
+ */
+void write_scom_indirect(uint64_t reg_address, uint64_t value)
+{
+	uint64_t addr;
+	uint64_t data;
+	addr = reg_address & 0x7FFFFFFF;
+	data = reg_address & XSCOM_ADDR_IND_ADDR;
+	data |= value & XSCOM_ADDR_IND_DATA;
+
+	write_scom_direct(addr, data);
+
+	for (int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
+		data = read_scom_direct(addr);
+		if((data & XSCOM_DATA_IND_COMPLETE) && ((data & XSCOM_DATA_IND_ERR) == 0)) {
+			return;
+		}
+		else if(data & XSCOM_DATA_IND_COMPLETE) {
+			printk(BIOS_EMERG, "SCOM WR error  %16.16llx = %16.16llx : %16.16llx\n",
+			       reg_address, value, data);
+		}
+		// TODO: delay?
+	}
+}
+
+uint64_t read_scom_indirect(uint64_t reg_address)
+{
+	uint64_t addr;
+	uint64_t data;
+	addr = reg_address & 0x7FFFFFFF;
+	data = XSCOM_DATA_IND_READ | (reg_address & XSCOM_ADDR_IND_ADDR);
+
+	write_scom_direct(addr, data);
+
+	for (int retries = 0; retries < XSCOM_IND_MAX_RETRIES; ++retries) {
+		data = read_scom_direct(addr);
+		if((data & XSCOM_DATA_IND_COMPLETE) && ((data & XSCOM_DATA_IND_ERR) == 0)) {
+			break;
+		}
+		else if(data & XSCOM_DATA_IND_COMPLETE) {
+			printk(BIOS_EMERG, "SCOM RD error  %16.16llx : %16.16llx\n",
+			       reg_address, data);
+		}
+		// TODO: delay?
+	}
+
+	return data & XSCOM_DATA_IND_DATA;
+}

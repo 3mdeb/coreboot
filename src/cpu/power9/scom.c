@@ -5,11 +5,16 @@
 #include <console/console.h>
 
 #define XSCOM_DATA_IND_READ			PPC_BIT(0)
-#define XSCOM_DATA_IND_COMPLETE		PPC_BIT(32)
+
+#define XSCOM_DATA_IND_COMPLETE			PPC_BIT(32)
 #define XSCOM_DATA_IND_ERR			PPC_BITMASK(33,35)
 #define XSCOM_DATA_IND_DATA			PPC_BITMASK(48,63)
-#define XSCOM_DATA_IND_FORM1_DATA	PPC_BITMASK(12,63)
-#define XSCOM_IND_MAX_RETRIES		10
+#define XSCOM_DATA_IND_FORM1_DATA		PPC_BITMASK(12,63)
+#define XSCOM_IND_MAX_RETRIES			10
+
+#define XSCOM_RCVED_STAT_REG			0x00090018
+#define XSCOM_LOG_REG				0x00090012
+#define XSCOM_ERR_REG				0x00090013
 
 /*
  * WARNING:
@@ -64,4 +69,19 @@ uint64_t read_scom_indirect(uint64_t reg_address)
 	}
 
 	return data & XSCOM_DATA_IND_DATA;
+}
+
+/* This function should be rarely called, don't make it inlined */
+void reset_scom_engine(void)
+{
+	/*
+	 * With cross-CPU SCOM accesses, first register should be cleared on the
+	 * executing CPU, the other two on target CPU. In that case it may be
+	 * necessary to do the remote writes in assembly directly to skip checking
+	 * HMER and possibly end in a loop.
+	 */
+	write_scom_direct(XSCOM_RCVED_STAT_REG, 0);
+	write_scom_direct(XSCOM_LOG_REG, 0);
+	write_scom_direct(XSCOM_ERR_REG, 0);
+	eieio();
 }

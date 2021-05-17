@@ -11,6 +11,7 @@
 #define LPCHC_FW_SPACE 0xF0000000
 #define FW_SPACE_SIZE  0x10000000
 #define LPC_BASE_ADDR (MMIO_GROUP0_CHIP0_LPC_BASE_ADDR + LPCHC_IO_SPACE)
+#define MMIO_GROUP0_CHIP0_SCOM_BASE_ADDR 0x8006030000000000
 
 /* Enforce In-order Execution of I/O */
 static inline void eieio(void)

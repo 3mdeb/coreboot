@@ -332,8 +332,6 @@ static void p9_setup_dpll_values(chiplet_id_t i_target)
 	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
 	l_eqChiplets = i_target.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
 	fapi2::buffer<uint64_t> l_data64;
-	fapi2::buffer<uint64_t> l_fmult;
-	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
 	fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ_Type l_attr_safe_mode_freq;
 	fapi2::ATTR_SAFE_MODE_VOLTAGE_MV_Type l_attr_safe_mode_mv;
 	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, i_target, l_attr_safe_mode_freq);
@@ -344,15 +342,13 @@ static void p9_setup_dpll_values(chiplet_id_t i_target)
 	}
 	for (auto l_itr = l_eqChiplets.begin(); l_itr != l_eqChiplets.end(); ++l_itr)
 	{
-		l_fmult = 0;
 		fapi2::getScom(*l_itr, EQ_QPPM_DPLL_FREQ , l_data64);
-		l_data64.extractToRight<EQ_QPPM_DPLL_FREQ_FMULT, EQ_QPPM_DPLL_FREQ_FMULT_LEN>(l_fmult);
 		// Convert frequency value to a format that needs to be written to the
 		// register
 		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 8000 / 133333;
-		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMAX, EQ_QPPM_DPLL_FREQ_FMAX_LEN>(l_safe_mode_dpll_value);
-		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMIN, EQ_QPPM_DPLL_FREQ_FMIN_LEN>(l_safe_mode_dpll_value);
-		l_data64.insertFromRight<EQ_QPPM_DPLL_FREQ_FMULT, EQ_QPPM_DPLL_FREQ_FMULT_LEN>(l_safe_mode_dpll_value);
+		l_data64.insertFromRight<1, 11>(l_safe_mode_dpll_value);
+		l_data64.insertFromRight<17, 11>(l_safe_mode_dpll_value);
+		l_data64.insertFromRight<33, 11>(l_safe_mode_dpll_value);
 		//
 		fapi2::putScom(*l_itr, EQ_QPPM_DPLL_FREQ, l_data64);
 		//Update VDM VID compare to safe mode value
@@ -1040,17 +1036,17 @@ avsVoltageRead(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
 		0xFFFF);
 
 	// Read returned voltage value from Read frame
-	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64));
+	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 	// Extracting bits 8:23 , which contains voltage read data
 	l_present_voltage_mv = (l_data64 & 0x00FFFF0000000000) >> 40;
 }
 
-fapi2::ReturnCode
-avsValidateResponse(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-					const uint8_t i_avsBusNum,
-					const uint8_t i_o2sBridgeNum,
-					const uint8_t i_throw_assert,
-					uint8_t& o_goodResponse)
+void avsValidateResponse(
+	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+	const uint8_t i_avsBusNum,
+	const uint8_t i_o2sBridgeNum,
+	const uint8_t i_throw_assert,
+	uint8_t& o_goodResponse)
 {
 	fapi2::buffer<uint64_t> l_data64;
 	fapi2::buffer<uint32_t> l_rsp_rcvd_crc;
@@ -1061,12 +1057,13 @@ avsValidateResponse(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
 	o_goodResponse = false;
 
 	// Read the data response register
-	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64));
+	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 
 	// Status Return Code and Received CRC
-	l_data64.extractToRight(l_data_status_code, 0, 2);
-	l_data64.extractToRight(l_rsp_rcvd_crc, 29, 3);
-	l_data64.extractToRight(l_rsp_data, 0, 32);
+	// out SS len
+	l_data_status_code = ~PPC_BITMASK(0, 1) & l_data64;
+	l_rsp_rcvd_crc = (~PPC_BITMASK(29, 31) & l_data64) >> 32;
+	l_rsp_data = ~PPC_BITMASK(0, 31) & l_data_64;
 
 	// Compute CRC on Response frame
 	l_rsp_computed_crc = avsCRCcalc(l_rsp_data);
@@ -1106,7 +1103,7 @@ fapi2::ReturnCode p9_fbc_eff_config_links_query_link_en(
 }
 
 template<fapi2::TargetType T>
-fapi2::ReturnCode p9_fbc_eff_config_links_query_endp(
+void p9_fbc_eff_config_links_query_endp(
 	const fapi2::Target<T>& i_loc_target,
 	const uint8_t i_loc_fbc_chip_id,
 	const uint8_t i_loc_fbc_group_id,
@@ -1154,7 +1151,6 @@ fapi2::ReturnCode p9_fbc_eff_config_links_query_endp(
 		fapi2::ATTR_PROC_FABRIC_LINK_ACTIVE,
 		i_loc_target,
 		o_loc_link_en[l_loc_link_id] ? fapi2::ENUM_ATTR_PROC_FABRIC_LINK_ACTIVE_TRUE : fapi2::ENUM_ATTR_PROC_FABRIC_LINK_ACTIVE_FALSE);
-
 }
 
 template<fapi2::TargetType T>
@@ -1178,406 +1174,7 @@ fapi2::ReturnCode p9_fbc_eff_config_links_map_endp(
 	}
 }
 
-fapi2::ReturnCode p9_fbc_ioo_tl_scom(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& TGT0,
-									 const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>& TGT1)
-{
-	fapi2::ATTR_EC_Type   l_chip_ec;
-	fapi2::ATTR_NAME_Type l_chip_id;
-	FAPI_ATTR_GET_PRIVILEGED(fapi2::ATTR_NAME, TGT0, l_chip_id);
-	FAPI_ATTR_GET_PRIVILEGED(fapi2::ATTR_EC, TGT0, l_chip_ec);
-	fapi2::ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_Type l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG;
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG, TGT0, l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG);
-	fapi2::ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_Type l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG;
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG, TGT0, l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG);
-	uint64_t l_def_OBUS0_FBC_ENABLED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[3] != fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_FALSE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[0] != fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_FALSE;
-	fapi2::ATTR_FREQ_A_MHZ_Type l_TGT1_ATTR_FREQ_A_MHZ;
-	FAPI_ATTR_GET(fapi2::ATTR_FREQ_A_MHZ, TGT1, l_TGT1_ATTR_FREQ_A_MHZ);
-	fapi2::ATTR_FREQ_PB_MHZ_Type l_TGT1_ATTR_FREQ_PB_MHZ;
-	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, TGT1, l_TGT1_ATTR_FREQ_PB_MHZ);
-	uint64_t l_def_LO_LIMIT_R = l_TGT1_ATTR_FREQ_PB_MHZ * 10 > l_TGT1_ATTR_FREQ_A_MHZ * 12;
-	uint64_t l_def_OBUS0_LO_LIMIT_D = l_TGT1_ATTR_FREQ_A_MHZ * 10;
-	uint64_t l_def_OBUS0_LO_LIMIT_N = l_TGT1_ATTR_FREQ_PB_MHZ * 154;
-	uint64_t l_def_OBUS1_FBC_ENABLED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[4] != fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_FALSE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[1] != fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_FALSE;
-	uint64_t l_def_OBUS1_LO_LIMIT_D = l_TGT1_ATTR_FREQ_A_MHZ;
-	uint64_t l_def_OBUS1_LO_LIMIT_N = l_TGT1_ATTR_FREQ_PB_MHZ * 12;
-	uint64_t l_def_OBUS2_FBC_ENABLED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[5] != fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_FALSE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[2] != fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_FALSE;
-	uint64_t l_def_OBUS2_LO_LIMIT_D = l_TGT1_ATTR_FREQ_A_MHZ * 10;
-	uint64_t l_def_OBUS2_LO_LIMIT_N = l_TGT1_ATTR_FREQ_PB_MHZ * 74;
-	uint64_t l_def_OBUS3_FBC_ENABLED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[6] != fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_FALSE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[3] != fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_FALSE;
-	uint64_t l_def_OBUS3_LO_LIMIT_D = l_TGT1_ATTR_FREQ_A_MHZ * 10;
-	uint64_t l_def_OBUS3_LO_LIMIT_N = l_TGT1_ATTR_FREQ_PB_MHZ * 95;
-	fapi2::ATTR_PROC_FABRIC_SMP_OPTICS_MODE_Type l_TGT1_ATTR_PROC_FABRIC_SMP_OPTICS_MODE;
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_FABRIC_SMP_OPTICS_MODE, TGT1, l_TGT1_ATTR_PROC_FABRIC_SMP_OPTICS_MODE);
-	uint64_t l_def_OPTICS_IS_A_BUS = l_TGT1_ATTR_PROC_FABRIC_SMP_OPTICS_MODE == fapi2::ENUM_ATTR_PROC_FABRIC_SMP_OPTICS_MODE_OPTICS_IS_A_BUS;
-	uint64_t l_def_OB0_IS_PAIRED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[3] == fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_TRUE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[0] == fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_TRUE;
-	uint64_t l_def_OB1_IS_PAIRED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[4] == fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_TRUE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[1] == fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_TRUE;
-	uint64_t l_def_OB2_IS_PAIRED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[5] == fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_TRUE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[2] == fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_TRUE;
-	uint64_t l_def_OB3_IS_PAIRED =
-			l_TGT0_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG[6] == fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_TRUE
-		 || l_TGT0_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG[3] == fapi2::ENUM_ATTR_PROC_FABRIC_A_ATTACHED_CHIP_CNFG_TRUE;
-	fapi2::ATTR_PROC_NPU_REGION_ENABLED_Type l_TGT0_ATTR_PROC_NPU_REGION_ENABLED;
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_NPU_REGION_ENABLED, TGT0, l_TGT0_ATTR_PROC_NPU_REGION_ENABLED);
-	fapi2::ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE_Type l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE;
-	FAPI_ATTR_GET(fapi2::ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE, TGT0, l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE);
-	uint64_t l_def_NVLINK_ACTIVE = (
-			 l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE[0] == fapi2::ENUM_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE_NV
-		  || l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE[1] == fapi2::ENUM_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE_NV
-		  || l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE[2] == fapi2::ENUM_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE_NV
-		  || l_TGT0_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE[3] == fapi2::ENUM_ATTR_PROC_FABRIC_OPTICS_CONFIG_MODE_NV)
-		  && l_TGT0_ATTR_PROC_NPU_REGION_ENABLED;
-	fapi2::buffer<uint64_t> l_scom_buffer;
-
-	// Power Bus Optical Framer/Parser 01 Configuration Register
-	// PB.IOO.SCOM.PB_FP01_CFG
-	fapi2::getScom(TGT0, 0x501380A, l_scom_buffer);
-	if (l_def_OBUS0_FBC_ENABLED)
-	{
-		constexpr auto l_PB_IOO_SCOM_A0_MODE_NORMAL = 0x0;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A0_MODE_NORMAL);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A0_MODE_NORMAL);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A0_MODE_NORMAL);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A0_MODE_NORMAL);
-		l_scom_buffer.insert<22, 2, 62, uint64_t>(1);
-		l_scom_buffer.insert<12, 8, 56, uint64_t>(0x40);
-		l_scom_buffer.insert<44, 8, 56, uint64_t>(0x40);
-		l_scom_buffer.insert<36, 8, 56, uint64_t>(0x37 - (l_def_OBUS0_LO_LIMIT_N / l_def_OBUS0_LO_LIMIT_D));
-		if (l_def_LO_LIMIT_R == 1)
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x36 - (l_def_OBUS0_LO_LIMIT_N / l_def_OBUS0_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x36 - (l_def_OBUS0_LO_LIMIT_N / l_def_OBUS0_LO_LIMIT_D));
-		}
-		else
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x37 - (l_def_OBUS0_LO_LIMIT_N / l_def_OBUS0_LO_LIMIT_D));
-		}
-	}
-	else
-	{
-		constexpr auto l_PB_IOO_SCOM_A0_MODE_BLOCKED = 0xF;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A0_MODE_BLOCKED);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A0_MODE_BLOCKED);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A0_MODE_BLOCKED);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A0_MODE_BLOCKED);
-	}
-	fapi2::putScom(TGT0, 0x501380A, l_scom_buffer);
-	// Power Bus Optical Framer/Parser 23 Configuration Register
-	// PB.IOO.SCOM.PB_FP23_CFG
-	fapi2::getScom(TGT0, 0x501380B, l_scom_buffer);
-	if (l_def_OBUS1_FBC_ENABLED)
-	{
-		constexpr auto l_PB_IOO_SCOM_A1_MODE_NORMAL = 0x0;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A1_MODE_NORMAL);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A1_MODE_NORMAL);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A1_MODE_NORMAL);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A1_MODE_NORMAL);
-		l_scom_buffer.insert<22, 2, 62, uint64_t>(1);
-		l_scom_buffer.insert<12, 8, 56, uint64_t>(0x40);
-		l_scom_buffer.insert<44, 8, 56, uint64_t>(0x40);
-		if (l_def_LO_LIMIT_R == 1)
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x2A - (l_def_OBUS1_LO_LIMIT_N / l_def_OBUS1_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x2A - (l_def_OBUS1_LO_LIMIT_N / l_def_OBUS1_LO_LIMIT_D));
-		}
-		else
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x2C - (l_def_OBUS1_LO_LIMIT_N / l_def_OBUS1_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x2C - (l_def_OBUS1_LO_LIMIT_N / l_def_OBUS1_LO_LIMIT_D));
-		}
-	}
-	else
-	{
-		constexpr auto l_PB_IOO_SCOM_A1_MODE_BLOCKED = 0xF;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A1_MODE_BLOCKED);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A1_MODE_BLOCKED);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A1_MODE_BLOCKED);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A1_MODE_BLOCKED);
-	}
-	fapi2::putScom(TGT0, 0x501380B, l_scom_buffer);
-	// Power Bus Optical Framer/Parser 45 Configuration Register
-	// PB.IOO.SCOM.PB_FP45_CFG
-	fapi2::getScom(TGT0, 0x501380C, l_scom_buffer);
-	if (l_def_OBUS2_FBC_ENABLED)
-	{
-		constexpr auto l_PB_IOO_SCOM_A2_MODE_NORMAL = 0x0;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A2_MODE_NORMAL);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A2_MODE_NORMAL);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A2_MODE_NORMAL);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A2_MODE_NORMAL);
-		l_scom_buffer.insert<22, 2, 62, uint64_t>(1);
-		l_scom_buffer.insert<12, 8, 56, uint64_t>(0x40);
-		l_scom_buffer.insert<44, 8, 56, uint64_t>(0x40);
-		if (l_def_LO_LIMIT_R == 1)
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x1B - (l_def_OBUS2_LO_LIMIT_N / l_def_OBUS2_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x1B - (l_def_OBUS2_LO_LIMIT_N / l_def_OBUS2_LO_LIMIT_D));
-		}
-		else
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x1C - (l_def_OBUS2_LO_LIMIT_N / l_def_OBUS2_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x1C - (l_def_OBUS2_LO_LIMIT_N / l_def_OBUS2_LO_LIMIT_D));
-		}
-	}
-	else
-	{
-		constexpr auto l_PB_IOO_SCOM_A2_MODE_BLOCKED = 0xF;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A2_MODE_BLOCKED);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A2_MODE_BLOCKED);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A2_MODE_BLOCKED);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A2_MODE_BLOCKED);
-	}
-	fapi2::putScom(TGT0, 0x501380C, l_scom_buffer);
-	// Power Bus Optical Framer/Parser 67 Configuration Register
-	// PB.IOO.SCOM.PB_FP67_CFG
-	fapi2::getScom(TGT0, 0x501380D, l_scom_buffer);
-	if (l_def_OBUS3_FBC_ENABLED)
-	{
-		constexpr auto l_PB_IOO_SCOM_A3_MODE_NORMAL = 0x0;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A3_MODE_NORMAL);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A3_MODE_NORMAL);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A3_MODE_NORMAL);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A3_MODE_NORMAL);
-		l_scom_buffer.insert<22, 2, 62, uint64_t>(1);
-		l_scom_buffer.insert<12, 8, 56, uint64_t>(0x40);
-		l_scom_buffer.insert<44, 8, 56, uint64_t>(0x40);
-		if (l_def_LO_LIMIT_R == 1)
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x22 - (l_def_OBUS3_LO_LIMIT_N / l_def_OBUS3_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x22 - (l_def_OBUS3_LO_LIMIT_N / l_def_OBUS3_LO_LIMIT_D));
-		}
-		else
-		{
-			l_scom_buffer.insert<4, 8, 56, uint64_t>(0x24 - (l_def_OBUS3_LO_LIMIT_N / l_def_OBUS3_LO_LIMIT_D));
-			l_scom_buffer.insert<36, 8, 56, uint64_t>(0x24 - (l_def_OBUS3_LO_LIMIT_N / l_def_OBUS3_LO_LIMIT_D));
-		}
-	}
-	else
-	{
-		constexpr auto l_PB_IOO_SCOM_A3_MODE_BLOCKED = 0xF;
-		l_scom_buffer.insert<20, 1, 60, uint64_t>(l_PB_IOO_SCOM_A3_MODE_BLOCKED);
-		l_scom_buffer.insert<25, 1, 61, uint64_t>(l_PB_IOO_SCOM_A3_MODE_BLOCKED);
-		l_scom_buffer.insert<52, 1, 62, uint64_t>(l_PB_IOO_SCOM_A3_MODE_BLOCKED);
-		l_scom_buffer.insert<57, 1, 63, uint64_t>(l_PB_IOO_SCOM_A3_MODE_BLOCKED);
-	}
-	fapi2::putScom(TGT0, 0x501380D, l_scom_buffer);
-	// Power Bus Optical Link Data Buffer 01 Configuration Register
-	// PB.IOO.SCOM.PB_OLINK_DATA_01_CFG_REG
-	fapi2::getScom(TGT0, 0x5013810, l_scom_buffer);
-	if(l_def_OBUS0_FBC_ENABLED)
-	{
-		if (l_def_OPTICS_IS_A_BUS)
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x10);
-		}
-		else
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x1F);
-		}
-		l_scom_buffer.insert<9, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<17, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<41, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<49, 7, 57, uint64_t>(0x3C);
-	}
-	fapi2::putScom(TGT0, 0x5013810, l_scom_buffer);
-	fapi2::getScom(TGT0, 0x5013811, l_scom_buffer);
-	if (l_def_OBUS1_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<1, 7, 57, uint64_t>(0x40);
-		l_scom_buffer.insert<9, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<17, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<33, 7, 57, uint64_t>(0x40);
-		l_scom_buffer.insert<41, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<49, 7, 57, uint64_t>(0x3C);
-		if (l_def_OPTICS_IS_A_BUS)
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x10);
-		}
-		else
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x1F);
-		}
-	}
-	fapi2::putScom(TGT0, 0x5013811, l_scom_buffer);
-	// Power Bus Optical Link Data Buffer 45 Configuration Register
-	// PB.IOO.SCOM.PB_OLINK_DATA_45_CFG_REG
-	fapi2::getScom(TGT0, 0x5013812, l_scom_buffer);
-	if (l_def_OBUS2_FBC_ENABLED)
-	{
-		if (l_def_OPTICS_IS_A_BUS)
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x10);
-		}
-		else
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x1F);
-		}
-		l_scom_buffer.insert<1, 7, 57, uint64_t>(0x40);
-		l_scom_buffer.insert<9, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<17, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<33, 7, 57, uint64_t>(0x40);
-		l_scom_buffer.insert<41, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<49, 7, 57, uint64_t>(0x3C);
-	}
-	fapi2::putScom(TGT0, 0x5013812, l_scom_buffer);
-	// Power Bus Optical Link Data Buffer 67 Configuration Register
-	// PB.IOO.SCOM.PB_OLINK_DATA_67_CFG_REG
-	fapi2::getScom(TGT0, 0x5013813, l_scom_buffer);
-	if(l_def_OBUS3_FBC_ENABLED)
-	{
-		if (l_def_OPTICS_IS_A_BUS)
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x0E);
-		}
-		else
-		{
-			l_scom_buffer.insert<24, 5, 59, uint64_t>(0x1C);
-		}
-		l_scom_buffer.insert<9, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<17, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<41, 7, 57, uint64_t>(0x3C);
-		l_scom_buffer.insert<49, 7, 57, uint64_t>(0x3C);
-	}
-	fapi2::putScom(TGT0, 0x5013813, l_scom_buffer);
-	// Power Bus Optical Miscellaneous Configuration Register
-	// PB.IOO.SCOM.PB_MISC_CFG
-	fapi2::getScom(TGT0, 0x5013823, l_scom_buffer);
-	if (l_def_OB0_IS_PAIRED)
-	{
-		l_scom_buffer.insert<0, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_PB_CFG_IOO01_IS_LOGICAL_PAIR_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<0, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_PB_CFG_IOO01_IS_LOGICAL_PAIR_OFF
-	}
-	if (l_def_OBUS0_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<8, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_LINKS01_TOD_ENABLE_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<8, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_LINKS01_TOD_ENABLE_OFF
-	}
-	if (l_def_OB1_IS_PAIRED)
-	{
-		l_scom_buffer.insert<1, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_PB_CFG_IOO23_IS_LOGICAL_PAIR_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<1, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_PB_CFG_IOO23_IS_LOGICAL_PAIR_OFF
-	}
-	if (l_def_OBUS1_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<9, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_LINKS23_TOD_ENABLE_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<9, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_LINKS23_TOD_ENABLE_OFF
-	}
-	if (l_def_OB2_IS_PAIRED)
-	{
-		l_scom_buffer.insert<2, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_PB_CFG_IOO45_IS_LOGICAL_PAIR_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<2, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_PB_CFG_IOO45_IS_LOGICAL_PAIR_OFF
-	}
-	if (l_def_OBUS2_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<10, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_LINKS45_TOD_ENABLE_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<10, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_LINKS45_TOD_ENABLE_OFF
-	}
-	if (l_def_OB3_IS_PAIRED)
-	{
-		l_scom_buffer.insert<3, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_PB_CFG_IOO67_IS_LOGICAL_PAIR_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<3, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_PB_CFG_IOO67_IS_LOGICAL_PAIR_OFF
-	}
-	if (l_def_OBUS3_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<11, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_LINKS67_TOD_ENABLE_ON
-	}
-	else
-	{
-		l_scom_buffer.insert<11, 1, 63, uint64_t>(0x0); // l_PB_IOO_SCOM_LINKS67_TOD_ENABLE_OFF
-	}
-	if (l_def_NVLINK_ACTIVE)
-	{
-		l_scom_buffer.insert<13, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_SEL_03_NPU_NOT_PB_ON
-		l_scom_buffer.insert<14, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_SEL_04_NPU_NOT_PB_ON
-		l_scom_buffer.insert<15, 1, 63, uint64_t>(0x1); // l_PB_IOO_SCOM_SEL_05_NPU_NOT_PB_ON
-	}
-	fapi2::putScom(TGT0, 0x5013823, l_scom_buffer);
-	// Power Bus Optical Link Trace Configuration Register
-	// PB.IOO.SCOM.PB_TRACE_CFG
-	// Trace group encodes:
-	// 0 = disabled
-	// 1 = inbound link
-	// 2 = inbound dhdr position 0
-	// 3 = inbound dhdr position 1
-	// 4 = inbound dhdr position 2
-	// 5 = outbound link
-	// 6 = outbound dhdr position 0
-	// 7 = outbound dhdr position 1
-	// 8 = outbound dhdr position 2
-	// 9 = dob1 pos 0
-	// A = dob1 pos 1
-	// B = dob2 pos 0
-	// C = dob2 pos
-	// D = dib pos 0
-	// E = dib pos 1
-	// F = Reserved.
-	fapi2::getScom(TGT0, 0x5013824, l_scom_buffer);
-	if (l_def_OBUS0_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<0, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<8, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<4, 4, 60, uint64_t>(4);
-		l_scom_buffer.insert<12, 4, 60, uint64_t>(4);
-	}
-	else if(l_def_OBUS1_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<16, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<24, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<20, 4, 60, uint64_t>(4);
-		l_scom_buffer.insert<28, 4, 60, uint64_t>(4);
-	}
-	else if(l_def_OBUS2_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<32, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<40, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<36, 4, 60, uint64_t>(4);
-		l_scom_buffer.insert<44, 4, 60, uint64_t>(4);
-	}
-	else if(l_def_OBUS3_FBC_ENABLED)
-	{
-		l_scom_buffer.insert<48, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<56, 4, 60, uint64_t>(1);
-		l_scom_buffer.insert<52, 4, 60, uint64_t>(4);
-		l_scom_buffer.insert<60, 4, 60, uint64_t>(4);
-	}
-	fapi2::putScom(TGT0, 0x5013824, l_scom_buffer);
-}
-
-fapi2::ReturnCode
-avsDriveCommand(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+void avsDriveCommand(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
 				const uint8_t  i_avsBusNum,
 				const uint8_t  i_o2sBridgeNum,
 				const uint32_t i_RailSelect,

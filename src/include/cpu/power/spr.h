@@ -3,6 +3,10 @@
 
 #include <arch/byteorder.h>	// PPC_BIT()
 
+#define SPR_PVR			0x11F
+#define SPR_PVR_REV_MASK		(PPC_BITMASK(52, 55) | PPC_BITMASK(60, 63))
+#define SPR_PVR_REV(maj, min)		(PPC_SHIFT((maj), 55) | PPC_SHIFT((min), 63))
+
 #define SPR_HMER			0x150
 /* Bits in HMER/HMEER */
 #define SPR_HMER_MALFUNCTION_ALERT	PPC_BIT(0)
@@ -23,11 +27,16 @@
 #ifndef __ASSEMBLER__
 #include <types.h>
 
-static inline uint64_t read_hmer(void)
+static inline uint64_t read_spr(int spr)
 {
 	uint64_t val;
-	asm volatile("mfspr %0,%1" : "=r"(val) : "i"(SPR_HMER) : "memory");
+	asm volatile("mfspr %0,%1" : "=r"(val) : "i"(spr) : "memory");
 	return val;
+}
+
+static inline uint64_t read_hmer(void)
+{
+	return read_spr(SPR_HMER);
 }
 
 static inline uint64_t read_msr(void)
@@ -35,6 +44,11 @@ static inline uint64_t read_msr(void)
 	uint64_t val;
 	asm volatile("mfmsr %0" : "=r"(val) :: "memory");
 	return val;
+}
+
+static inline uint64_t pvr_revision(void)
+{
+	return read_spr(SPR_PVR) & SPR_PVR_REV_MASK;
 }
 
 #endif /* __ASSEMBLER__ */

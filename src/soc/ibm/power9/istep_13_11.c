@@ -5,6 +5,8 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 static void setup_and_execute_zqcal(int mcs_i, int mca_i, int d)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
@@ -59,55 +61,56 @@ static void clear_initial_cal_errors(int mcs_i, int mca_i)
 		IOM0.DDRPHY_DP16_WR_VREF_ERROR1_P0_{0-4},
 			[all] 0
 		*/
-		dp_mca_and_or(id, dp, mca_i, 0x8000007A0701103F, 0, 0);	/* RD_VREF_CAL_ERROR */
-		dp_mca_and_or(id, dp, mca_i, 0x8000001B0701103F, 0, 0);	/* WR_ERROR0 */
-		dp_mca_and_or(id, dp, mca_i, 0x800000140701103F, 0, 0);	/* RD_STATUS0 */
-		dp_mca_and_or(id, dp, mca_i, 0x800000100701103F, 0, 0);	/* RD_LVL_STATUS2 */
-		dp_mca_and_or(id, dp, mca_i, 0x8000000E0701103F, 0, 0);	/* RD_LVL_STATUS0 */
-		dp_mca_and_or(id, dp, mca_i, 0x800000AE0701103F, 0, 0);	/* WR_VREF_ERROR0 */
-		dp_mca_and_or(id, dp, mca_i, 0x800000AF0701103F, 0, 0);	/* WR_VREF_ERROR1 */
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_WR_ERROR0_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_RD_STATUS0_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS2_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS0_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR0_P0_0, 0, 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR1_P0_0, 0, 0);
 	}
 
 	/* IOM0.DDRPHY_APB_CONFIG0_P0 =
 		[49]  RESET_ERR_RPT = 1, then 0
 	*/
-	mca_and_or(id, mca_i, 0x8000D0000701103F, ~0, PPC_BIT(49));
-	mca_and_or(id, mca_i, 0x8000D0000701103F, ~PPC_BIT(49), 0);
+	mca_and_or(id, mca_i, DDRPHY_APB_CONFIG0_P0, ~0, PPC_BIT(RESET_ERR_RPT));
+	mca_and_or(id, mca_i, DDRPHY_APB_CONFIG0_P0, ~PPC_BIT(RESET_ERR_RPT), 0);
 
 	/* IOM0.DDRPHY_APB_ERROR_STATUS0_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000D0010701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_APB_ERROR_STATUS0_P0, 0, 0);
 
 	/* IOM0.DDRPHY_RC_ERROR_STATUS0_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000C8050701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_RC_ERROR_STATUS0_P0, 0, 0);
 
 	/* IOM0.DDRPHY_SEQ_ERROR_STATUS0_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000C4080701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_SEQ_ERROR_STATUS0_P0, 0, 0);
 
 	/* IOM0.DDRPHY_WC_ERROR_STATUS0_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000CC030701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_WC_ERROR_STATUS0_P0, 0, 0);
 
 	/* IOM0.DDRPHY_PC_ERROR_STATUS0_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000C0120701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_PC_ERROR_STATUS0_P0, 0, 0);
 
 	/* IOM0.DDRPHY_PC_INIT_CAL_ERROR_P0 =
 		[all] 0
 	*/
-	mca_and_or(id, mca_i, 0x8000C0180701103F, 0, 0);
+	mca_and_or(id, mca_i, DDRPHY_PC_INIT_CAL_ERROR_P0, 0, 0);
 
 	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG =
 		[56]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2 = 0
 	*/
-	mca_and_or(id, mca_i, 0x07011000, ~PPC_BIT(56), 0);
+	mca_and_or(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG,
+	           ~PPC_BIT(IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2), 0);
 }
 
 static void dump_cal_errors(int mcs_i, int mca_i)
@@ -125,66 +128,52 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 	for (dp = 0; dp < 5; dp++) {
 		printk(BIOS_ERR, "DP %d\n", dp);
 		printk(BIOS_ERR, "\t%#16.16llx - RD_VREF_CAL_ERROR\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007A0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - DQ_BIT_DISABLE_RP0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007C0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_DQ_BIT_DISABLE_RP0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - DQS_BIT_DISABLE_RP0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000007D0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_DQS_BIT_DISABLE_RP0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_ERROR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000001B0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_ERROR0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_STATUS0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000140701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_STATUS0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS2\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000100701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS2_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - RD_LVL_STATUS0\n",
-		       dp_mca_read(id, dp, mca_i, 0x8000000E0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_LVL_STATUS0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000AE0701103F));
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR0_P0_0));
 		printk(BIOS_ERR, "\t%#16.16llx - WR_VREF_ERROR1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000AF0701103F));
-
-		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR0\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000300701103F));
-		printk(BIOS_ERR, "\t%#16.16llx - DQSCLK_PR1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000310701103F));
-
-		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG1\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000350701103F));
-		printk(BIOS_ERR, "\t%#16.16llx - RD_DIA_CONFIG2\n",
-		       dp_mca_read(id, dp, mca_i, 0x800000360701103F));
-
-		for (int i = 0; i < 24; i++) {
-			printk(BIOS_ERR, "\t%#16.16llx - WR_DELAY_VALUE_%d_RP0_REG\n",
-			       dp_mca_read(id, dp, mca_i,
-			                   0x800000380701103F + i*0x100000000), i);
-			if (i >= 16) i++;
-		}
+		       dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR1_P0_0));
 	}
 
 	printk(BIOS_ERR, "%#16.16llx - APB_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000D0010701103F));
+	       mca_read(id, mca_i, DDRPHY_APB_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - RC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C8050701103F));
+	       mca_read(id, mca_i, DDRPHY_RC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - SEQ_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C4080701103F));
+	       mca_read(id, mca_i, DDRPHY_SEQ_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - WC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000CC030701103F));
+	       mca_read(id, mca_i, DDRPHY_WC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - PC_ERROR_STATUS0\n",
-	       mca_read(id, mca_i, 0x8000C0120701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_ERROR_STATUS0_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_ERROR\n",
-	       mca_read(id, mca_i, 0x8000C0180701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_INIT_CAL_ERROR_P0));
 
-	/* 0x8000 on success */
+	/* 0x8000 on success for first rank, 0x4000 for second */
 	printk(BIOS_ERR, "%#16.16llx - PC_INIT_CAL_STATUS\n",
-	       mca_read(id, mca_i, 0x8000C0190701103F));
+	       mca_read(id, mca_i, DDRPHY_PC_INIT_CAL_STATUS_P0));
 
 	printk(BIOS_ERR, "%#16.16llx - IOM_PHY0_DDRPHY_FIR_REG\n",
-	       mca_read(id, mca_i, 0x07011000));
+	       mca_read(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG));
+
+	printk(BIOS_ERR, "%#16.16llx - MBACALFIRQ\n",
+	       mca_read(id, mca_i, MBACALFIRQ));
 #endif
 }
 
@@ -201,16 +190,16 @@ static void dp16_reset_delay_values(int mcs_i, int mca_i, enum rank_selection ra
 	for (dp = 0; dp < 5; dp++) {
 		/* IOM0.DDRPHY_DP16_DQS_GATE_DELAY_RP0_P0_{0-4} = 0 */
 		if (ranks_present & DIMM0_RANK0)
-			dp_mca_and_or(id, dp, mca_i, 0x800000130701103F, 0, 0);
+			dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_DQS_GATE_DELAY_RP0_P0_0, 0, 0);
 		/* IOM0.DDRPHY_DP16_DQS_GATE_DELAY_RP1_P0_{0-4} = 0 */
 		if (ranks_present & DIMM0_RANK1)
-			dp_mca_and_or(id, dp, mca_i, 0x800001130701103F, 0, 0);
+			dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_DQS_GATE_DELAY_RP1_P0_0, 0, 0);
 		/* IOM0.DDRPHY_DP16_DQS_GATE_DELAY_RP2_P0_{0-4} = 0 */
 		if (ranks_present & DIMM1_RANK0)
-			dp_mca_and_or(id, dp, mca_i, 0x800002130701103F, 0, 0);
+			dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_DQS_GATE_DELAY_RP2_P0_0, 0, 0);
 		/* IOM0.DDRPHY_DP16_DQS_GATE_DELAY_RP3_P0_{0-4} = 0 */
 		if (ranks_present & DIMM1_RANK1)
-			dp_mca_and_or(id, dp, mca_i, 0x800003130701103F, 0, 0);
+			dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_DQS_GATE_DELAY_RP3_P0_0, 0, 0);
 	}
 }
 
@@ -223,8 +212,9 @@ static void dqs_align_turn_on_refresh(int mcs_i, int mca_i)
 	// > Provided by Ryan King
 	    [60-63] TRFC_CYCLES = 9             // tRFC = 2^9 = 512 memcycles
 	*/
-	mca_and_or(id, mca_i, 0x8000C4120701103F, ~PPC_BITMASK(60, 63),
-	           PPC_SHIFT(9, 63));
+	/* See note in seq_reset() in 13.8. This may not be necessary. */
+	mca_and_or(id, mca_i, DDRPHY_SEQ_MEM_TIMING_PARAM0_P0, ~PPC_BITMASK(60, 63),
+	           PPC_SHIFT(9, TRFC_CYCLES));
 
 	/* IOM0.DDRPHY_PC_INIT_CAL_CONFIG1_P0
 	    // > Hard coded settings provided by Ryan King for this workaround
@@ -236,10 +226,10 @@ static void dqs_align_turn_on_refresh(int mcs_i, int mca_i)
 	    [55]    CMD_SNOOP_DIS =     0
 	    [57-63] REFRESH_INTERVAL =  0x13    // Worst case: 6.08us for 1866 (max tCK). Must be not more than 7.8us
 	*/
-	mca_and_or(id, mca_i, 0x8000C0170701103F,
+	mca_and_or(id, mca_i, DDRPHY_PC_INIT_CAL_CONFIG1_P0,
 	           ~(PPC_BITMASK(48, 55) | PPC_BITMASK(57, 63)),
-	           PPC_SHIFT(0xF, 51) | PPC_SHIFT(3, 53) | PPC_BIT(54) |
-	           PPC_SHIFT(0x13, 63));
+	           PPC_SHIFT(0xF, REFRESH_COUNT) | PPC_SHIFT(3, REFRESH_CONTROL) |
+	           PPC_BIT(REFRESH_ALL_RANKS) | PPC_SHIFT(0x13, REFRESH_INTERVAL));
 }
 
 static void wr_level_pre(int mcs_i, int mca_i, int rp,
@@ -299,25 +289,25 @@ static void wr_level_pre(int mcs_i, int mca_i, int rp,
 			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
 			  [48] = 1
 			*/
-			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(48));
+			mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_WR_CONFIG0_P0, ~0, PPC_BIT(48));
 			break;
 		case 1:
 			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
 			  [57] = 1
 			*/
-			mca_and_or(id, mca_i, 0x8000C40A0701103F, ~0, PPC_BIT(57));
+			mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_WR_CONFIG0_P0, ~0, PPC_BIT(57));
 			break;
 		case 2:
 			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
 			  [50] = 1
 			*/
-			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(50));
+			mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_WR_CONFIG0_P0, ~0, PPC_BIT(50));
 			break;
 		case 3:
 			/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG1_P0 =
 			  [59] = 1
 			*/
-			mca_and_or(id, mca_i, 0x8000C40B0701103F, ~0, PPC_BIT(59));
+			mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_WR_CONFIG0_P0, ~0, PPC_BIT(59));
 			break;
 		}
 
@@ -377,18 +367,14 @@ static uint64_t wr_level_time(mca_data_t *mca)
 	 * TWLO_TWLOE for every defined speed bin is 9.5 + 2 = 11.5 ns, this needs
 	 * to be converted to clock cycles, it is the only non-constant component of
 	 * the equation.
-	 *
-	 * WR_LVL_BIG_STEP = 7
-	 * WR_LVL_SMALL_STEP = 0
-	 * WR_LVL_NUM_VALID_SAMPLES = 5
 	 */
-	const int BIG_STEP = 7;
-	const int SMALL_STEP = 0;
-	const int NUM_VALID_SAMPLES = 5;
-	const int TWLO_TWLOE = ps_to_nck(11500);
+	const int big_step = 7;
+	const int small_step = 0;
+	const int num_valid_samples = 5;
+	const int twlo_twloe = ps_to_nck(11500);
 
-	return (80 + TWLO_TWLOE) * NUM_VALID_SAMPLES * (384 / (BIG_STEP + 1) +
-	       (2 * (BIG_STEP + 1)) / (SMALL_STEP + 1)) + 20;
+	return (80 + twlo_twloe) * num_valid_samples * (384 / (big_step + 1) +
+	       (2 * (big_step + 1)) / (small_step + 1)) + 20;
 }
 
 /* Undo the pre-workaround, basically */
@@ -424,10 +410,10 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 		/* 2 DIMMs -> odd vpd_idx */
 		uint64_t val = 0;
 		if (vpd_idx % 2)
-			val = PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][0]), 51) |
-				  PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][1]), 59);
+			val = PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][0]), ODT_RD_VALUES0) |
+				  PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_RD[vpd_idx][1][1]), ODT_RD_VALUES1);
 
-		mca_and_or(id, mca_i, 0x8000C40F0701103F, 0, val);
+		mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_RD_CONFIG1_P0, 0, val);
 
 
 		/* IOM0.DDRPHY_SEQ_ODT_WR_CONFIG0_P0 =
@@ -436,9 +422,9 @@ static void wr_level_post(int mcs_i, int mca_i, int rp,
 			  [48-51] ODT_WR_VALUES0 = F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][0])
 			  [56-59] ODT_WR_VALUES1 = F(ATTR_MSS_VPD_MT_ODT_WR[index(MCA)][0][1])
 		*/
-		mca_and_or(id, mca_i, 0x8000C40A0701103F, 0,
-				   PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][0]), 51) |
-				   PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][1]), 59));
+		mca_and_or(id, mca_i, DDRPHY_SEQ_ODT_WR_CONFIG0_P0, 0,
+				   PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][0]), ODT_RD_VALUES0) |
+				   PPC_SHIFT(F(ATTR_MSS_VPD_MT_ODT_WR[vpd_idx][0][1]), ODT_RD_VALUES1));
 		#undef F
 
 		/* MR2 =               // redo the rest of the bits
@@ -580,7 +566,7 @@ static void rdclk_align_pre(int mcs_i, int mca_i, int rp,
 	IOM0.DDRPHY_PC_INIT_CAL_CONFIG1_P0
 		[52-53] REFRESH_CONTROL =   0       // refresh commands are only sent at start of initial calibration
 	*/
-	mca_and_or(id, mca_i, 0x8000C0170701103F, ~PPC_BITMASK(52, 53), 0);
+	mca_and_or(id, mca_i, DDRPHY_PC_INIT_CAL_CONFIG1_P0, ~PPC_BITMASK(52, 53), 0);
 }
 
 static uint64_t rdclk_align_time(mca_data_t *mca)
@@ -594,8 +580,8 @@ static uint64_t rdclk_align_time(mca_data_t *mca)
 	 * In tests this finishes in about a third of this time (7 us instead of
 	 * calculated 20.16 us).
 	 */
-	const int COARSE_CAL_STEP_SIZE = 4;
-	return 24 * ((1024/COARSE_CAL_STEP_SIZE + 4*COARSE_CAL_STEP_SIZE) * 4 + 32);
+	const int coarse_cal_step_size = 4;
+	return 24 * ((1024/coarse_cal_step_size + 4*coarse_cal_step_size) * 4 + 32);
 }
 
 static void rdclk_align_post(int mcs_i, int mca_i, int rp,
@@ -609,32 +595,36 @@ static void rdclk_align_post(int mcs_i, int mca_i, int rp,
 	/*
 	 * "In DD2.*, We adjust the red waterfall to account for low VDN settings.
 	 * We move the waterfall forward by one"
-	IOM0.DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR{0-3}_P0_{0-3}      // 0x80000<rp>090701103F, +0x0400_0000_0000
+	IOM0.DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR{0-3}_P0_{0-3}
 	    [48-49] DQSCLK_SELECT0 = (++DQSCLK_SELECT0 % 4)
 	    [52-53] DQSCLK_SELECT1 = (++DQSCLK_SELECT1 % 4)
 	    [56-57] DQSCLK_SELECT2 = (++DQSCLK_SELECT2 % 4)
 	    [60-61] DQSCLK_SELECT3 = (++DQSCLK_SELECT3 % 4)
-	IOM0.DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR{0-3}_P0_4          // 0x80001{0-3}090701103F
+	IOM0.DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR{0-3}_P0_4
 	    [48-49] DQSCLK_SELECT0 = (++DQSCLK_SELECT0 % 4)
 	    [52-53] DQSCLK_SELECT1 = (++DQSCLK_SELECT1 % 4)
 	    // Can't change non-existing quads
 	*/
 	for (dp = 0; dp < 4; dp++) {
-		val = dp_mca_read(id, dp, mca_i, 0x800000090701103F + rp * mul);
+		val = dp_mca_read(id, dp, mca_i,
+		                  DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR0_P0_0 + rp * mul);
 		val += PPC_BIT(49) | PPC_BIT(53) | PPC_BIT(57) | PPC_BIT(61);
 		val &= PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53) | PPC_BITMASK(56, 57) |
 		       PPC_BITMASK(60, 61);
 		/* TODO: this can be done with just one read */
-		dp_mca_and_or(id, dp, mca_i, 0x800000090701103F + rp * mul,
+		dp_mca_and_or(id, dp, mca_i,
+		              DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR0_P0_0 + rp * mul,
 		              ~(PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53) |
 		                PPC_BITMASK(56, 57) | PPC_BITMASK(60, 61)),
 		              val);
 	}
 
-	val = dp_mca_read(id, 4, mca_i, 0x800000090701103F + rp * mul);
+	val = dp_mca_read(id, 4, mca_i,
+	                  DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR0_P0_0 + rp * mul);
 	val += PPC_BIT(49) | PPC_BIT(53);
 	val &= PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53);
-	dp_mca_and_or(id, dp, mca_i, 0x800000090701103F + rp * mul,
+	dp_mca_and_or(id, dp, mca_i,
+	              DDRPHY_DP16_DQS_RD_PHASE_SELECT_RANK_PAIR0_P0_0 + rp * mul,
 				  ~(PPC_BITMASK(48, 49) | PPC_BITMASK(52, 53)),
 				  val);
 
@@ -652,23 +642,24 @@ static void read_ctr_pre(int mcs_i, int mca_i, int rp,
 	IOM0.DDRPHY_PC_INIT_CAL_CONFIG1_P0
 		[52-53] REFRESH_CONTROL =   0       // refresh commands are only sent at start of initial calibration
 	*/
-	mca_and_or(id, mca_i, 0x8000C0170701103F, ~PPC_BITMASK(52, 53), 0);
+	mca_and_or(id, mca_i, DDRPHY_PC_INIT_CAL_CONFIG1_P0, ~PPC_BITMASK(52, 53), 0);
 
 	for (dp = 0; dp < 5; dp++) {
 		/*
 		IOM0.DDRPHY_DP16_CONFIG0_P0_{0-4}
 			[62]  1         // part of ATESTSEL_0_4 field
 		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800000030701103F, ~0, PPC_BIT(62));
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_CONFIG0_P0_0, ~0, PPC_BIT(62));
 
 		/*
-		 * This was a part of main calibration, not pre-workaround, but this is
-		 * easier this way.
+		 * This was a part of main calibration in Hostboot, not pre-workaround,
+		 * but this is easier this way.
 		IOM0.DDRPHY_DP16_RD_VREF_CAL_EN_P0_{0-4}
 			[all] 0
 			[48-63] VREF_CAL_EN = 0xffff    // We already did this in reset_rd_vref() in 13.8
 		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800000760701103F, 0, PPC_SHIFT(0xFFFF, 63));
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_RD_VREF_CAL_EN_P0_0, 0,
+		              PPC_SHIFT(0xFFFF, 63));
 	}
 
 	/* This also was part of main
@@ -676,7 +667,9 @@ static void read_ctr_pre(int mcs_i, int mca_i, int rp,
 		[60]  CALIBRATION_ENABLE =  1
 		[61]  SKIP_RDCENTERING =    0
 	*/
-	mca_and_or(id, mca_i, 0x8000C80A0701103F, ~PPC_BIT(61), PPC_BIT(60));
+	mca_and_or(id, mca_i, DDRPHY_RC_RDVREF_CONFIG1_P0,
+	           ~PPC_BIT(SKIP_RDCENTERING),
+	           PPC_BIT(CALIBRATION_ENABLE));
 }
 
 static uint64_t read_ctr_time(mca_data_t *mca)
@@ -692,9 +685,9 @@ static uint64_t read_ctr_time(mca_data_t *mca)
 	 * REF commands that are pulled in before the calibration. It is still much
 	 * less than timeout (107us).
 	 */
-	const int COARSE_CAL_STEP_SIZE = 4;
-	const int CONSEQ_PASS = 8;
-	return 6 * (512/COARSE_CAL_STEP_SIZE + 4 * (COARSE_CAL_STEP_SIZE + 4 * CONSEQ_PASS))
+	const int coarse_cal_step_size = 4;
+	const int conseq_pass = 8;
+	return 6 * (512/coarse_cal_step_size + 4 * (coarse_cal_step_size + 4 * conseq_pass))
 	       * 24;
 }
 
@@ -715,7 +708,7 @@ static void read_ctr_post(int mcs_i, int mca_i, int rp,
 		IOM0.DDRPHY_DP16_CONFIG0_P0_{0-4}
 			[62]  0         // part of ATESTSEL_0_4 field
 		*/
-		dp_mca_and_or(id, dp, mca_i, 0x800000030701103F, ~PPC_BIT(62), 0);
+		dp_mca_and_or(id, dp, mca_i, DDRPHY_DP16_CONFIG0_P0_0, ~PPC_BIT(62), 0);
 	}
 }
 
@@ -783,7 +776,8 @@ static void write_ctr_pre(int mcs_i, int mca_i, int rp,
 		const uint64_t rp_mul =  0x0000010000000000;
 		const uint64_t val_mul = 0x0000000100000000;
 		/* IOM0.DDRPHY_DP16_WR_DELAY_VALUE_<val_idx>_RP<rp>_REG_P0_<dp> */
-		uint64_t val = dp_mca_read(id, dp, mca_i, 0x800000380701103F +
+		uint64_t val = dp_mca_read(id, dp, mca_i,
+		                           DDRPHY_DP16_WR_DELAY_VALUE_0_RP0_REG_P0_0 +
 		                           rp * rp_mul + val_idx * val_mul);
 		write_delays[dram] = (uint16_t) val;
 	}
@@ -822,13 +816,13 @@ static uint64_t write_ctr_time(mca_data_t *mca)
 	 * below probably doesn't account for REF commands. This leaves rather small
 	 * margin for error.
 	 */
-	const int WR_LVL_BIG_STEP = 7;
-	const int WR_LVL_SMALL_STEP = 0;
-	const int WR_LVL_NUM_VALID_SAMPLES = 5;
-	int FW_RD_WR = MAX(mca->nwtr_s + 11, ps_to_nck(7500) + 3);
-	return 1000 + (WR_LVL_NUM_VALID_SAMPLES * (FW_RD_WR + 16) *
-	               (1024/(WR_LVL_SMALL_STEP + 1) + 128/(WR_LVL_BIG_STEP + 1)) +
-	               2 * (WR_LVL_BIG_STEP + 1)/(WR_LVL_SMALL_STEP + 1)) * 24;
+	const int big_step = 7;
+	const int small_step = 0;
+	const int num_valid_samples = 5;
+	int fw_rd_wr = MAX(mca->nwtr_s + 11, ps_to_nck(7500) + 3);
+	return 1000 + (num_valid_samples * (fw_rd_wr + 16) *
+	               (1024/(small_step + 1) + 128/(big_step + 1)) +
+	               2 * (big_step + 1)/(small_step + 1)) * 24;
 }
 
 static void write_ctr_post(int mcs_i, int mca_i, int rp,
@@ -843,7 +837,7 @@ static void write_ctr_post(int mcs_i, int mca_i, int rp,
 	 * yet implemented.
 	 */
 	for (dp = 0; dp < 5; dp++) {
-		bad_bits |= dp_mca_read(id, dp, mca_i, 0x8000007C0701103F);
+		bad_bits |= dp_mca_read(id, dp, mca_i, DDRPHY_DP16_DQ_BIT_DISABLE_RP0_P0_0);
 	}
 
 	if (!bad_bits)
@@ -964,7 +958,7 @@ static void dispatch_step(struct phy_step *step, int mcs_i, int mca_i, int rp,
 
 	dump_cal_errors(mcs_i, mca_i);
 
-	if (mca_read(mcs_ids[mcs_i], mca_i, 0x8000C0180701103F) != 0)
+	if (mca_read(mcs_ids[mcs_i], mca_i, DDRPHY_PC_INIT_CAL_ERROR_P0) != 0)
 		die("%s failed, aborting\n", step->name);
 
 	printk(BIOS_DEBUG, "%s done\n", step->name);
@@ -979,22 +973,22 @@ static int process_initial_cal_errors(int mcs_i, int mca_i)
 
 	for (dp = 0; dp < 5; dp++) {
 		/* IOM0.DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_n */
-		err |= dp_mca_read(id, dp, mca_i, 0x8000007A0701103F);
+		err |= dp_mca_read(id, dp, mca_i, DDRPHY_DP16_RD_VREF_CAL_ERROR_P0_0);
 
 		/* Both ERROR_MASK registers were set to 0xFFFF in 13.8 */
 		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR0_P0_n &
 		 * ~IOM0.DDRPHY_DP16_WR_VREF_ERROR_MASK0_P0_n */
-		err |= (dp_mca_read(id, dp, mca_i, 0x800000AE0701103F) &
-		       ~dp_mca_read(id, dp, mca_i, 0x800000FB0701103F));
+		err |= (dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR0_P0_0) &
+		        ~dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR_MASK0_P0_0));
 
 		/* IOM0.DDRPHY_DP16_WR_VREF_ERROR1_P0_n &
 		 * ~IOM0.DDRPHY_DP16_WR_VREF_ERROR_MASK1_P0_n */
-		err |= (dp_mca_read(id, dp, mca_i, 0x800000AF0701103F) &
-		       ~dp_mca_read(id, dp, mca_i, 0x800000FA0701103F));
+		err |= (dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR1_P0_0) &
+		        ~dp_mca_read(id, dp, mca_i, DDRPHY_DP16_WR_VREF_ERROR_MASK1_P0_0));
 	}
 
 	/* IOM0.DDRPHY_PC_INIT_CAL_ERROR_P0 */
-	err |= mca_read(id, mca_i, 0x8000C0180701103F);
+	err |= mca_read(id, mca_i, DDRPHY_PC_INIT_CAL_ERROR_P0);
 
 	if (err)
 		return 1;
@@ -1004,12 +998,15 @@ static int process_initial_cal_errors(int mcs_i, int mca_i)
 	 * calibration engine itself. Check for latter.
 	 */
 	/* IOM0.IOM_PHY0_DDRPHY_FIR_REG */
-	if (read_scom_for_chiplet(id, 0x07011000) & PPC_BIT(52)) {
+	if (read_scom_for_chiplet(id, IOM_PHY0_DDRPHY_FIR_REG) &
+	    PPC_BIT(IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2)) {
 		/*
 		 * "Clear the PHY FIR ERROR 2 bit so we don't keep failing training and
 		 * training advance on this port"
 		 */
-		scom_and_or_for_chiplet(id, 0x07011000, ~PPC_BIT(52), 0);
+		scom_and_or_for_chiplet(id, IOM_PHY0_DDRPHY_FIR_REG,
+		                        ~PPC_BIT(IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_2),
+		                        0);
 
 		return 1;
 	}
@@ -1043,7 +1040,8 @@ static int can_recover(int mcs_i, int mca_i, int rp)
 		uint64_t nibbles_mask = 0xFFFF;
 		/*
 		IOM0.DDRPHY_DP16_DQS_BIT_DISABLE_RP<rp>_P0_{0-4}:
-		  // This calculates how many (DQS_t | DQS_c) failed - if _t and _c failed for the same DQS, we count it as one.
+		  // This calculates how many (DQS_t | DQS_c) failed - if _t and _c failed
+		  // for the same DQS, we count it as one.
 		  bad_dqs = bit_count((reg & 0x5500) | ((reg & 0xaa00) >> 1))
 		  if x8 && bad_dqs > 0: DIMM is FUBAR, return error
 		  total_bad_nibbles += bad_dqs
@@ -1051,7 +1049,8 @@ static int can_recover(int mcs_i, int mca_i, int rp)
 		  if total_bad_nibbles > 1: DIMM is FUBAR, return error
 		*/
 		const uint64_t rp_mul = 0x0000010000000000;
-		reg = dp_mca_read(id, dp, mca_i, 0x8000007D0701103F + rp * rp_mul);
+		reg = dp_mca_read(id, dp, mca_i,
+		                  DDRPHY_DP16_DQS_BIT_DISABLE_RP0_P0_0 + rp * rp_mul);
 
 		/* One bad DQS on x8 is already bad 2 nibbles, can't recover from that. */
 		if (reg != 0 && width == WIDTH_x8)
@@ -1078,7 +1077,8 @@ static int can_recover(int mcs_i, int mca_i, int rp)
 			if total_bad_bits    >  1: total_bad_nibbles += 1, total_bad_bits -= 1
 			if total_bad_nibbles >  1: DIMM is FUBAR, return error?
 		*/
-		reg = dp_mca_read(id, dp, mca_i, 0x8000007C0701103F + rp * rp_mul);
+		reg = dp_mca_read(id, dp, mca_i,
+		                  DDRPHY_DP16_DQ_BIT_DISABLE_RP0_P0_0 + rp * rp_mul);
 
 		/* Exclude nibbles corresponding to a bad DQS, it won't get worse. */
 		reg &= nibbles_mask;
@@ -1134,14 +1134,14 @@ static void fir_unmask(int mcs_i)
 	MC01.MCBIST.MBA_SCOMFIR.MCBISTFIRMASK
 		  [1] MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT =  0     //recoverable_error (0,1,0)
 	 */
-	scom_and_or_for_chiplet(id, 0x07012306,
-	                        ~PPC_BIT(1),
+	scom_and_or_for_chiplet(id, MCBISTFIRACT0,
+	                        ~PPC_BIT(MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT),
 	                        0);
-	scom_and_or_for_chiplet(id, 0x07012307,
-	                        ~PPC_BIT(1),
-	                        PPC_BIT(1));
-	scom_and_or_for_chiplet(id, 0x07012303,
-	                        ~PPC_BIT(1),
+	scom_and_or_for_chiplet(id, MCBISTFIRACT1,
+	                        ~PPC_BIT(MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT),
+	                        PPC_BIT(MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT));
+	scom_and_or_for_chiplet(id, MCBISTFIRMASK,
+	                        ~PPC_BIT(MCBISTFIRQ_COMMAND_ADDRESS_TIMEOUT),
 	                        0);
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
@@ -1149,7 +1149,7 @@ static void fir_unmask(int mcs_i)
 			continue;
 
 		/*
-		MC01.PORT0.SRQ.MBACALFIR_ACTION0              // 0x07010906
+		MC01.PORT0.SRQ.MBACALFIR_ACTION0
 			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        0
 			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    0
 			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  0
@@ -1157,7 +1157,7 @@ static void fir_unmask(int mcs_i)
 			[11]  MBACALFIR_MASK_ASYNC_IF_ERROR =         0
 			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0
 			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   0
-		MC01.PORT0.SRQ.MBACALFIR_ACTION1              // 0x07010907
+		MC01.PORT0.SRQ.MBACALFIR_ACTION1
 			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        1
 			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    1
 			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  1
@@ -1165,7 +1165,7 @@ static void fir_unmask(int mcs_i)
 			[11]  MBACALFIR_MASK_ASYNC_IF_ERROR =         0
 			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0
 			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   1
-		MC01.PORT0.SRQ.MBACALFIR_MASK                 // 0x07010903
+		MC01.PORT0.SRQ.MBACALFIR_MASK
 			[2]   MBACALFIR_MASK_REFRESH_OVERRUN =        0   // recoverable_error (0,1,0)
 			[5]   MBACALFIR_MASK_DDR_CAL_TIMEOUT_ERR =    0   // recoverable_error (0,1,0)
 			[7]   MBACALFIR_MASK_DDR_CAL_RESET_TIMEOUT =  0   // recoverable_error (0,1,0)
@@ -1174,17 +1174,36 @@ static void fir_unmask(int mcs_i)
 			[12]  MBACALFIR_MASK_CMD_PARITY_ERROR =       0   // checkstop (0,0,0)
 			[14]  MBACALFIR_MASK_RCD_CAL_PARITY_ERROR =   0   // recoverable_error (0,1,0)
 		*/
-		mca_and_or(id, mca_i, 0x07010906,
-		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
-		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
+		mca_and_or(id, mca_i, MBACALFIR_ACTION0,
+		           ~(PPC_BIT(MBACALFIR_REFRESH_OVERRUN) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_TIMEOUT_ERR) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_RESET_TIMEOUT) |
+		             PPC_BIT(MBACALFIR_WRQ_RRQ_HANG_ERR) |
+		             PPC_BIT(MBACALFIR_ASYNC_IF_ERROR) |
+		             PPC_BIT(MBACALFIR_CMD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_CAL_PARITY_ERROR)),
 		           0);
-		mca_and_or(id, mca_i, 0x07010907,
-		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
-		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
-		           PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) | PPC_BIT(14));
-		mca_and_or(id, mca_i, 0x07010903,
-		           ~(PPC_BIT(2) | PPC_BIT(5) | PPC_BIT(7) | PPC_BIT(9) |
-		             PPC_BIT(11) | PPC_BIT(12) | PPC_BIT(14)),
+		mca_and_or(id, mca_i, MBACALFIR_ACTION1,
+		           ~(PPC_BIT(MBACALFIR_REFRESH_OVERRUN) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_TIMEOUT_ERR) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_RESET_TIMEOUT) |
+		             PPC_BIT(MBACALFIR_WRQ_RRQ_HANG_ERR) |
+		             PPC_BIT(MBACALFIR_ASYNC_IF_ERROR) |
+		             PPC_BIT(MBACALFIR_CMD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_CAL_PARITY_ERROR)),
+		           PPC_BIT(MBACALFIR_REFRESH_OVERRUN) |
+		           PPC_BIT(MBACALFIR_DDR_CAL_TIMEOUT_ERR) |
+		           PPC_BIT(MBACALFIR_DDR_CAL_RESET_TIMEOUT) |
+		           PPC_BIT(MBACALFIR_WRQ_RRQ_HANG_ERR) |
+		           PPC_BIT(MBACALFIR_RCD_CAL_PARITY_ERROR));
+		mca_and_or(id, mca_i, MBACALFIR_MASK,
+		           ~(PPC_BIT(MBACALFIR_REFRESH_OVERRUN) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_TIMEOUT_ERR) |
+		             PPC_BIT(MBACALFIR_DDR_CAL_RESET_TIMEOUT) |
+		             PPC_BIT(MBACALFIR_WRQ_RRQ_HANG_ERR) |
+		             PPC_BIT(MBACALFIR_ASYNC_IF_ERROR) |
+		             PPC_BIT(MBACALFIR_CMD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_CAL_PARITY_ERROR)),
 		           0);
 	}
 }
@@ -1235,16 +1254,17 @@ void istep_13_11(void)
 			}
 
 			/* IOM0.DDRPHY_PC_INIT_CAL_CONFIG0_P0 = 0 */
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x8000C0160701103F, 0, 0);
+			mca_and_or(mcs_ids[mcs_i], mca_i, DDRPHY_PC_INIT_CAL_CONFIG0_P0, 0, 0);
 
 			/*
 			 * > Disable port fails as it doesn't appear the MC handles initial
 			 * > cal timeouts correctly (cal_length.) BRS, see conversation with
 			 * > Brad Michael
-			MC01.PORT0.SRQ.MBA_FARB0Q =                 // 0x07010913
+			MC01.PORT0.SRQ.MBA_FARB0Q =
 				  [57]  MBA_FARB0Q_CFG_PORT_FAIL_DISABLE = 1
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010913, ~0, PPC_BIT(57));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB0Q, ~0,
+			           PPC_BIT(MBA_FARB0Q_CFG_PORT_FAIL_DISABLE));
 
 			/*
 			 * > The following registers must be configured to the correct

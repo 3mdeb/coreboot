@@ -3,6 +3,7 @@
 #include <console/console.h>
 #include <cpu/power/vpd.h>
 #include <cpu/power/istep_13.h>
+#include <cpu/power/istep_14.h>
 #include <program_loading.h>
 #include <lib.h>	// hexdump
 #include <spd_bin.h>
@@ -35,8 +36,7 @@ static void dump_mca_data(mca_data_t *mca)
 			if (mca->dimm[i].log_ranks != mca->dimm[i].mranks)
 				printk(BIOS_SPEW, "%dH 3DS ", mca->dimm[i].log_ranks / mca->dimm[i].mranks);
 
-			printk(BIOS_SPEW, "%dGB\n", (1 << (mca->dimm[i].density - 2)) *
-			       mca->dimm[i].log_ranks * (2 - mca->dimm[i].width));
+			printk(BIOS_SPEW, "%dGB\n", mca->dimm[i].size_gb);
 		}
 		else
 			printk(BIOS_SPEW, "\tDIMM%d: not installed\n", i);
@@ -106,8 +106,15 @@ static void prepare_dimm_data(void)
 	int i, mcs, mca;
 	int tckmin = 0x06;		// Platform limit
 
+	/*
+	 * DIMMs 4-7 are under a different port. This is not the same as bus, but we
+	 * need to pass that information to I2C function. As there is no easier way,
+	 * use MSB of address and mask it out at the receiving side. This will print
+	 * wrong addresses in dump_spd_info(), but that is small price to pay.
+	 */
 	struct spd_block blk = {
-		.addr_map = { DIMM0, DIMM1, DIMM2, DIMM3, DIMM4, DIMM5, DIMM6, DIMM7},
+		.addr_map = { DIMM0, DIMM1, DIMM2, DIMM3,
+		              DIMM4 | 0x80, DIMM5 | 0x80, DIMM6 | 0x80, DIMM7 | 0x80},
 	};
 
 	get_spd_smbus(&blk);
@@ -153,9 +160,11 @@ static void prepare_dimm_data(void)
 			dimm->mranks = ((blk.spd_array[i][12] >> 3) & 0x7) + 1;
 			dimm->log_ranks = dimm->mranks * (((blk.spd_array[i][6] >> 4) & 0x7) + 1);
 			dimm->density = blk.spd_array[i][4] & 0xF;
+			dimm->size_gb = (1 << (dimm->density - 2)) * (2 - dimm->width) *
+			                dimm->log_ranks;
 
-			if ((blk.spd_array[i][5] & 0x38) > 0x20)
-				die("DIMMs with more than 16 row address bits are not supported\n");
+			if ((blk.spd_array[i][5] & 0x38) == 0x30)
+				die("DIMMs with 18 row address bits are not supported\n");
 
 			if (blk.spd_array[i][18] > tckmin)
 				tckmin = blk.spd_array[i][18];
@@ -329,6 +338,13 @@ void main(void)
 	istep_13_11();
 	report_istep(13,12);	// optional, not yet implemented
 	istep_13_13();
+
+	istep_14_1();
+	istep_14_2();
+	/* istep_14_3 doesn't work, probably due to missing SCOM init, skip for now. */
+	// istep_14_3();
+	report_istep(14,4);	// no-op
+	istep_14_5();
 
 	/* Test if SCOM still works. Maybe should check also indirect access? */
 	printk(BIOS_DEBUG, "0xF000F = %llx\n", read_scom(0xf000f));

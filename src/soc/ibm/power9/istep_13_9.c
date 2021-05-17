@@ -4,10 +4,12 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 static int test_dll_calib_done(int mcs_i, int mca_i, bool *do_workaround)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
-	uint64_t status = mca_read(id, mca_i, 0x8000C0000701103F);
+	uint64_t status = mca_read(id, mca_i, DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0);
 	/*
 	if (IOM0.DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0
 			[48]  DP_DLL_CAL_GOOD ==        1
@@ -22,12 +24,14 @@ static int test_dll_calib_done(int mcs_i, int mca_i, bool *do_workaround)
 			[52]  ADR_DLL_CAL_ERROR ==      1 |
 			[53]  ADR_DLL_CAL_ERROR_FINE == 1) break and do the workaround
 	*/
-	if ((status & PPC_BITMASK(48, 53)) == (PPC_BIT(48) | PPC_BIT(51))) {
+	if ((status & PPC_BITMASK(48, 53)) ==
+	    (PPC_BIT(DP_DLL_CAL_GOOD) | PPC_BIT(ADR_DLL_CAL_GOOD))) {
 		/* DLL calibration finished without errors */
 		return 1;
 	}
 
-	if (status & (PPC_BIT(49) | PPC_BIT(50) | PPC_BIT(52) | PPC_BIT(53))) {
+	if (status & (PPC_BIT(DP_DLL_CAL_ERROR) | PPC_BIT(DP_DLL_CAL_ERROR_FINE) |
+	              PPC_BIT(ADR_DLL_CAL_ERROR) | PPC_BIT(ADR_DLL_CAL_ERROR_FINE))) {
 		/* DLL calibration finished, but with errors */
 		*do_workaround = true;
 		return 1;
@@ -40,7 +44,7 @@ static int test_dll_calib_done(int mcs_i, int mca_i, bool *do_workaround)
 static int test_bb_lock(int mcs_i)
 {
 	chiplet_id_t id = mcs_ids[mcs_i];
-	uint64_t res = PPC_BIT(48) | PPC_BIT(56);
+	uint64_t res = PPC_BIT(BB_LOCK0) | PPC_BIT(BB_LOCK1);
 	int mca_i, dp;
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
@@ -58,27 +62,30 @@ static int test_bb_lock(int mcs_i)
 		if all bits listed above are set: success
 		*/
 
-		/* ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S{0,1}, bit 48 doesn't matter */
-		res &= dp_mca_read(id, 0, mca_i, 0x800080340701103F) | PPC_BIT(48);
-		res &= dp_mca_read(id, 1, mca_i, 0x800080340701103F) | PPC_BIT(48);
+		/* ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S{0,1}, BB_LOCK0 doesn't matter */
+		res &= dp_mca_read(id, 0, mca_i, ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S0) |
+		       PPC_BIT(BB_LOCK0);
+		res &= dp_mca_read(id, 1, mca_i, ADR_SYSCLK_PR_VALUE_RO_P0_ADR32S0) |
+		       PPC_BIT(BB_LOCK0);
 
 		/* IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_{0,1,2,3} */
 		for (dp = 0; dp < 4; dp++) {
-			res &= dp_mca_read(id, dp, mca_i, 0x800000730701103F);
+			res &= dp_mca_read(id, dp, mca_i, DDRPHY_DP16_SYSCLK_PR_VALUE_P0_0);
 		}
 
-		/* IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_4, bit 56 doesn't matter */
-		res &= dp_mca_read(id, dp, mca_i, 0x800000730701103F) | PPC_BIT(56);
+		/* IOM0.DDRPHY_DP16_SYSCLK_PR_VALUE_P0_4, BB_LOCK1 doesn't matter */
+		res &= dp_mca_read(id, dp, mca_i, DDRPHY_DP16_SYSCLK_PR_VALUE_P0_0) |
+		       PPC_BIT(BB_LOCK1);
 
 		/* Do we want early return here? */
 	}
 
-	return res == (PPC_BIT(48) | PPC_BIT(56));
+	return res == (PPC_BIT(BB_LOCK0) | PPC_BIT(BB_LOCK1));
 }
 
-static void fix_bad_voltage_settings(void)
+static void fix_bad_voltage_settings(int mcs_i)
 {
-	die("fix_bad_voltage_settings() required, but not implemented yet\n");
+	die("fix_bad_voltage_settings() required for MCS%d, but not implemented yet\n", mcs_i);
 
 	/* TODO: implement if needed */
 /*
@@ -136,20 +143,25 @@ static void check_during_phy_reset(int mcs_i)
 		if (mca_i != 0 && !mem_data.mcs[mcs_i].mca[mca_i].functional)
 			continue;
 
-		/* MC01.PORT0.SRQ.MBACALFIRQ
-			  [0]   MBACALFIRQ_MBA_RECOVERABLE_ERROR
-			  [1]   MBACALFIRQ_MBA_NONRECOVERABLE_ERROR
-			  [10]  MBACALFIRQ_SM_1HOT_ERR
+		/* MC01.PORT0.SRQ.MBACALFIR
+			  [0]   MBACALFIR_MBA_RECOVERABLE_ERROR
+			  [1]   MBACALFIR_MBA_NONRECOVERABLE_ERROR
+			  [10]  MBACALFIR_SM_1HOT_ERR
 		*/
-		val = mca_read(id, mca_i, 0x07010900);
-		if (val & (PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(10))) {
+		val = mca_read(id, mca_i, MBACALFIR);
+		if (val & (PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		           PPC_BIT(MBACALFIR_MBA_NONRECOVERABLE_ERROR) |
+		           PPC_BIT(MBACALFIR_SM_1HOT_ERR))) {
 			/* No idea how severe that error is... */
-			printk(BIOS_ERR, "Error detected in PORT%d.SRQ.MBACALFIRQ: %#llx\n",
+			printk(BIOS_ERR, "Error detected in PORT%d.SRQ.MBACALFIR: %#llx\n",
 			       mca_i, val);
 		}
 
-		mca_and_or(id, mca_i, 0x07010900,
-		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(10)), 0);
+		mca_and_or(id, mca_i, MBACALFIR,
+		           ~(PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_MBA_NONRECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_SM_1HOT_ERR)),
+		           0);
 
 		/* IOM0.IOM_PHY0_DDRPHY_FIR_REG
 			  [54]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_0
@@ -161,14 +173,14 @@ static void check_during_phy_reset(int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7
 		*/
-		val = mca_read(id, mca_i, 0x07011000);
+		val = mca_read(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG);
 		if (val & PPC_BITMASK(54, 61)) {
 			/* No idea how severe that error is... */
 			printk(BIOS_ERR, "Error detected in IOM_PHY%d_DDRPHY_FIR_REG: %#llx\n",
 				   mca_i , val);
 		}
 
-		mca_and_or(id, mca_i, 0x07011000, ~(PPC_BITMASK(54, 61)), 0);
+		mca_and_or(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG, ~(PPC_BITMASK(54, 61)), 0);
 	}
 }
 
@@ -193,14 +205,20 @@ static void fir_unmask(int mcs_i)
 		[13]  MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE =  0   // recoverable_error (0,1,0)
 		[14]  MCBISTFIRQ_SCOM_FATAL_REG_PE =        0   // checkstop (0,0,0)
 	*/
-	scom_and_or_for_chiplet(id, 0x07012306,
-	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
+	scom_and_or_for_chiplet(id, MCBISTFIRACT0,
+	                        ~(PPC_BIT(MCBISTFIRQ_INTERNAL_FSM_ERROR) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_FATAL_REG_PE)),
 	                        0);
-	scom_and_or_for_chiplet(id, 0x07012307,
-	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
-	                        PPC_BIT(13));
-	scom_and_or_for_chiplet(id, 0x07012303,
-	                        ~(PPC_BIT(2) | PPC_BIT(13) | PPC_BIT(14)),
+	scom_and_or_for_chiplet(id, MCBISTFIRACT1,
+	                        ~(PPC_BIT(MCBISTFIRQ_INTERNAL_FSM_ERROR) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_FATAL_REG_PE)),
+	                        PPC_BIT(MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE));
+	scom_and_or_for_chiplet(id, MCBISTFIRMASK,
+	                        ~(PPC_BIT(MCBISTFIRQ_INTERNAL_FSM_ERROR) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_RECOVERABLE_REG_PE) |
+	                          PPC_BIT(MCBISTFIRQ_SCOM_FATAL_REG_PE)),
 	                        0);
 
 	for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
@@ -209,29 +227,39 @@ static void fir_unmask(int mcs_i)
 
 		/*
 		MC01.PORT0.SRQ.MBACALFIR_ACTION0
-			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    0
-			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0
-			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         0
-			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0
+			  [0]   MBACALFIR_MBA_RECOVERABLE_ERROR =    0
+			  [1]   MBACALFIR_MBA_NONRECOVERABLE_ERROR = 0
+			  [4]   MBACALFIR_RCD_PARITY_ERROR =         0
+			  [10]  MBACALFIR_SM_1HOT_ERR =              0
 		MC01.PORT0.SRQ.MBACALFIR_ACTION1
-			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    1
-			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0
-			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         1
-			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0
+			  [0]   MBACALFIR_MBA_RECOVERABLE_ERROR =    1
+			  [1]   MBACALFIR_MBA_NONRECOVERABLE_ERROR = 0
+			  [4]   MBACALFIR_RCD_PARITY_ERROR =         1
+			  [10]  MBACALFIR_SM_1HOT_ERR =              0
 		MC01.PORT0.SRQ.MBACALFIR_MASK
-			  [0]   MBACALFIR_MASK_MBA_RECOVERABLE_ERROR =    0   // recoverable_error (0,1,0)
-			  [1]   MBACALFIR_MASK_MBA_NONRECOVERABLE_ERROR = 0   // checkstop (0,0,0)
-			  [4]   MBACALFIR_MASK_RCD_PARITY_ERROR =         0   // recoverable_error (0,1,0)
-			  [10]  MBACALFIR_MASK_SM_1HOT_ERR =              0   // checkstop (0,0,0)
+			  [0]   MBACALFIR_MBA_RECOVERABLE_ERROR =    0   // recoverable_error (0,1,0)
+			  [1]   MBACALFIR_MBA_NONRECOVERABLE_ERROR = 0   // checkstop (0,0,0)
+			  [4]   MBACALFIR_RCD_PARITY_ERROR =         0   // recoverable_error (0,1,0)
+			  [10]  MBACALFIR_SM_1HOT_ERR =              0   // checkstop (0,0,0)
 		*/
-		mca_and_or(id, mca_i, 0x07010906,
-		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
+		mca_and_or(id, mca_i, MBACALFIR_ACTION0,
+		           ~(PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_MBA_NONRECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_SM_1HOT_ERR)),
 		           0);
-		mca_and_or(id, mca_i, 0x07010907,
-		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
-		           PPC_BIT(0) | PPC_BIT(4));
-		mca_and_or(id, mca_i, 0x07010903,
-		           ~(PPC_BIT(0) | PPC_BIT(1) | PPC_BIT(4) | PPC_BIT(10)),
+		mca_and_or(id, mca_i, MBACALFIR_ACTION1,
+		           ~(PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_MBA_NONRECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_SM_1HOT_ERR)),
+		           PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		           PPC_BIT(MBACALFIR_RCD_PARITY_ERROR));
+		mca_and_or(id, mca_i, MBACALFIR_MASK,
+		           ~(PPC_BIT(MBACALFIR_MBA_RECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_MBA_NONRECOVERABLE_ERROR) |
+		             PPC_BIT(MBACALFIR_RCD_PARITY_ERROR) |
+		             PPC_BIT(MBACALFIR_SM_1HOT_ERR)),
 		           0);
 
 		/*
@@ -260,13 +288,13 @@ static void fir_unmask(int mcs_i)
 			  [60]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_6 = 0   // recoverable_error (0,1,0)
 			  [61]  IOM_PHY0_DDRPHY_FIR_REG_DDR_FIR_ERROR_7 = 0   // recoverable_error (0,1,0)
 		*/
-		mca_and_or(id, mca_i, 0x07011006,
+		mca_and_or(id, mca_i, IOM_PHY0_DDRPHY_FIR_ACTION0_REG,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
-		mca_and_or(id, mca_i, 0x07011007,
+		mca_and_or(id, mca_i, IOM_PHY0_DDRPHY_FIR_ACTION1_REG,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61));
-		mca_and_or(id, mca_i, 0x07011003,
+		mca_and_or(id, mca_i, IOM_PHY0_DDRPHY_FIR_MASK_REG,
 		           ~(PPC_BITMASK(54, 55) | PPC_BITMASK(57, 61)),
 		           0);
 	}
@@ -328,7 +356,8 @@ void istep_13_9(void)
 			/* MC01.PORT0.SRQ.MBA_FARB5Q =
 				[8]     MBA_FARB5Q_CFG_FORCE_MCLK_LOW_N = 0
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~PPC_BIT(8), 0);
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q,
+			           ~PPC_BIT(MBA_FARB5Q_CFG_FORCE_MCLK_LOW_N), 0);
 
 			/* Drive all control signals to their inactive/idle state, or
 			 * inactive value
@@ -338,17 +367,18 @@ void istep_13_9(void)
 				[48]    reserved = 1            // MCA_DDRPHY_DP16_SYSCLK_PR0_P0_0_01_ENABLE
 			*/
 			for (dp = 0; dp < 5; dp++) {
-				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x800000070701103F, 0,
-				              PPC_BIT(48));
-				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x8000007F0701103F, 0,
-				              PPC_BIT(48));
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_SYSCLK_PR0_P0_0,
+				              0, PPC_BIT(48));
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_SYSCLK_PR1_P0_0,
+				              0, PPC_BIT(48));
 			}
 
 			/* Assert reset to PHY for 32 memory clocks
 			MC01.PORT0.SRQ.MBA_CAL0Q =
 				[57]    MBA_CAL0Q_RESET_RECOVER = 1
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x0701090F, ~0, PPC_BIT(57));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_CAL0Q, ~0,
+			           PPC_BIT(MBA_CAL0Q_RESET_RECOVER));
 		}
 
 		delay_nck(32);
@@ -363,7 +393,8 @@ void istep_13_9(void)
 			MC01.PORT0.SRQ.MBA_CAL0Q =
 					[57]    MBA_CAL0Q_RESET_RECOVER = 0
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x0701090F, ~PPC_BIT(57), 0);
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_CAL0Q,
+			           ~PPC_BIT(MBA_CAL0Q_RESET_RECOVER), 0);
 
 			/* Flush output drivers
 			IOM0.DDRPHY_ADR_OUTPUT_FORCE_ATEST_CNTL_P0_ADR32S{0,1} =
@@ -372,10 +403,12 @@ void istep_13_9(void)
 					[50]    INIT_IO = 1
 			*/
 			/* Has the same stride as DP16 */
-			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, 0x800080350701103F, 0,
-			              PPC_BIT(48) | PPC_BIT(50));
-			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i, 0x800080350701103F, 0,
-			              PPC_BIT(48) | PPC_BIT(50));
+			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
+			              DDRPHY_ADR_OUTPUT_FORCE_ATEST_CNTL_P0_ADR32S0, 0,
+			              PPC_BIT(FLUSH) | PPC_BIT(INIT_IO));
+			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
+			              DDRPHY_ADR_OUTPUT_FORCE_ATEST_CNTL_P0_ADR32S0, 0,
+			              PPC_BIT(FLUSH) | PPC_BIT(INIT_IO));
 
 			/* IOM0.DDRPHY_DP16_CONFIG0_P0_{0,1,2,3,4} =
 					[all]   0
@@ -385,8 +418,11 @@ void istep_13_9(void)
 					[58]    DELAY_PING_PONG_HALF =  1
 			*/
 			for (dp = 0; dp < 5; dp++) {
-				dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, 0x800000030701103F, 0,
-				              PPC_BIT(51) | PPC_BIT(54) | PPC_BIT(55) | PPC_BIT(58));
+				dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, DDRPHY_DP16_CONFIG0_P0_0, 0,
+				              PPC_BIT(DP16_CONFIG0_FLUSH) |
+				              PPC_BIT(DP16_CONFIG0_INIT_IO) |
+				              PPC_BIT(DP16_CONFIG0_ADVANCE_PING_PONG) |
+				              PPC_BIT(DP16_CONFIG0_DELAY_PING_PONG_HALF));
 			}
 		}
 
@@ -404,8 +440,10 @@ void istep_13_9(void)
 					[50]    INIT_IO = 0
 			*/
 			/* Has the same stride as DP16 */
-			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, 0x800080350701103F, 0, 0);
-			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i, 0x800080350701103F, 0, 0);
+			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
+			              DDRPHY_ADR_OUTPUT_FORCE_ATEST_CNTL_P0_ADR32S0, 0, 0);
+			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
+			              DDRPHY_ADR_OUTPUT_FORCE_ATEST_CNTL_P0_ADR32S0, 0, 0);
 
 			/* IOM0.DDRPHY_DP16_CONFIG0_P0_{0,1,2,3,4} =
 					[all]   0
@@ -415,8 +453,9 @@ void istep_13_9(void)
 					[58]    DELAY_PING_PONG_HALF =  1
 			*/
 			for (dp = 0; dp < 5; dp++) {
-				dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, 0x800000030701103F, 0,
-				              PPC_BIT(55) | PPC_BIT(58));
+				dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, DDRPHY_DP16_CONFIG0_P0_0, 0,
+				              PPC_BIT(DP16_CONFIG0_ADVANCE_PING_PONG) |
+				              PPC_BIT(DP16_CONFIG0_DELAY_PING_PONG_HALF));
 			}
 		}
 
@@ -424,19 +463,19 @@ void istep_13_9(void)
 		/*
 		 * In Hostboot this is 'for each magic MCA'. We know there is only one
 		 * magic, and it has always the same index.
-		IOM0.DDRPHY_PC_RESETS_P0 =                                  // 0x8000C00E0701103F
+		IOM0.DDRPHY_PC_RESETS_P0 =
 			// Yet another documentation error: all bits in this register are marked as read-only
 			[51]    ENABLE_ZCAL = 1
-		 * TODO: for MCS1, is it MCA0 or MCA2?
 		 */
-		mca_and_or(mcs_ids[mcs_i], 0, 0x8000C00E0701103F, ~0, PPC_BIT(51));
+		mca_and_or(mcs_ids[mcs_i], 0, DDRPHY_PC_RESETS_P0, ~0, PPC_BIT(ENABLE_ZCAL));
 
 		/* Maybe it would be better to add another 1us later instead of this. */
 		delay_nck(1024);
 
 		/* for each magic MCA */
 		/* 50*10ns, but we don't have such precision. */
-		time = wait_us(1, mca_read(mcs_ids[mcs_i], 0, 0x8000C0000701103F) & PPC_BIT(63));
+		time = wait_us(1, mca_read(mcs_ids[mcs_i], 0,
+		               DDRPHY_PC_DLL_ZCAL_CAL_STATUS_P0) & PPC_BIT(ZCAL_DONE));
 
 		if (!time)
 			die("ZQ calibration timeout\n");
@@ -456,15 +495,19 @@ void istep_13_9(void)
 				[48]    INIT_RXDLL_CAL_RESET = 0
 			*/
 			/* Has the same stride as DP16 */
-			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, 0x8000803A0701103F, ~PPC_BIT(48), 0);
-			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i, 0x8000803A0701103F, ~PPC_BIT(48), 0);
+			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i, DDRPHY_ADR_DLL_CNTL_P0_ADR32S0,
+			              ~PPC_BIT(INIT_RXDLL_CAL_RESET), 0);
+			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i, DDRPHY_ADR_DLL_CNTL_P0_ADR32S0,
+			              ~PPC_BIT(INIT_RXDLL_CAL_RESET), 0);
 
 			for (dp = 0; dp < 4; dp++) {
 				/* IOM0.DDRPHY_DP16_DLL_CNTL{0,1}_P0_{0,1,2,3} =
 					[48]    INIT_RXDLL_CAL_RESET = 0
 				*/
-				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x800000240701103F, ~PPC_BIT(48), 0);
-				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x800000250701103F, ~PPC_BIT(48), 0);
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_DLL_CNTL0_P0_0,
+				              ~PPC_BIT(INIT_RXDLL_CAL_RESET), 0);
+				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_DLL_CNTL1_P0_0,
+				              ~PPC_BIT(INIT_RXDLL_CAL_RESET), 0);
 			}
 			/* Last DP16 is different
 			IOM0.DDRPHY_DP16_DLL_CNTL0_P0_4
@@ -472,8 +515,10 @@ void istep_13_9(void)
 			IOM0.DDRPHY_DP16_DLL_CNTL1_P0_4
 				[48]    INIT_RXDLL_CAL_RESET = 1
 			*/
-			dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x800000240701103F, ~PPC_BIT(48), 0);
-			dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, 0x800000250701103F, ~0, PPC_BIT(48));
+			dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_DLL_CNTL0_P0_0,
+				              ~PPC_BIT(INIT_RXDLL_CAL_RESET), 0);
+			dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i, DDRPHY_DP16_DLL_CNTL1_P0_0,
+				              ~0, PPC_BIT(INIT_RXDLL_CAL_RESET));
 		}
 
 		/* From Hostboot's comments:
@@ -548,22 +593,22 @@ void istep_13_9(void)
 			test_dll_calib_done(mcs_i, mca_i, &need_dll_workaround);
 
 			/*
-			if (IOM0.DDRPHY_ADR_DLL_VREG_COARSE_P0_ADR32S0        |       // 0x8000803E0701103F
-			  IOM0.DDRPHY_DP16_DLL_VREG_COARSE0_P0_{0,1,2,3,4}  |       // 0x8000002C0701103F, +0x0400_0000_0000
-			  IOM0.DDRPHY_DP16_DLL_VREG_COARSE1_P0_{0,1,2,3}    |       // 0x8000002D0701103F, +0x0400_0000_0000
+			if (IOM0.DDRPHY_ADR_DLL_VREG_COARSE_P0_ADR32S0        |
+			  IOM0.DDRPHY_DP16_DLL_VREG_COARSE0_P0_{0,1,2,3,4}  |
+			  IOM0.DDRPHY_DP16_DLL_VREG_COARSE1_P0_{0,1,2,3}    |
 					[56-62] REGS_RXDLL_VREG_DAC_COARSE = 1)    // The same offset for ADR and DP16
 				  do the workaround
 			*/
-			TEST_VREF(0, 0x8000803E0701103F) /* ADR_DLL_VREG_COARSE_P0_ADR32S0 */
-			TEST_VREF(4, 0x8000002C0701103F) /* DP16_DLL_VREG_COARSE0_P0_4 */
+			TEST_VREF(0, DDRPHY_ADR_DLL_VREG_COARSE_P0_ADR32S0)
+			TEST_VREF(4, DDRPHY_DP16_DLL_VREG_COARSE0_P0_0)
 			for (dp = 0; dp < 4; dp++) {
-				TEST_VREF(dp, 0x8000002C0701103F) /* DP16_DLL_VREG_COARSE0_P0_n */
-				TEST_VREF(dp, 0x8000002D0701103F) /* DP16_DLL_VREG_COARSE1_P0_n */
+				TEST_VREF(dp, DDRPHY_DP16_DLL_VREG_COARSE0_P0_0)
+				TEST_VREF(dp, DDRPHY_DP16_DLL_VREG_COARSE1_P0_0)
 			}
 		}
 
 		if (need_dll_workaround)
-			fix_bad_voltage_settings();
+			fix_bad_voltage_settings(mcs_i);
 
 		/* Start bang-bang-lock */
 		for (mca_i = 0; mca_i < MCA_PER_MCS; mca_i++) {
@@ -582,22 +627,22 @@ void istep_13_9(void)
 			*/
 			/* Has the same stride as DP16 */
 			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
-			              0x800080320701103F, /* ADR_SYSCLK_CNTRL_PR_P0_ADR32S0 */
+			              ADR_SYSCLK_CNTRL_PR_P0_ADR32S0,
 			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
 			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
-			              0x800080320701103F,
+			              ADR_SYSCLK_CNTRL_PR_P0_ADR32S0,
 			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
 
 			for (dp = 0; dp < 4; dp++) {
 				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
-				              0x800000070701103F, /* DP16_SYSCLK_PR0_P0_<dp> */
+				              DDRPHY_DP16_SYSCLK_PR0_P0_0,
 				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
 				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
-				              0x8000007F0701103F, /* DP16_SYSCLK_PR1_P0_<dp> */
+				              DDRPHY_DP16_SYSCLK_PR1_P0_0,
 				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
 			}
 			dp_mca_and_or(mcs_ids[mcs_i], 4, mca_i,
-						  0x800000070701103F, /* DP16_SYSCLK_PR0_P0_4 */
+						  DDRPHY_DP16_SYSCLK_PR0_P0_0,
 						  ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8024, 63));
 		}
 
@@ -634,7 +679,8 @@ void istep_13_9(void)
 			IOM0.DDRPHY_PC_RESETS_P0 =
 				  [49]  SYSCLK_RESET = 0
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x8000C00E0701103F, ~PPC_BIT(49), 0);
+			mca_and_or(mcs_ids[mcs_i], mca_i, DDRPHY_PC_RESETS_P0,
+			           ~PPC_BIT(SYSCLK_RESET), 0);
 
 			/* Reset the windage registers */
 			/*
@@ -680,22 +726,22 @@ void istep_13_9(void)
 			*/
 			/* Has the same stride as DP16 */
 			dp_mca_and_or(mcs_ids[mcs_i], 0, mca_i,
-			              0x800080320701103F, /* ADR_SYSCLK_CNTRL_PR_P0_ADR32S0 */
+			              ADR_SYSCLK_CNTRL_PR_P0_ADR32S0,
 			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
 			dp_mca_and_or(mcs_ids[mcs_i], 1, mca_i,
-			              0x800080320701103F,
+			              ADR_SYSCLK_CNTRL_PR_P0_ADR32S0,
 			              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
 
 			for (dp = 0; dp < 4; dp++) {
 				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
-				              0x800000070701103F, /* DP16_SYSCLK_PR0_P0_<dp> */
+				              DDRPHY_DP16_SYSCLK_PR0_P0_0,
 				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
 				dp_mca_and_or(mcs_ids[mcs_i], dp, mca_i,
-				              0x8000007F0701103F, /* DP16_SYSCLK_PR1_P0_<dp> */
+				              DDRPHY_DP16_SYSCLK_PR1_P0_0,
 				              ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
 			}
 			dp_mca_and_or(mcs_ids[mcs_i], 4, mca_i,
-						  0x800000070701103F, /* DP16_SYSCLK_PR0_P0_4 */
+						  DDRPHY_DP16_SYSCLK_PR0_P0_0,
 						  ~PPC_BITMASK(48, 63), PPC_SHIFT(0x8020, 63));
 		}
 
@@ -713,7 +759,8 @@ void istep_13_9(void)
 			/* MC01.PORT0.SRQ.MBA_FARB5Q =
 					[8]     MBA_FARB5Q_CFG_FORCE_MCLK_LOW_N = 1
 			*/
-			mca_and_or(mcs_ids[mcs_i], mca_i, 0x07010918, ~0, PPC_BIT(8));
+			mca_and_or(mcs_ids[mcs_i], mca_i, MBA_FARB5Q, ~0,
+			           PPC_BIT(MBA_FARB5Q_CFG_FORCE_MCLK_LOW_N));
 
 		}
 

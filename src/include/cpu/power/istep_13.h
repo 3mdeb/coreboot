@@ -44,6 +44,7 @@ typedef struct {
 	uint8_t density;
 	uint8_t *spd;
 	uint8_t rcd_i2c_addr;
+	uint16_t size_gb;	// 2S8Rx4 8Gb DIMMs are 256GB
 } rdimm_data_t;
 
 typedef struct {
@@ -160,8 +161,6 @@ static inline void delay_nck(uint64_t nck)
 	udelay(nck_to_us(nck));
 }
 
-#define PPC_SHIFT(val, lsb)	(((uint64_t)(val)) << (63 - (lsb)))
-
 /* TODO: discover which MCAs are used on second MCS (0,1,6,7? 0,1,4,5?) */
 /* TODO: consider non-RMW variants */
 static inline void mca_and_or(chiplet_id_t mcs, int mca, uint64_t scom,
@@ -191,6 +190,14 @@ static inline uint64_t mca_read(chiplet_id_t mcs, int mca, uint64_t scom)
 	return read_scom_for_chiplet(mcs, scom + mca * mul);
 }
 
+static inline void mca_write(chiplet_id_t mcs, int mca, uint64_t scom, uint64_t val)
+{
+	/* Indirect registers have different stride than the direct ones in
+	 * general, except for (only?) direct PHY registers. */
+	unsigned mul = (scom & PPC_BIT(0) ||
+	                (scom & 0xFFFFF000) == 0x07011000) ? 0x400 : 0x40;
+	write_scom_for_chiplet(mcs, scom + mca * mul, val);
+}
 static inline uint64_t dp_mca_read(chiplet_id_t mcs, int dp, int mca, uint64_t scom)
 {
 	return mca_read(mcs, mca, scom + dp * 0x40000000000);
@@ -301,3 +308,5 @@ void istep_13_9(void);
 void istep_13_10(void);
 void istep_13_11(void);
 void istep_13_13(void);
+void istep_14_1(void);
+void istep_14_5(void);

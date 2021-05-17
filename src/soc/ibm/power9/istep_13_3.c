@@ -4,6 +4,8 @@
 #include <console/console.h>
 #include <timer.h>
 
+#include "istep_13_scom.h"
+
 #define RING_ID_1866	0x6B
 #define RING_ID_2133	0x6C
 #define RING_ID_2400	0x6D
@@ -28,6 +30,7 @@ void istep_13_3(void)
 {
 	printk(BIOS_EMERG, "starting istep 13.3\n");
 	uint64_t ring_id;
+	int mcs_i;
 
 	report_istep(13,3);
 
@@ -59,55 +62,60 @@ void istep_13_3(void)
 	 * start digging here: https://github.com/open-power/hostboot/blob/master/src/usr/scan/scandd.C#L169
 	 */
 	// TP.TPCHIP.PIB.PSU.PSU_SBE_DOORBELL_REG
-	if (read_scom(0x000D0060) & PPC_BIT(0))
+	if (read_scom(PSU_SBE_DOORBELL_REG) & PPC_BIT(0))
 		die("MBOX to SBE busy, this should not happen\n");
 
-	/* https://github.com/open-power/hostboot/blob/master/src/include/usr/sbeio/sbe_psudd.H#L418 */
-	// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
-	/* REQUIRE_RESPONSE, PSU_PUT_RING_FROM_IMAGE_CMD, CMD_CONTROL_PUTRING */
-	/*
-	 * TODO: there is also a sequence ID (bits 32-47) which has to be unique. It
-	 * has a value of 9 at this point in Hostboot logs, meaning there were
-	 * probably earlier messages to SBE. In that case, we may also need a static
-	 * variable for it, which probably implies wrapping this into a function and
-	 * moving it to separate file.
-	 */
-	write_scom(0x000D0050, 0x000001000000D301);
 
-	// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
-	/* TARGET_TYPE_PERV, chiplet ID = 0x07, ring ID, RING_MODE_SET_PULSE_NSL */
-	write_scom(0x000D0051, 0x0002000700000004 | ring_id << 16);
+	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		long time;
 
-	// Ring the host->SBE doorbell
-	// TP.TPCHIP.PIB.PSU.PSU_SBE_DOORBELL_REG_OR
-	write_scom(0x000D0062, PPC_BIT(0));
+		if (!mem_data.mcs[mcs_i].functional)
+			continue;
 
-	// Wait for response
-	/*
-	 * Hostboot registers an interrupt handler in a thread that is demonized. We
-	 * do not want nor need to implement a whole OS just for this purpose, we
-	 * can just busy-wait here, there isn't anything better to do anyway.
-	 *
-	 * The original timeout is 90 seconds, but that seems like eternity. After
-	 * thorough testing we probably should trim it.
-	 */
-	long time;
+		/* https://github.com/open-power/hostboot/blob/master/src/include/usr/sbeio/sbe_psudd.H#L418 */
+		// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
+		/* REQUIRE_RESPONSE, PSU_PUT_RING_FROM_IMAGE_CMD, CMD_CONTROL_PUTRING */
+		/*
+		 * TODO: there is also a sequence ID (bits 32-47) which should be unique. It
+		 * has a value of 9 at this point in Hostboot logs, meaning there were
+		 * probably earlier messages to SBE. In that case, we may also need a static
+		 * variable for it, which probably implies wrapping this into a function and
+		 * moving it to separate file.
+		 */
+		write_scom(PSU_HOST_SBE_MBOX0_REG, 0x000001000000D301);
 
-	// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG
-	time = wait_ms(90 * MSECS_PER_SEC, read_scom(0x000D0063) & PPC_BIT(0));
+		// TP.TPCHIP.PIB.PSU.PSU_HOST_SBE_MBOX0_REG
+		/* TARGET_TYPE_PERV, chiplet ID = 0x07, ring ID, RING_MODE_SET_PULSE_NSL */
+		write_scom(PSU_HOST_SBE_MBOX1_REG, 0x0002000000000004 | PPC_SHIFT(ring_id, 47) |
+		           PPC_SHIFT(mcs_ids[mcs_i], 31));
 
-	if (!time)
-		die("Timed out while waiting for SBE response\n");
+		// Ring the host->SBE doorbell
+		// TP.TPCHIP.PIB.PSU.PSU_SBE_DOORBELL_REG_OR
+		write_scom(PSU_SBE_DOORBELL_REG_WOR, PPC_BIT(0));
 
-	/* This may depend on the requested frequency, but for current setup in our
-	 * lab this is ~3ms both for coreboot and Hostboot. */
-	printk(BIOS_EMERG, "putRing took %ld ms\n", time);
+		// Wait for response
+		/*
+		 * Hostboot registers an interrupt handler in a thread that is demonized. We
+		 * do not want nor need to implement a whole OS just for this purpose, we
+		 * can just busy-wait here, there isn't anything better to do anyway.
+		 *
+		 * The original timeout is 90 seconds, but that seems like eternity. After
+		 * thorough testing we probably should trim it.
+		 */
+		// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG
+		time = wait_ms(90 * MSECS_PER_SEC, read_scom(PSU_HOST_DOORBELL_REG) & PPC_BIT(0));
 
-	// Clear SBE->host doorbell
-	// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG_AND
-	write_scom(0x000D0064, ~PPC_BIT(0));
+		if (!time)
+			die("Timed out while waiting for SBE response\n");
 
-	/* FIXME: do we need to repeat it for second MCS? */
+		/* This may depend on the requested frequency, but for current setup in our
+		 * lab this is ~3ms both for coreboot and Hostboot. */
+		printk(BIOS_EMERG, "putRing took %ld ms\n", time);
+
+		// Clear SBE->host doorbell
+		// TP.TPCHIP.PIB.PSU.PSU_HOST_DOORBELL_REG_AND
+		write_scom(PSU_HOST_DOORBELL_REG_WAND, ~PPC_BIT(0));
+	}
 
 	printk(BIOS_EMERG, "ending istep 13.3\n");
 }

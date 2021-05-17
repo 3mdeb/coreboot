@@ -12,8 +12,8 @@
 #define RES_ERR_REG(bus)	(0xA000C | ((bus) << 12))
 
 // CMD register
-#define LEN_SHIFT(x)		((uint64_t)(x) << 32)
-#define ADDR_SHIFT(x)		((uint64_t)(x) << 49)
+#define LEN_SHIFT(x)		PPC_SHIFT((x), 31)
+#define ADDR_SHIFT(x)		PPC_SHIFT((x), 14)
 #define READ_NOT_WRITE		0x0001000000000000
 #define START			0x8000000000000000
 #define WITH_ADDR		0x4000000000000000
@@ -35,18 +35,25 @@
 /* return -1 if SMBus errors otherwise return 0 */
 static int get_spd(u8 *spd, u8 addr)
 {
+	/*
+	 * Second half of DIMMs is on the second I2C port. platform_i2c_transfer()
+	 * changes this automatically for SPD and RCD, but not for SPD page select.
+	 * For those commands, set MSB that is later masked out.
+	 */
+	uint8_t fix = addr & 0x80;
+
 	if (i2c_read_bytes(SPD_I2C_BUS, addr, 0, spd, SPD_PAGE_LEN) < 0) {
 		printk(BIOS_INFO, "No memory DIMM at address %02X\n", addr);
 		return -1;
 	}
 
 	/* DDR4 spd is 512 byte. Switch to page 1 */
-	i2c_writeb(SPD_I2C_BUS, SPD_PAGE_1, 0, 0);
+	i2c_writeb(SPD_I2C_BUS, SPD_PAGE_1 | fix, 0, 0);
 
 	/* No need to check again if DIMM is present */
 	i2c_read_bytes(SPD_I2C_BUS, addr, 0, spd + SPD_PAGE_LEN, SPD_PAGE_LEN);
 	/* Restore to page 0 */
-	i2c_writeb(SPD_I2C_BUS, SPD_PAGE_0, 0, 0);
+	i2c_writeb(SPD_I2C_BUS, SPD_PAGE_0 | fix, 0, 0);
 
 	return 0;
 }
@@ -84,29 +91,11 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 		return -1;
 	}
 
-	/*
-	 * Divisor fields in this register are poorly documented:
-	 *
-	 *	 Bits     SCOM   Field Mnemonic: Description
-	 *	0:7       RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
-	 *	8:9       RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
-	 *	10:15     RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
-	 *
-	 * After issuing a fast command (SCOM A3000) they change like this:
-	 * -  100 kHz - previous value is not changed
-	 * -   50 kHz - 0x000B
-	 * - 3400 kHz - 0x005E
-	 * -  400 kHz - 0x0177
-	 *
-	 * Use value for 400 kHz as it is the one used by Hostboot.
-	 */
-	write_scom(MODE_REG(bus), 0x0177000000000000);	// 400kHz
-
 	write_scom(RES_ERR_REG(bus), CLEAR_ERR);
 
 	for (i = 0; i < seg_count; i++) {
 		unsigned int len;
-		uint64_t read_not_write, stop, read_cont;
+		uint64_t read_not_write, stop, read_cont, port;
 
 		/* Only read for now, implement different flags when needed */
 		if (segment[i].flags & ~I2C_M_RD) {
@@ -117,10 +106,29 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 		read_not_write = (segment[i].flags & I2C_M_RD) ? READ_NOT_WRITE : 0;
 		stop = (i == seg_count - 1) ? STOP : 0;
 		read_cont = (!stop && !read_not_write) ? READ_CONT : 0;
+		port = segment[i].slave & 0x80 ? 1 : 0;
+
+		/*
+		 * Divisor fields in this register are poorly documented:
+		 *
+		 *	 Bits     SCOM   Field Mnemonic: Description
+		 *	0:7       RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
+		 *	8:9       RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
+		 *	10:15     RWX    BIT_RATE_DIVISOR_3: Decides the speed on the I2C bus.
+		 *
+		 * After issuing a fast command (SCOM A3000) they change like this:
+		 * -  100 kHz - previous value is not changed
+		 * -   50 kHz - 0x000B
+		 * - 3400 kHz - 0x005E
+		 * -  400 kHz - 0x0177
+		 *
+		 * Use value for 400 kHz as it is the one used by Hostboot.
+		 */
+		write_scom(MODE_REG(bus), 0x0177000000000000 | PPC_SHIFT(port, 21));	// 400kHz
 
 		write_scom(RES_ERR_REG(bus), CLEAR_ERR);
 		write_scom(CMD_REG(bus), START | stop | WITH_ADDR | read_not_write | read_cont |
-		                         ADDR_SHIFT(segment[i].slave) |
+		                         ADDR_SHIFT(segment[i].slave & 0x7F) |
 		                         LEN_SHIFT(segment[i].len));
 
 		for (len = 0; len < segment[i].len; len++, bytes_transfered++) {

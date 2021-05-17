@@ -97,9 +97,17 @@ void reset_scom_engine(void);
 static uint64_t read_scom_direct(uint64_t reg_address)
 {
 	uint64_t val;
-	uint64_t hmer;
+	uint64_t hmer = 0;
 	do {
-		clear_hmer();
+		/*
+		 * Clearing HMER on every SCOM access seems to slow down CCS up
+		 * to a point where it starts hitting timeout on "less ideal"
+		 * DIMMs for write centering. Clear it only if this do...while
+		 * executes more than once.
+		 */
+		if ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED)
+			clear_hmer();
+
 		eieio();
 		asm volatile(
 			"ldcix %0, %1, %2":
@@ -124,9 +132,12 @@ static uint64_t read_scom_direct(uint64_t reg_address)
 
 static void write_scom_direct(uint64_t reg_address, uint64_t data)
 {
-	uint64_t hmer;
+	uint64_t hmer = 0;
 	do {
-		clear_hmer();
+		/* See comment in read_scom_direct() */
+		if ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED)
+			clear_hmer();
+
 		eieio();
 		asm volatile(
 			"stdcix %0, %1, %2"::
@@ -141,14 +152,6 @@ static void write_scom_direct(uint64_t reg_address, uint64_t data)
 		reset_scom_engine();
 }
 
-/*
- * WARNING:
- * Indirect access uses the same approach as Hostboot, yet all our tests so far
- * were unsuccessful. It is possible that the devices we were trying to access
- * must be initialized or otherwise enabled first. Because of that we decided to
- * leave it as it is for now, with heavy debugging, and return to this when we
- * are sure that it doesn't work because of error in implementation.
- */
 uint64_t read_scom_indirect(uint64_t reg_address);
 void write_scom_indirect(uint64_t reg_address, uint64_t data);
 

@@ -173,7 +173,7 @@ static void dump_cal_errors(int mcs_i, int mca_i)
 	       mca_read(id, mca_i, IOM_PHY0_DDRPHY_FIR_REG));
 
 	printk(BIOS_ERR, "%#16.16llx - MBACALFIRQ\n",
-	       mca_read(id, mca_i, MBACALFIRQ));
+	       mca_read(id, mca_i, MBACALFIR));
 #endif
 }
 

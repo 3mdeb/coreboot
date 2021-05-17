@@ -362,10 +362,18 @@ static void p9_setup_dpll_values(chiplet_id_t i_target)
 	}
 }
 
+static void p9_pm_get_poundv_bucket(
+    const fapi2::Target<fapi2::TARGET_TYPE_EQ>& i_target,
+    fapi2::voltageBucketData_t& o_data)
+{
+    fapi2::ATTR_POUNDV_BUCKET_DATA_Type l_bucketAttr;
+    FAPI_ATTR_GET(fapi2::ATTR_POUNDV_BUCKET_DATA, i_target, l_bucketAttr);
+    memcpy(&o_data, l_bucketAttr, sizeof(o_data));
+}
+
 void PlatPmPPB::chk_valid_poundv(const bool i_biased_state)
 {
 	const uint8_t   pv_op_order[4] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
-	const char*     pv_op_str[4] = {"Nominal   ","PowerSave ", "Turbo     ", "UltraTurbo"};
 	uint8_t         i = 0;
 	bool            suspend_ut_check = false;
 	uint8_t         l_chiplet_num = iv_procChip.getChipletNumber();
@@ -378,22 +386,17 @@ void PlatPmPPB::chk_valid_poundv(const bool i_biased_state)
 		memcpy(l_attr_mvpd_data,iv_attr_mvpd_poundV_biased,sizeof(l_attr_mvpd_data));
 	}
 
-	iv_valid_pdv_points = 4;
-
 	// check valid operating points' values have this relationship (power save <= nominal <= turbo <= ultraturbo)
 	for (i = 1; i < 4; i++)
 	{
-		// Only skip checkinug for WOF not enabled and UltraTurbo.
-		if !((strcmp(pv_op_str[pv_op_order[i]], "UltraTurbo") == 0))
+		// does not execute for i = 4 meaning UltraTurbo
+		if (l_attr_mvpd_data[pv_op_order[i-1]].frequency_mhz > l_attr_mvpd_data[pv_op_order[i]].frequency_mhz
+		|| l_attr_mvpd_data[pv_op_order[i-1]].vdd_mv        > l_attr_mvpd_data[pv_op_order[i]].vdd_mv
+		|| l_attr_mvpd_data[pv_op_order[i-1]].idd_100ma     > l_attr_mvpd_data[pv_op_order[i]].idd_100ma
+		|| l_attr_mvpd_data[pv_op_order[i-1]].vcs_mv        > l_attr_mvpd_data[pv_op_order[i]].vcs_mv
+		|| l_attr_mvpd_data[pv_op_order[i-1]].ics_100ma     > l_attr_mvpd_data[pv_op_order[i]].ics_100ma)
 		{
-			if (l_attr_mvpd_data[pv_op_order[i-1]].frequency_mhz > l_attr_mvpd_data[pv_op_order[i]].frequency_mhz
-			|| l_attr_mvpd_data[pv_op_order[i-1]].vdd_mv        > l_attr_mvpd_data[pv_op_order[i]].vdd_mv
-			|| l_attr_mvpd_data[pv_op_order[i-1]].idd_100ma     > l_attr_mvpd_data[pv_op_order[i]].idd_100ma
-			|| l_attr_mvpd_data[pv_op_order[i-1]].vcs_mv        > l_attr_mvpd_data[pv_op_order[i]].vcs_mv
-			|| l_attr_mvpd_data[pv_op_order[i-1]].ics_100ma     > l_attr_mvpd_data[pv_op_order[i]].ics_100ma)
-			{
-				iv_pstates_enabled = false;
-			}
+			iv_pstates_enabled = false;
 		}
 	}
 }
@@ -404,7 +407,7 @@ void PlatPmPPB::get_mvpd_poundV()
 	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
 	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
 	uint8_t    j                = 0;
-	uint8_t*   l_buffer         = reinterpret_cast<uint8_t*>(malloc(sizeof(voltageBucketData_t)));
+	uint8_t l_buffer[61]         = {0};
 	uint8_t*   l_buffer_inc     = NULL;
 
 	memset(&l_fstChlt_vpd_data, 0, sizeof(l_fstChlt_vpd_data));
@@ -415,28 +418,25 @@ void PlatPmPPB::get_mvpd_poundV()
 
 	for (j = 0; j < l_eqChiplets.size(); j++)
 	{
-		p9_pm_get_poundv_bucket(l_eqChiplets[j], iv_poundV_raw_data);
-
-		memset(l_buffer, 0, sizeof(iv_poundV_raw_data));
-		memcpy(l_buffer, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
+		l_buffer = {0};
 
 		l_buffer_inc = l_buffer;
 		l_buffer_inc++;
 		for (int i = 0; i <= 4; i++)
 		{
-			iv_attr_mvpd_poundV_raw[i].frequency_mhz = (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			iv_attr_mvpd_poundV_raw[i].frequency_mhz  = 0
 			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].vdd_mv= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			iv_attr_mvpd_poundV_raw[i].vdd_mv = 0
 			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].idd_100ma= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			iv_attr_mvpd_poundV_raw[i].idd_100ma = 0
 			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].vcs_mv= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			iv_attr_mvpd_poundV_raw[i].vcs_mv = 0
 			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].ics_100ma= (uint32_t)((uint16_t)(((*((const uint8_t *)(l_buffer_inc)) << 8) | *((const uint8_t *)(l_buffer_inc) + 1))));
+			iv_attr_mvpd_poundV_raw[i].ics_100ma = 0
 			l_buffer_inc += 2;
 		}
 
-		chk_valid_poundv(false);
+		iv_pstates_enabled = false;
 
 		l_firstEqChiplet = l_eqChiplets[j];
 		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
@@ -452,7 +452,6 @@ void PlatPmPPB::get_mvpd_poundV()
 			iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
 		}
 	}
-	free(l_buffer);
 }
 
 #define NUM_OP_POINTS      4
@@ -769,13 +768,13 @@ bool PlatPmPPB::is_wov_underv_enabled()
 
 void PlatPmPPB::vpd_init(void)
 {
-	memset(&iv_raw_vpd_pts, 0, sizeof(iv_raw_vpd_pts));
-	memset(&iv_biased_vpd_pts, 0, sizeof(iv_biased_vpd_pts));
-	memset(&iv_poundW_data, 0, sizeof(iv_poundW_data));
-	memset(&iv_iddqt, 0, sizeof(iv_iddqt));
-	memset(iv_operating_points,0,sizeof(iv_operating_points));
-	memset(&iv_attr_mvpd_poundV_raw, 0, sizeof(iv_attr_mvpd_poundV_raw));
-	memset(&iv_attr_mvpd_poundV_biased, 0, sizeof(iv_attr_mvpd_poundV_biased));
+	iv_raw_vpd_pts = 0;
+	iv_biased_vpd_pts = 0;
+	iv_poundW_data = 0;
+	iv_iddqt = 0;
+	iv_operating_points = 0;
+	iv_attr_mvpd_poundV_raw = 0;
+	iv_attr_mvpd_poundV_biased = 0;
 
 	get_mvpd_poundV();
 
@@ -819,7 +818,7 @@ void PlatPmPPB::load_mvpd_operating_point ()
 	}
 }
 
-fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
+void PlatPmPPB::compute_boot_safe()
 {
 	// query VPD if any of the voltage attributes are zero
 	if(!iv_attrs.vdd_voltage_mv
@@ -837,30 +836,13 @@ fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
 		// set VCS voltage to UltraTurbo Voltage from MVPD data (if no override)
 		if (!iv_attrs.vcs_voltage_mv)
 		{
-			uint32_t l_int_vcs_mv = (iv_attr_mvpd_poundV_biased[POWERSAVE].vcs_mv);
-			uint32_t l_ics_ma = (iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma) * 100;
-			uint32_t l_ext_vcs_mv = sysparm_uplift(l_int_vcs_mv,
-					l_ics_ma,
-					revle32(0),
-					revle32(64),
-					revle32(0));
-			iv_attrs.vcs_voltage_mv = (l_ext_vcs_mv);
-
+			iv_attrs.vcs_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERSAVE].vcs_mv + (double)(iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma * 100 * revle32(64)) / 1000000);
 		}
 
 		// set VDN voltage to PowerSave Voltage from MVPD data (if no override)
 		if(!iv_attrs.vdn_voltage_mv)
 		{
-			uint32_t l_int_vdn_mv = (iv_attr_mvpd_poundV_biased[POWERBUS].vdd_mv);
-			uint32_t l_idn_ma = (iv_attr_mvpd_poundV_biased[POWERBUS].idd_100ma) * 100;
-			// Returns revle32
-			uint32_t l_ext_vdn_mv = sysparm_uplift(l_int_vdn_mv,
-					l_idn_ma,
-					revle32(0),
-					revle32(50),
-					revle32(0));
-
-			iv_attrs.vdn_voltage_mv = (l_ext_vdn_mv);
+			iv_attrs.vdn_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERBUS].vdd_mv + (double)(iv_attr_mvpd_poundV_biased[POWERBUS].idd_100ma * 100 * revle32(50)) / 1000000)
 		}
 	}
 	else
@@ -877,20 +859,7 @@ fapi2::ReturnCode PlatPmPPB::compute_boot_safe()
 	FAPI_ATTR_SET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
 }
 
-uint32_t sysparm_uplift(const uint32_t i_vpd_mv,
-						const uint32_t i_vpd_ma,
-						const uint32_t i_loadline_uohm,
-						const uint32_t i_distloss_uohm,
-						const uint32_t i_distoffset_uohm)
-{
-	return (uint32_t)((double)i_vpd_mv + (((double)(i_vpd_ma * (i_loadline_uohm + i_distloss_uohm)) / 1000 + (double)i_distoffset_uohm)) / 1000);
-	//                              mV +           (mA       *             uOhm                   ) / 1000 +                       uV
-	// mV + (mA * uOhm / 1000) / 1000
-	// mV + mV + mV
-}
-
-fapi2::ReturnCode
-avsInitExtVoltageControl(
+void avsInitExtVoltageControl(
 	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
 	const uint8_t i_avsBusNum,
 	const uint8_t i_o2sBridgeNum)

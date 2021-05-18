@@ -12,7 +12,7 @@ void* call_host_set_voltages(void *io_pArgs)
 }
 
 PlatPmPPB {
-	iv_procChip (i_target), iv_pstates_enabled(0), iv_resclk_enabled(0),
+	iv_procChip (i_target), iv_pstates_enabled(false), iv_resclk_enabled(0),
 	iv_vdm_enabled(0), iv_ivrm_enabled(0), iv_wof_enabled(0), iv_safe_voltage (0),
 	iv_safe_frequency(0), iv_reference_frequency_mhz(0), iv_reference_frequency_khz(0),
 	iv_frequency_step_khz(0), iv_proc_dpll_divider(0), iv_nest_freq_mhz(0),
@@ -164,7 +164,6 @@ void PlatPmPPB::attr_init(void)
 	iv_vdmpb.vid_compare_override_mv = 0;
 	iv_vdmpb.vdm_response = 0;
 
-	iv_pstates_enabled = true;
 	iv_resclk_enabled  = true;
 	iv_vdm_enabled     = true;
 	iv_ivrm_enabled    = true;
@@ -362,85 +361,25 @@ static void p9_setup_dpll_values(chiplet_id_t i_target)
 	}
 }
 
-static void p9_pm_get_poundv_bucket(
-    const fapi2::Target<fapi2::TARGET_TYPE_EQ>& i_target,
-    fapi2::voltageBucketData_t& o_data)
-{
-    fapi2::ATTR_POUNDV_BUCKET_DATA_Type l_bucketAttr;
-    FAPI_ATTR_GET(fapi2::ATTR_POUNDV_BUCKET_DATA, i_target, l_bucketAttr);
-    memcpy(&o_data, l_bucketAttr, sizeof(o_data));
-}
-
-void PlatPmPPB::chk_valid_poundv(const bool i_biased_state)
-{
-	const uint8_t   pv_op_order[4] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
-	uint8_t         i = 0;
-	bool            suspend_ut_check = false;
-	uint8_t         l_chiplet_num = iv_procChip.getChipletNumber();
-
-	VpdPoint        l_attr_mvpd_data[5];
-	memcpy(l_attr_mvpd_data,iv_attr_mvpd_poundV_raw,sizeof(l_attr_mvpd_data));
-
-	if (i_biased_state)
-	{
-		memcpy(l_attr_mvpd_data,iv_attr_mvpd_poundV_biased,sizeof(l_attr_mvpd_data));
-	}
-
-	// check valid operating points' values have this relationship (power save <= nominal <= turbo <= ultraturbo)
-	for (i = 1; i < 4; i++)
-	{
-		// does not execute for i = 4 meaning UltraTurbo
-		if (l_attr_mvpd_data[pv_op_order[i-1]].frequency_mhz > l_attr_mvpd_data[pv_op_order[i]].frequency_mhz
-		|| l_attr_mvpd_data[pv_op_order[i-1]].vdd_mv        > l_attr_mvpd_data[pv_op_order[i]].vdd_mv
-		|| l_attr_mvpd_data[pv_op_order[i-1]].idd_100ma     > l_attr_mvpd_data[pv_op_order[i]].idd_100ma
-		|| l_attr_mvpd_data[pv_op_order[i-1]].vcs_mv        > l_attr_mvpd_data[pv_op_order[i]].vcs_mv
-		|| l_attr_mvpd_data[pv_op_order[i-1]].ics_100ma     > l_attr_mvpd_data[pv_op_order[i]].ics_100ma)
-		{
-			iv_pstates_enabled = false;
-		}
-	}
-}
-
 void PlatPmPPB::get_mvpd_poundV()
 {
 	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
 	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
 	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
-	uint8_t    j                = 0;
-	uint8_t l_buffer[61]         = {0};
-	uint8_t*   l_buffer_inc     = NULL;
 
-	memset(&l_fstChlt_vpd_data, 0, sizeof(l_fstChlt_vpd_data));
-	iv_eq_chiplet_state = 0;
-
-	l_eqChiplets = iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
-	iv_eq_chiplet_state = l_eqChiplets.size();
-
-	for (j = 0; j < l_eqChiplets.size(); j++)
+	for (uint8_t j = 0; j < l_eqChiplets.size(); j++)
 	{
-		l_buffer = {0};
+		iv_attr_mvpd_poundV_raw.frequency_mhz  = {0};
+		iv_attr_mvpd_poundV_raw.vdd_mv = {0};
+		iv_attr_mvpd_poundV_raw.idd_100ma = {0};
+		iv_attr_mvpd_poundV_raw.vcs_mv = {0};
+		iv_attr_mvpd_poundV_raw.ics_100ma = {0};
 
-		l_buffer_inc = l_buffer;
-		l_buffer_inc++;
-		for (int i = 0; i <= 4; i++)
-		{
-			iv_attr_mvpd_poundV_raw[i].frequency_mhz  = 0
-			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].vdd_mv = 0
-			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].idd_100ma = 0
-			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].vcs_mv = 0
-			l_buffer_inc += 2;
-			iv_attr_mvpd_poundV_raw[i].ics_100ma = 0
-			l_buffer_inc += 2;
-		}
 
-		iv_pstates_enabled = false;
 
 		l_firstEqChiplet = l_eqChiplets[j];
-		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
-		memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
+		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
+		memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
 
 		if ((iv_poundV_raw_data.VddNomVltg    > l_fstChlt_vpd_data.VddNomVltg)
 		||	(iv_poundV_raw_data.VddPSVltg     > l_fstChlt_vpd_data.VddPSVltg)
@@ -449,7 +388,7 @@ void PlatPmPPB::get_mvpd_poundV()
 		||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
 		{
 			memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
-			iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;;
+			iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
 		}
 	}
 }
@@ -463,84 +402,99 @@ void PlatPmPPB::get_mvpd_poundV()
 
 void PlatPmPPB::get_extint_bias()
 {
-    double freq_bias[NUM_OP_POINTS];
-    double voltage_ext_vdd_bias[NUM_OP_POINTS];
-    double voltage_ext_vcs_bias;
-    double voltage_ext_vdn_bias;
+	memcpy(iv_attr_mvpd_poundV_biased, iv_attr_mvpd_poundV_raw, sizeof(iv_attr_mvpd_poundV_raw));
 
-	iv_bias[POWERSAVE].frequency_hp    = 0;
-	iv_bias[POWERSAVE].vdd_ext_hp      = 0;
-	iv_bias[POWERSAVE].vdd_int_hp      = 0;
-
-	iv_bias[NOMINAL].frequency_hp    = 0;
-	iv_bias[NOMINAL].vdd_ext_hp      = 0;
-	iv_bias[NOMINAL].vdd_int_hp      = 0;
-
-	iv_bias[TURBO].frequency_hp    = 0;
-	iv_bias[TURBO].vdd_ext_hp      = 0;
-	iv_bias[TURBO].vdd_int_hp      = 0;
-
-	iv_bias[ULTRA].frequency_hp    = 0;
-	iv_bias[ULTRA].vdd_ext_hp      = 0;
-	iv_bias[ULTRA].vdd_int_hp      = 0;
-
-    for (auto point = 0; point < NUM_OP_POINTS; p++)
-    {
-        iv_bias[point].vdn_ext_hp      = 0;
-        iv_bias[point].vcs_ext_hp      = 0;
-
-        freq_bias[point]                 = 1.0;
-        voltage_ext_vdd_bias[point]      = 1.0;
-    }
-
-    // VCS bias applied to all operating points
-    voltage_ext_vcs_bias = 1.0;
-
-    // VDN bias applied to all operating points
-    voltage_ext_vdn_bias = 1.0;
-
-    // Change the VPD frequency, VDD and VCS values with the bias multiplers
-    for (auto p = 0; p < NUM_OP_POINTS; p++)
-    {
-        double freq_mhz = ((double)iv_attr_mvpd_poundV_biased[p].frequency_mhz * freq_bias[p]);
-        double vdd_mv = ((double)iv_attr_mvpd_poundV_biased[p].vdd_mv * voltage_ext_vdd_bias[p]);
-        double vcs_mv = ((double)iv_attr_mvpd_poundV_biased[p].vcs_mv * voltage_ext_vcs_bias);
-
-        iv_attr_mvpd_poundV_biased[p].frequency_mhz = (uint16_t)internal_floor(freq_mhz);
-        iv_attr_mvpd_poundV_biased[p].vdd_mv        = (uint16_t)internal_ceil(vdd_mv);
-        iv_attr_mvpd_poundV_biased[p].vcs_mv        = (uint16_t)(vcs_mv);
-    }
-    double vdn_mv =
-           (( (double)iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv) * voltage_ext_vdn_bias);
-
-    iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv = (uint32_t)internal_ceil(vdn_mv);
-
-    return fapi2::FAPI2_RC_SUCCESS;
+	for (auto p = 0; p < NUM_OP_POINTS; p++)
+	{
+		iv_attr_mvpd_poundV_raw[p].frequency_mhz = (uint16_t)floor(iv_attr_mvpd_poundV_raw[p].frequency_mhz);
+		iv_attr_mvpd_poundV_raw[p].vdd_mv        = (uint16_t)ceil(iv_attr_mvpd_poundV_raw[p].vdd_mv);
+		iv_attr_mvpd_poundV_raw[p].vcs_mv        = (uint16_t)iv_attr_mvpd_poundV_raw[p].vcs_mv;
+	}
+	iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv = (uint32_t)ceil((double)iv_attr_mvpd_poundV_raw[VPD_PV_POWERBUS].vdd_mv);
 }
 
-void PlatPmPPB::apply_biased_values()
+static void PlatPmPPB::validate_quad_spec_data(void)
 {
-	memcpy(iv_attr_mvpd_poundV_biased,iv_attr_mvpd_poundV_raw,sizeof(iv_attr_mvpd_poundV_raw));
-	get_extint_bias();
-	chk_valid_poundv(BIASED);
+	uint32_t l_vdm_compare_raw_mv[NUM_OP_POINTS];
+	uint32_t l_vdm_compare_biased_mv[NUM_OP_POINTS];
+
+	for(size_t eq_chiplet_unit_pos = 0; eq_chiplet_unit_pos < 5; ++eq_chiplet_unit_pos)
+	{
+		if (!(iv_poundW_data.poundw[NOMINAL].vdm_vid_compare_per_quad[eq_chiplet_unit_pos])
+		&& !(iv_poundW_data.poundw[POWERSAVE].vdm_vid_compare_per_quad[eq_chiplet_unit_pos])
+		&& !(iv_poundW_data.poundw[TURBO].vdm_vid_compare_per_quad[eq_chiplet_unit_pos])
+		&& !(iv_poundW_data.poundw[ULTRA].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]))
+		{
+			iv_poundW_data.poundw[NOMINAL].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (iv_poundV_raw_data.VddNomVltg - 512) / 4;
+			iv_poundW_data.poundw[POWERSAVE].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (iv_poundV_raw_data.VddPSVltg - 512) / 4;
+			iv_poundW_data.poundw[TURBO].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (iv_poundV_raw_data.VddTurboVltg - 512) / 4;
+			iv_poundW_data.poundw[ULTRA].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (iv_poundV_raw_data.VddUTurboVltg - 512) / 4;
+		}
+		else if (!(iv_poundW_data.poundw[NOMINAL].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]) ||
+				 !(iv_poundW_data.poundw[POWERSAVE].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]) ||
+				 !(iv_poundW_data.poundw[TURBO].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]) ||
+				 !(iv_poundW_data.poundw[ULTRA].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]))
+		{
+			iv_vdm_enabled = false;
+			return;
+		}
+
+		iv_vdm_enabled = !(
+			iv_poundW_data.poundw[POWERSAVE].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] <= iv_poundW_data.poundw[NOMINAL].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]
+			&& iv_poundW_data.poundw[NOMINAL].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] <= iv_poundW_data.poundw[TURBO].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]
+			&& iv_poundW_data.poundw[TURBO].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] <= iv_poundW_data.poundw[ULTRA].vdm_vid_compare_per_quad[eq_chiplet_unit_pos]);
+		if(!iv_vdm_enabled)
+		{
+			return;
+		}
+
+		for (uint8_t i = 0; i < NUM_OP_POINTS; i++)
+		{
+			l_vdm_compare_biased_mv[i] = 512 + (iv_poundW_data.poundw[i].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] << 2);
+			if (l_vdm_compare_biased_mv[i] < 576)
+			{
+				l_vdm_compare_biased_mv[i] = 576;
+			}
+			iv_poundW_data.poundw[i].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (l_vdm_compare_biased_mv[i] - 512) >> 2;
+		}
+	}
 }
 
-#define VALIDATE_THRESHOLD_VALUES(w, x, y, z, state) \
-    if ((w > 0x7 && w != 0xC) || /* overvolt */   \
-        (x == 8) ||  (x == 9) || (x > 0xF) ||     \
-        (y == 8) ||  (y == 9) || (y > 0xF) ||     \
-        (z == 8) ||  (z == 9) || (z > 0xF)   )    \
-    { state = 0; }
+double ceil(double x)
+{
+	if ((x - (int)(x)) > 0)
+	{
+		return (int)x + 1;
+	}
+	return ((int)x);
+}
+
+double floor(double x)
+{
+	if(x >= 0)
+	{
+		return (int)x;
+	}
+	return (int)(x - 0.9999999999999999);
+}
+
+fapi2::ReturnCode p9_pm_get_poundw_bucket(
+    const fapi2::Target<fapi2::TARGET_TYPE_EQ>& i_target, fapi2::vdmData_t& o_data)
+{
+    fapi2::ATTR_POUNDW_BUCKET_DATA_Type l_bucketAttr;
+    FAPI_ATTR_GET(fapi2::ATTR_POUNDW_BUCKET_DATA, i_target, l_bucketAttr);
+    memcpy(&o_data,  l_bucketAttr, sizeof(l_bucketAttr));
+}
 
 void PlatPmPPB::get_mvpd_poundW (void)
 {
-    std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
-    fapi2::vdmData_t l_vdmBuf;
-    uint8_t    selected_eq      = 0;
-    uint8_t    bucket_id        = 0;
-    uint8_t    version_id       = 0;
+	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
+	fapi2::vdmData_t l_vdmBuf;
+	uint8_t    selected_eq      = 0;
+	uint8_t    bucket_id        = 0;
+	uint8_t    version_id       = 0;
 
-    const char*     pv_op_str[NUM_OP_POINTS] = PV_OP_ORDER_STR;
+	const char*     pv_op_str[NUM_OP_POINTS] = PV_OP_ORDER_STR;
 
 	// Exit if both VDM and WOF is disabled
 	if ((!is_vdm_enabled() && !is_wof_enabled()))
@@ -563,21 +517,17 @@ void PlatPmPPB::get_mvpd_poundW (void)
 		memset(&l_vdmBuf, 0, sizeof(l_vdmBuf));
 		FAPI_TRY(p9_pm_get_poundw_bucket(l_eqChiplets[selected_eq], l_vdmBuf));
 
-		bucket_id   =   l_vdmBuf.bucketId;
-		version_id  =   l_vdmBuf.version;
-
-
-		if( version_id < POUNDW_VERSION_30 )
+		POUNDW_VERSION_30 = 0x30,
+		if(l_vdmBuf.version < POUNDW_VERSION_30)
 		{
-			PoundW_data_per_quad  l_poundwPerQuad;
-			PoundW_data           l_poundw;
-			memcpy( &l_poundw, l_vdmBuf.vdmData, sizeof( PoundW_data ) );
-			memset( &l_poundwPerQuad, 0, sizeof(PoundW_data_per_quad) );
+			PoundW_data_per_quad l_poundwPerQuad;
+			PoundW_data          l_poundw;
+			memcpy(&l_poundw, l_vdmBuf.vdmData, sizeof(PoundW_data));
+			memset(&l_poundwPerQuad, 0, sizeof(PoundW_data_per_quad));
 
-			for( size_t op = 0; op <= ULTRA; op++ )
+			for(size_t op = 0; op <= ULTRA; op++ )
 			{
 				l_poundwPerQuad.poundw[op].ivdd_tdp_ac_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_ac_current_10ma;
-
 				l_poundwPerQuad.poundw[op].ivdd_tdp_dc_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_dc_current_10ma;
 				l_poundwPerQuad.poundw[op].vdm_overvolt_small_thresholds =   l_poundw.poundw[op].vdm_overvolt_small_thresholds;
 				l_poundwPerQuad.poundw[op].vdm_large_extreme_thresholds  =   l_poundw.poundw[op].vdm_large_extreme_thresholds;
@@ -597,25 +547,13 @@ void PlatPmPPB::get_mvpd_poundW (void)
 			memcpy(&l_vdmBuf.vdmData, &l_poundwPerQuad, sizeof( PoundW_data_per_quad ) );
 		}
 
-		//if we match with the bucket id, then we don't need to continue
-		if (iv_poundV_bucket_id == bucket_id)
+		if (iv_poundV_bucket_id == l_vdmBuf.bucketId)
 		{
 			break;
 		}
 	}
 
-	uint8_t l_poundw_static_data = 0;
-	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
-	FAPI_ATTR_GET(fapi2::ATTR_POUND_W_STATIC_DATA_ENABLE, FAPI_SYSTEM, l_poundw_static_data);
-
-	if (l_poundw_static_data)
-	{
-		memcpy (&iv_poundW_data, &g_vpdData, sizeof (g_vpdData));
-	}
-	else
-	{
-		memcpy (&iv_poundW_data, l_vdmBuf.vdmData, sizeof (l_vdmBuf.vdmData));
-	}
+	memcpy (&iv_poundW_data, l_vdmBuf.vdmData, sizeof (l_vdmBuf.vdmData));
 
 	//Re-ordering to Natural order
 	// When we read the data from VPD image the order will be N,PS,T,UT.
@@ -683,36 +621,29 @@ void PlatPmPPB::get_mvpd_poundW (void)
 		break;
 	}
 
-	// validate threshold values
-	bool l_threshold_value_state = 1;
-
-	validate_quad_spec_data( );
+	validate_quad_spec_data();
 
 	for (uint8_t p = 0; p < NUM_OP_POINTS; ++p)
 	{
-		VALIDATE_THRESHOLD_VALUES(((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F), // overvolt
-									((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F),      // small
-									((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F),  // large
-									((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F),       // extreme
-									l_threshold_value_state);
-
-		if (!l_threshold_value_state)
-		{
-			iv_vdm_enabled = false;
-		}
-	}
-
-	bool l_frequency_value_state = 1;
-
-	for (uint8_t p = 0; p < NUM_OP_POINTS; ++p)
-	{
-		VALIDATE_FREQUENCY_DROP_VALUES(((iv_poundW_data.poundw[p].vdm_normal_freq_drop) & 0x0F),        // N_L
-										((iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F),   // N_S
-										((iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F), // L_S
-										((iv_poundW_data.poundw[p].vdm_normal_freq_return) & 0x0F),      // S_N
-										l_frequency_value_state);
-
-		if (!l_frequency_value_state)
+		if((((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F) > 0x7 && ((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F) != 0xC)
+		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) == 8)
+		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) == 9)
+		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) > 0xF)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) == 8)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) == 9)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) > 0xF)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) == 8)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) == 9)
+		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) > 0xF)
+		|| (iv_poundW_data.poundw[p].vdm_normal_freq_drop) & 0x0F > 7
+		|| (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F > iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F
+		|| (iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F
+			> iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F - iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F
+		|| (iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F > (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F)
+		|| (((iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F)
+		   | (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F
+		   | (iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F
+		   | iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F) == 0))
 		{
 			iv_vdm_enabled = false;
 		}
@@ -720,29 +651,24 @@ void PlatPmPPB::get_mvpd_poundW (void)
 
 	//If we have reached this point, that means VDM is ok to be enabled. Only then we try to
 	//enable wov undervolting
-	if (((iv_poundW_data.resistance_data.r_undervolt_allowed) || (iv_attrs.attr_wov_underv_force)) && is_wov_underv_enabled())
-	{
-		iv_wov_underv_enabled = true;
-	} else {
-		iv_wov_underv_enabled = false;
-	}
+	iv_wov_underv_enabled = (iv_poundW_data.resistance_data.r_undervolt_allowed || iv_attrs.attr_wov_underv_force) && is_wov_underv_enabled();
 
 
 fapi_try_exit:
 
-    // Given #W has both VDM and WOF content, a failure needs to disable both
-    if (fapi2::current_err != fapi2::FAPI2_RC_SUCCESS)
-    {
-        iv_vdm_enabled = false;
-        iv_wof_enabled = false;
-        iv_wov_underv_enabled = false;
-        iv_wov_overv_enabled = false;
-    }
+	// Given #W has both VDM and WOF content, a failure needs to disable both
+	if (fapi2::current_err != fapi2::FAPI2_RC_SUCCESS)
+	{
+		iv_vdm_enabled = false;
+		iv_wof_enabled = false;
+		iv_wov_underv_enabled = false;
+		iv_wov_overv_enabled = false;
+	}
 
-    if (!(iv_vdm_enabled))
-    {
-        large_jump_defaults();
-    }
+	if (!(iv_vdm_enabled))
+	{
+		large_jump_defaults();
+	}
 }
 
 bool PlatPmPPB::is_vdm_enabled()
@@ -761,9 +687,9 @@ bool PlatPmPPB::is_vdm_enabled()
 
 bool PlatPmPPB::is_wov_underv_enabled()
 {
-    return(!(iv_attrs.attr_wov_underv_disable) &&
-         iv_wov_underv_enabled)
-         ? true : false;
+	return(!(iv_attrs.attr_wov_underv_disable) &&
+		 iv_wov_underv_enabled)
+		 ? true : false;
 }
 
 void PlatPmPPB::vpd_init(void)
@@ -778,11 +704,17 @@ void PlatPmPPB::vpd_init(void)
 
 	get_mvpd_poundV();
 
-	if(!iv_eq_chiplet_state)
+	if(!iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL).size())
 	{
 		break;
 	}
-	apply_biased_values();
+	iv_bias[].frequency_hp    = {0};
+	iv_bias[].vdd_ext_hp      = {0};
+	iv_bias[].vdd_int_hp      = {0};
+	iv_bias[].vdn_ext_hp      = {0};
+	iv_bias[].vcs_ext_hp      = {0};
+
+	get_extint_bias();
 	get_mvpd_poundW();
 	iv_wof_enabled = false;
 	load_mvpd_operating_point();

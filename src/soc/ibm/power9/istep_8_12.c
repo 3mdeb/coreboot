@@ -110,16 +110,16 @@ void PlatPmPPB::attr_init(void)
 	iv_attrs.freq_proc_refclock_khz = 133333;
 	iv_attrs.attr_freq_dpll_refclock_khz = 133333
 	iv_attrs.proc_dpll_divider = 8
-	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_VDM_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_vdm_not_supported); // 1 if EC == 0x20
-	FAPI_ATTR_GET(fapi2::CHIP_EC_FEATURE_WOF_NOT_SUPPORTED, iv_procChip, iv_attrs.attr_dd_wof_not_supported); // 1 if EC == 0x20
+	iv_attrs.vcs_voltage_mv = 0;
+	iv_attrs.vdd_voltage_mv = 0;
+	iv_attrs.vdn_voltage_mv = 0;
+	iv_attrs.attr_dd_vdm_not_supported = CHIP_EC == 0x20;
+	iv_attrs.attr_dd_wof_not_supported = CHIP_EC == 0x20;
 	FAPI_ATTR_GET(fapi2::FREQ_CORE_FLOOR_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_floor_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, FAPI_SYSTEM, iv_attrs.attr_nest_frequency_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_CORE_CEILING_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_ceiling_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ,iv_procChip, iv_attrs.attr_pm_safe_frequency_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
-	FAPI_ATTR_GET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
-	FAPI_ATTR_GET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
-	FAPI_ATTR_GET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
 
 	#define SET_DEFAULT(_attr_name, _attr_default) \
 	if (!(iv_attrs._attr_name)) \
@@ -174,46 +174,156 @@ void PlatPmPPB::attr_init(void)
 	iv_nest_freq_mhz      = iv_attrs.attr_nest_frequency_mhz;
 }
 
+static void PlatPmPPB::compute_vpd_pts(void)
+{
+    uint32_t l_vdd_loadline_uohm = revle32(iv_vdd_sysparam.loadline_uohm);
+    uint32_t l_vdd_distloss_uohm = revle32(iv_vdd_sysparam.distloss_uohm);
+    uint32_t l_vdd_distoffset_uv = revle32(iv_vdd_sysparam.distoffset_uv);
+    uint32_t l_vcs_loadline_uohm = revle32(iv_vcs_sysparam.loadline_uohm);
+    uint32_t l_vcs_distloss_uohm = revle32(iv_vcs_sysparam.distloss_uohm);
+    uint32_t l_vcs_distoffset_uv = revle32(iv_vcs_sysparam.distoffset_uv);
+
+    for (int p = 0; p < NUM_OP_POINTS; p++)
+    {
+        iv_operating_points[VPD_PT_SET_RAW][p].vdd_mv = iv_raw_vpd_pts[p].vdd_mv;
+        iv_operating_points[VPD_PT_SET_RAW][p].vcs_mv = iv_raw_vpd_pts[p].vcs_mv;
+        iv_operating_points[VPD_PT_SET_RAW][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
+        iv_operating_points[VPD_PT_SET_RAW][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
+        iv_operating_points[VPD_PT_SET_RAW][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
+        iv_operating_points[VPD_PT_SET_RAW][p].pstate = iv_raw_vpd_pts[p].pstate;
+    }
+
+    for (int p = 0; p < NUM_OP_POINTS; p++)
+    {
+        iv_operating_points[VPD_PT_SET_SYSP][p].vdd_mv = sysparm_uplift(iv_raw_vpd_pts[p].vdd_mv, iv_raw_vpd_pts[p].idd_100ma * 100, l_vdd_loadline_uohm, l_vdd_distloss_uohm, l_vdd_distoffset_uv);
+        iv_operating_points[VPD_PT_SET_SYSP][p].vcs_mv = sysparm_uplift(iv_raw_vpd_pts[p].vcs_mv, iv_raw_vpd_pts[p].ics_100ma * 100, l_vcs_loadline_uohm, l_vcs_distloss_uohm, l_vcs_distoffset_uv);
+        iv_operating_points[VPD_PT_SET_SYSP][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
+        iv_operating_points[VPD_PT_SET_SYSP][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
+        iv_operating_points[VPD_PT_SET_SYSP][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
+        iv_operating_points[VPD_PT_SET_SYSP][p].pstate = iv_raw_vpd_pts[p].pstate;
+    }
+
+    for (int p = 0; p < NUM_OP_POINTS; p++)
+    {
+        iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vdd_mv, iv_bias[p].vdd_ext_hp);
+        iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vcs_mv, iv_bias[p].vcs_ext_hp);
+        iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz = bias_adjust_mhz(iv_raw_vpd_pts[p].frequency_mhz, iv_bias[p].frequency_hp);
+        iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma = iv_biased_vpd_pts[p].idd_100ma;
+        iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma = iv_biased_vpd_pts[p].ics_100ma;
+    }
+
+    iv_reference_frequency_khz = (iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz) * 1000;
+
+    for (int p = 0; p < NUM_OP_POINTS; p++)
+    {
+        iv_operating_points[VPD_PT_SET_BIASED][p].pstate = (((iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz - iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz) * 1000) / iv_frequency_step_khz);
+    }
+
+    for (int p = 0; p < NUM_OP_POINTS; p++)
+    {
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vdd_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv, iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma * 100, l_vdd_loadline_uohm, l_vdd_distloss_uohm, l_vdd_distoffset_uv);
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vcs_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv, iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma * 100, l_vcs_loadline_uohm, l_vcs_distloss_uohm, l_vcs_distoffset_uv);
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].idd_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma;
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].ics_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma;
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].frequency_mhz = iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz;
+        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].pstate = iv_operating_points[VPD_PT_SET_BIASED][p].pstate;
+    }
+}
+
+void PlatPmPPB::safe_mode_init(void)
+{
+    uint8_t l_ps_pstate = 0;
+    Safe_mode_parameters l_safe_mode_values;
+    uint32_t l_ps_freq_khz = iv_operating_points[VPD_PT_SET_BIASED][POWERSAVE].frequency_mhz * 1000;
+
+	if(!iv_attrs.attr_pm_safe_voltage_mv && !iv_attrs.attr_pm_safe_frequency_mhz)
+	{
+		freq2pState( l_ps_freq_khz, &l_ps_pstate);
+		safe_mode_computation(l_ps_pstate, &l_safe_mode_values);
+		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip,iv_attrs.attr_pm_safe_frequency_mhz);
+		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
+	}
+}
+
+void PlatPmPPB::compute_boot_safe()
+{
+	iv_raw_vpd_pts = 0;
+	iv_biased_vpd_pts = 0;
+	iv_poundW_data = 0;
+	iv_iddqt = 0;
+	iv_operating_points = 0;
+	iv_attr_mvpd_poundV_raw = 0;
+	iv_attr_mvpd_poundV_biased = 0;
+
+	iv_attr_mvpd_poundV_raw[].frequency_mhz  = {0};
+	iv_attr_mvpd_poundV_raw[].vdd_mv = {0};
+	iv_attr_mvpd_poundV_raw[].idd_100ma = {0};
+	iv_attr_mvpd_poundV_raw[].vcs_mv = {0};
+	iv_attr_mvpd_poundV_raw[].ics_100ma = {0};
+
+	vpd_init();
+	compute_vpd_pts();
+	safe_mode_init();
+
+	iv_attrs.vcs_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERSAVE].vcs_mv
+		+ (double)(iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma * revle32(64)) / 10000);
+	iv_attrs.vdn_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERBUS].vdd_mv
+		+ (double)(iv_attr_mvpd_poundV_biased[POWERBUS].idd_100ma * revle32(50)) / 10000)
+
+	FAPI_ATTR_SET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
+	FAPI_ATTR_SET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
+	FAPI_ATTR_SET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
+}
+
+static void p9_setup_dpll_values(chiplet_id_t i_target)
+{
+	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
+	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
+	l_eqChiplets = i_target.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
+	fapi2::buffer<uint64_t> l_data64;
+	fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ_Type l_attr_safe_mode_freq;
+	fapi2::ATTR_SAFE_MODE_VOLTAGE_MV_Type l_attr_safe_mode_mv;
+	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, i_target, l_attr_safe_mode_freq);
+	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, i_target, l_attr_safe_mode_mv);
+	if (!l_attr_safe_mode_freq || !l_attr_safe_mode_mv)
+	{
+		return;
+	}
+	for (auto l_itr = l_eqChiplets.begin(); l_itr != l_eqChiplets.end(); ++l_itr)
+	{
+		fapi2::getScom(*l_itr, EQ_QPPM_DPLL_FREQ , l_data64);
+		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 8000 / 133333;
+		l_data64.insertFromRight<1, 11>(l_safe_mode_dpll_value);
+		l_data64.insertFromRight<17, 11>(l_safe_mode_dpll_value);
+		l_data64.insertFromRight<33, 11>(l_safe_mode_dpll_value);
+		fapi2::putScom(*l_itr, EQ_QPPM_DPLL_FREQ, l_data64);
+
+		fapi2::getScom(*l_itr, EQ_QPPM_VDMCFGR, l_data64);
+		l_data64.insertFromRight<0, 8>((l_attr_safe_mode_mv - 512) / 4);
+		fapi2::putScom(*l_itr, EQ_QPPM_VDMCFGR, l_data64);
+	}
+}
+
 void p9_setup_evid(chiplet_id_t proc_chip_target)
 {
 	pm_pstate_parameter_block::AttributeList attrs;
-	// Instantiate PPB object
 	PlatPmPPB l_pmPPB(proc_chip_target);
 	l_pmPPB.attr_init();
-	// Compute the boot/safe values
 	l_pmPPB.compute_boot_safe();
 	memcpy(&attrs ,&iv_attrs, sizeof(iv_attrs));
-	// Set the DPLL frequency values to safe mode values
 	p9_setup_dpll_values(proc_chip_target);
 
 	if (attrs.vdd_voltage_mv)
 	{
-		p9_setup_evid_voltageWrite(
-			proc_chip_target,
-			0,
-			0,
-			attrs.vdd_voltage_mv,
-			VDD_SETUP); // VDD_SETUP = 6
+		p9_setup_evid_voltageWrite(proc_chip_target, 0, 0, attrs.vdd_voltage_mv, VDD_SETUP); // VDD_SETUP = 6
 	}
-
 	if (attrs.vdn_voltage_mv)
 	{
-		p9_setup_evid_voltageWrite(
-			proc_chip_target,
-			1,
-			0,
-			attrs.vdn_voltage_mv,
-			VDN_SETUP); // VDN_SETUP = 7
+		p9_setup_evid_voltageWrite(proc_chip_target, 1, 0, attrs.vdn_voltage_mv, VDN_SETUP); // VDN_SETUP = 7
 	}
-
 	if (attrs.vcs_voltage_mv)
 	{
-		p9_setup_evid_voltageWrite(
-			proc_chip_target,
-			0,
-			1,
-			attrs.vcs_voltage_mv,
-			VCS_SETUP); // VCS_SETUP = 8
+		p9_setup_evid_voltageWrite(proc_chip_target, 0, 1, attrs.vcs_voltage_mv, VCS_SETUP); // VCS_SETUP = 8
 	}
 }
 
@@ -234,17 +344,11 @@ void p9_setup_evid_voltageWrite(
 	// VCS_SETUP = 8
 	if (i_evid_value != VCS_SETUP)
 	{
-		// Initialize the buses
 		avsInitExtVoltageControl(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 	}
 
-	// Drive AVS Bus with a frame value 0xFFFFFFFF (idle frame) to
-	// initialize the AVS slave
 	avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
 
-	// Read the present voltage
-
-	// This loop is to ensrue AVSBus Master and Slave are in sync
 	l_count = 0;
 	do
 	{
@@ -322,74 +426,6 @@ void p9_setup_evid_voltageWrite(
 			l_count++;
 		}
 		while (!l_goodResponse);
-	}
-}
-
-static void p9_setup_dpll_values(chiplet_id_t i_target)
-{
-	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
-	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
-	l_eqChiplets = i_target.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
-	fapi2::buffer<uint64_t> l_data64;
-	fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ_Type l_attr_safe_mode_freq;
-	fapi2::ATTR_SAFE_MODE_VOLTAGE_MV_Type l_attr_safe_mode_mv;
-	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, i_target, l_attr_safe_mode_freq);
-	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, i_target, l_attr_safe_mode_mv);
-	if (!l_attr_safe_mode_freq || !l_attr_safe_mode_mv)
-	{
-		return;
-	}
-	for (auto l_itr = l_eqChiplets.begin(); l_itr != l_eqChiplets.end(); ++l_itr)
-	{
-		fapi2::getScom(*l_itr, EQ_QPPM_DPLL_FREQ , l_data64);
-		// Convert frequency value to a format that needs to be written to the
-		// register
-		uint32_t l_safe_mode_dpll_value = l_attr_safe_mode_freq * 8000 / 133333;
-		l_data64.insertFromRight<1, 11>(l_safe_mode_dpll_value);
-		l_data64.insertFromRight<17, 11>(l_safe_mode_dpll_value);
-		l_data64.insertFromRight<33, 11>(l_safe_mode_dpll_value);
-		//
-		fapi2::putScom(*l_itr, EQ_QPPM_DPLL_FREQ, l_data64);
-		//Update VDM VID compare to safe mode value
-		//Convert same mode value to a format that needs to be written to
-		//the register
-		uint32_t l_vdm_vid_value = (l_attr_safe_mode_mv - 512) / 4;
-		// EQ_QPPM_VDMCFGR = 0x100F01B6
-		fapi2::getScom(*l_itr, EQ_QPPM_VDMCFGR, l_data64);
-		l_data64.insertFromRight<0, 8>(l_vdm_vid_value);
-		fapi2::putScom(*l_itr, EQ_QPPM_VDMCFGR, l_data64);
-	}
-}
-
-void PlatPmPPB::get_mvpd_poundV()
-{
-	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
-	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
-	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
-
-	for (uint8_t j = 0; j < l_eqChiplets.size(); j++)
-	{
-		iv_attr_mvpd_poundV_raw.frequency_mhz  = {0};
-		iv_attr_mvpd_poundV_raw.vdd_mv = {0};
-		iv_attr_mvpd_poundV_raw.idd_100ma = {0};
-		iv_attr_mvpd_poundV_raw.vcs_mv = {0};
-		iv_attr_mvpd_poundV_raw.ics_100ma = {0};
-
-
-
-		l_firstEqChiplet = l_eqChiplets[j];
-		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
-		memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
-
-		if ((iv_poundV_raw_data.VddNomVltg    > l_fstChlt_vpd_data.VddNomVltg)
-		||	(iv_poundV_raw_data.VddPSVltg     > l_fstChlt_vpd_data.VddPSVltg)
-		||	(iv_poundV_raw_data.VddTurboVltg  > l_fstChlt_vpd_data.VddTurboVltg)
-		||	(iv_poundV_raw_data.VddUTurboVltg > l_fstChlt_vpd_data.VddUTurboVltg)
-		||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
-		{
-			memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
-			iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
-		}
 	}
 }
 
@@ -478,26 +514,10 @@ double floor(double x)
 	return (int)(x - 0.9999999999999999);
 }
 
-fapi2::ReturnCode p9_pm_get_poundw_bucket(
-    const fapi2::Target<fapi2::TARGET_TYPE_EQ>& i_target, fapi2::vdmData_t& o_data)
-{
-    fapi2::ATTR_POUNDW_BUCKET_DATA_Type l_bucketAttr;
-    FAPI_ATTR_GET(fapi2::ATTR_POUNDW_BUCKET_DATA, i_target, l_bucketAttr);
-    memcpy(&o_data,  l_bucketAttr, sizeof(l_bucketAttr));
-}
-
 void PlatPmPPB::get_mvpd_poundW (void)
 {
-	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
-	fapi2::vdmData_t l_vdmBuf;
-	uint8_t    selected_eq      = 0;
-	uint8_t    bucket_id        = 0;
-	uint8_t    version_id       = 0;
-
-	const char*     pv_op_str[NUM_OP_POINTS] = PV_OP_ORDER_STR;
-
 	// Exit if both VDM and WOF is disabled
-	if ((!is_vdm_enabled() && !is_wof_enabled()))
+	if (!(CHIPE_EC > 0x20 && iv_vdm_enabled) && !(CHIP_EC > 0x20 && iv_wof_enabled))
 	{
 		iv_vdm_enabled = false;
 		iv_wof_enabled = false;
@@ -505,91 +525,59 @@ void PlatPmPPB::get_mvpd_poundW (void)
 		iv_wov_overv_enabled = false;
 		break;
 	}
-
+	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
 	l_eqChiplets = iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL);
 
-	for (selected_eq = 0; selected_eq < l_eqChiplets.size(); selected_eq++)
+
+	fapi2::vdmData_t l_vdmBuf;
+	memset(&l_vdmBuf, 0, sizeof(l_vdmBuf));
+	memset(&l_vdmBuf, 0, sizeof(l_vdmBuf));
+	PoundW_data_per_quad l_poundwPerQuad;
+	PoundW_data          l_poundw;
+	memset(&l_poundw, 0, sizeof(PoundW_data));
+	memset(&l_poundwPerQuad, 0, sizeof(PoundW_data_per_quad));
+
+	l_poundwPerQuad.poundw[].ivdd_tdp_ac_current_10ma      = 0;
+	l_poundwPerQuad.poundw[].ivdd_tdp_dc_current_10ma      = 0;
+	l_poundwPerQuad.poundw[].vdm_overvolt_small_thresholds = 0;
+	l_poundwPerQuad.poundw[].vdm_large_extreme_thresholds  = 0;
+	l_poundwPerQuad.poundw[].vdm_normal_freq_drop          = 0;
+	l_poundwPerQuad.poundw[].vdm_normal_freq_return        = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[0]   = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[1]   = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[2]   = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[3]   = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[4]   = 0;
+	l_poundwPerQuad.poundw[].vdm_vid_compare_per_quad[5]   = 0;
+
+	const uint32_t LEGACY_RESISTANCE_ENTRY_SIZE =  10;
+	memcpy(&l_poundwPerQuad.resistance_data, &l_poundw.resistance_data , LEGACY_RESISTANCE_ENTRY_SIZE);
+	l_poundwPerQuad.resistance_data.r_undervolt_allowed = l_poundw.undervolt_tested;
+	memset(&l_vdmBuf.vdmData, 0, sizeof(l_vdmBuf.vdmData));
+	memcpy(&l_vdmBuf.vdmData, &l_poundwPerQuad, sizeof(PoundW_data_per_quad));
+
+	if (iv_poundV_bucket_id == l_vdmBuf.bucketId)
 	{
-		uint8_t l_chipletNum = 0xFF;
-
-		FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, l_eqChiplets[selected_eq], l_chipletNum);
-		// clear out buffer to known value before calling fapiGetMvpdField
-		memset(&l_vdmBuf, 0, sizeof(l_vdmBuf));
-		FAPI_TRY(p9_pm_get_poundw_bucket(l_eqChiplets[selected_eq], l_vdmBuf));
-
-		POUNDW_VERSION_30 = 0x30,
-		if(l_vdmBuf.version < POUNDW_VERSION_30)
-		{
-			PoundW_data_per_quad l_poundwPerQuad;
-			PoundW_data          l_poundw;
-			memcpy(&l_poundw, l_vdmBuf.vdmData, sizeof(PoundW_data));
-			memset(&l_poundwPerQuad, 0, sizeof(PoundW_data_per_quad));
-
-			for(size_t op = 0; op <= ULTRA; op++ )
-			{
-				l_poundwPerQuad.poundw[op].ivdd_tdp_ac_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_ac_current_10ma;
-				l_poundwPerQuad.poundw[op].ivdd_tdp_dc_current_10ma      =   l_poundw.poundw[op].ivdd_tdp_dc_current_10ma;
-				l_poundwPerQuad.poundw[op].vdm_overvolt_small_thresholds =   l_poundw.poundw[op].vdm_overvolt_small_thresholds;
-				l_poundwPerQuad.poundw[op].vdm_large_extreme_thresholds  =   l_poundw.poundw[op].vdm_large_extreme_thresholds;
-				l_poundwPerQuad.poundw[op].vdm_normal_freq_drop          =   l_poundw.poundw[op].vdm_normal_freq_drop;
-				l_poundwPerQuad.poundw[op].vdm_normal_freq_return        =   l_poundw.poundw[op].vdm_normal_freq_return;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[0]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[1]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[2]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[3]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[4]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-				l_poundwPerQuad.poundw[op].vdm_vid_compare_per_quad[5]   =   l_poundw.poundw[op].vdm_vid_compare_ivid;
-			}
-
-			memcpy( &l_poundwPerQuad.resistance_data, &l_poundw.resistance_data , LEGACY_RESISTANCE_ENTRY_SIZE );
-			l_poundwPerQuad.resistance_data.r_undervolt_allowed =   l_poundw.undervolt_tested;
-			memset(&l_vdmBuf.vdmData, 0, sizeof(l_vdmBuf.vdmData));
-			memcpy(&l_vdmBuf.vdmData, &l_poundwPerQuad, sizeof( PoundW_data_per_quad ) );
-		}
-
-		if (iv_poundV_bucket_id == l_vdmBuf.bucketId)
-		{
-			break;
-		}
+		break;
 	}
 
-	memcpy (&iv_poundW_data, l_vdmBuf.vdmData, sizeof (l_vdmBuf.vdmData));
-
-	//Re-ordering to Natural order
-	// When we read the data from VPD image the order will be N,PS,T,UT.
-	// But we need the order PS,N,T,UT.. hence we are swapping the data
-	// between PS and Nominal.
-	poundw_entry_per_quad_t l_tmp_data;
-	memset( &l_tmp_data ,0, sizeof(poundw_entry_per_quad_t));
-	memcpy (&l_tmp_data,
-			&(iv_poundW_data.poundw[VPD_PV_NOMINAL]),
-			sizeof (poundw_entry_per_quad_t));
-
-	memcpy (&(iv_poundW_data.poundw[VPD_PV_NOMINAL]),
-			&(iv_poundW_data.poundw[VPD_PV_POWERSAVE]),
-			sizeof(poundw_entry_per_quad_t));
-
-	memcpy (&(iv_poundW_data.poundw[VPD_PV_POWERSAVE]),
-			&l_tmp_data,
-			sizeof(poundw_entry_per_quad_t));
+	memcpy(&iv_poundW_data, l_vdmBuf.vdmData, sizeof(l_vdmBuf.vdmData));
+	memcpy(&(iv_poundW_data.poundw[VPD_PV_NOMINAL]), &iv_poundW_data.poundw[VPD_PV_POWERSAVE], sizeof(poundw_entry_per_quad_t));
+	memcpy(&(iv_poundW_data.poundw[VPD_PV_POWERSAVE]), &iv_poundW_data.poundw[VPD_PV_NOMINAL], sizeof(poundw_entry_per_quad_t));
 
 	// If the #W version is less than 3, validate Turbo VDM large threshold
 	// not larger than -32mV. This filters out parts that have bad VPD.  If
 	// this check fails, log a recovered error, mark the VDMs disabled and
 	// break out of the reset of the checks.
-	uint32_t turbo_vdm_large_threshhold =
-		(iv_poundW_data.poundw[TURBO].vdm_large_extreme_thresholds >> 4) & 0x0F;
-
-	if (version_id < FULLY_VALID_POUNDW_VERSION &&
-		g_GreyCodeIndexMapping[turbo_vdm_large_threshhold] > GREYCODE_INDEX_M32MV)
+	uint32_t turbo_vdm_large_threshhold = (iv_poundW_data.poundw[TURBO].vdm_large_extreme_thresholds >> 4) & 0x0F;
+	if (l_vdmBuf.version < FULLY_VALID_POUNDW_VERSION && g_GreyCodeIndexMapping[turbo_vdm_large_threshhold] > GREYCODE_INDEX_M32MV)
 	{
 		iv_vdm_enabled = false;
 		break;
-
 	}
 
 	// Validate the WOF content is non-zero if WOF is enabled
-	if (is_wof_enabled())
+	if (CHIP_EC > 0x20 && iv_wof_enabled)
 	{
 		bool b_tdp_ac = true;
 		bool b_tdp_dc = true;
@@ -615,94 +603,66 @@ void PlatPmPPB::get_mvpd_poundW (void)
 
 	// The rest of the processing here is all checking of the VDM content
 	// within #W.  If VDMs are not enabled (or supported), skip all of it
-	if (!is_vdm_enabled())
+	if (CHIPE_EC < 0x20)
 	{
 		iv_vdm_enabled = false;
-		break;
+		return;
 	}
 
 	validate_quad_spec_data();
 
-	for (uint8_t p = 0; p < NUM_OP_POINTS; ++p)
-	{
-		if((((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F) > 0x7 && ((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F) != 0xC)
-		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) == 8)
-		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) == 9)
-		|| (((iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds) & 0x0F) > 0xF)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) == 8)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) == 9)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds >> 4) & 0x0F) > 0xF)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) == 8)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) == 9)
-		|| (((iv_poundW_data.poundw[p].vdm_large_extreme_thresholds) & 0x0F) > 0xF)
-		|| (iv_poundW_data.poundw[p].vdm_normal_freq_drop) & 0x0F > 7
-		|| (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F > iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F
-		|| (iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F
-			> iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F - iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F
-		|| (iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F > (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F)
-		|| (((iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F)
-		   | (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F
-		   | (iv_poundW_data.poundw[p].vdm_normal_freq_return >> 4) & 0x0F
-		   | iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F) == 0))
-		{
-			iv_vdm_enabled = false;
-		}
-	}
-
-	//If we have reached this point, that means VDM is ok to be enabled. Only then we try to
-	//enable wov undervolting
-	iv_wov_underv_enabled = (iv_poundW_data.resistance_data.r_undervolt_allowed || iv_attrs.attr_wov_underv_force) && is_wov_underv_enabled();
-
-
-fapi_try_exit:
-
-	// Given #W has both VDM and WOF content, a failure needs to disable both
-	if (fapi2::current_err != fapi2::FAPI2_RC_SUCCESS)
+	if((((iv_poundW_data.poundw[].vdm_overvolt_small_thresholds >> 4) & 0x0F) > 0x7 && (iv_poundW_data.poundw[p].vdm_overvolt_small_thresholds >> 4) & 0x0F != 0xC)
+	|| (((iv_poundW_data.poundw[].vdm_overvolt_small_thresholds) & 0x0F) == 8)
+	|| (((iv_poundW_data.poundw[].vdm_overvolt_small_thresholds) & 0x0F) == 9)
+	|| (((iv_poundW_data.poundw[].vdm_overvolt_small_thresholds) & 0x0F) > 0xF)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds >> 4) & 0x0F) == 8)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds >> 4) & 0x0F) == 9)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds >> 4) & 0x0F) > 0xF)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds) & 0x0F) == 8)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds) & 0x0F) == 9)
+	|| (((iv_poundW_data.poundw[].vdm_large_extreme_thresholds) & 0x0F) > 0xF)
+	|| (iv_poundW_data.poundw[].vdm_normal_freq_drop) & 0x0F > 7
+	|| (iv_poundW_data.poundw[].vdm_normal_freq_drop >> 4) & 0x0F > iv_poundW_data.poundw[p].vdm_normal_freq_drop & 0x0F
+	|| (iv_poundW_data.poundw[].vdm_normal_freq_return >> 4) & 0x0F
+		> iv_poundW_data.poundw[].vdm_normal_freq_drop & 0x0F - iv_poundW_data.poundw[p].vdm_normal_freq_return & 0x0F
+	|| (iv_poundW_data.poundw[].vdm_normal_freq_return & 0x0F > (iv_poundW_data.poundw[p].vdm_normal_freq_drop >> 4) & 0x0F)
+	|| (((iv_poundW_data.poundw[].vdm_normal_freq_drop & 0x0F)
+		| (iv_poundW_data.poundw[].vdm_normal_freq_drop >> 4) & 0x0F
+		| (iv_poundW_data.poundw[].vdm_normal_freq_return >> 4) & 0x0F
+		| iv_poundW_data.poundw[].vdm_normal_freq_return & 0x0F) == 0))
 	{
 		iv_vdm_enabled = false;
-		iv_wof_enabled = false;
-		iv_wov_underv_enabled = false;
-		iv_wov_overv_enabled = false;
 	}
 
-	if (!(iv_vdm_enabled))
+	iv_wov_underv_enabled =
+		(iv_poundW_data.resistance_data.r_undervolt_allowed || iv_attrs.attr_wov_underv_force)
+		&& !(iv_attrs.attr_wov_underv_disable)
+		&& iv_wov_underv_enabled;
+
+	if (!iv_vdm_enabled)
 	{
-		large_jump_defaults();
+		iv_poundW_data.poundw[POWERSAVE].vdm_normal_freq_drop = 4;
+		iv_poundW_data.poundw[NOMINAL].vdm_normal_freq_drop = 4;
 	}
-}
-
-bool PlatPmPPB::is_vdm_enabled()
-{
-	const fapi2::Target<fapi2::TARGET_TYPE_SYSTEM> FAPI_SYSTEM;
-	uint8_t attr_dd_vdm_not_supported;
-	uint8_t attr_system_vdm_disable;
-
-	FAPI_ATTR_GET(fapi2::ATTR_SYSTEM_VDM_DISABLE, FAPI_SYSTEM, attr_system_vdm_disable);
-	FAPI_ATTR_GET(fapi2::ATTR_CHIP_EC_FEATURE_VDM_NOT_SUPPORTED, iv_procChip, attr_dd_vdm_not_supported);
-
-	return (!(attr_system_vdm_disable)
-	&& !(attr_dd_vdm_not_supported)
-	&& iv_vdm_enabled);
-}
-
-bool PlatPmPPB::is_wov_underv_enabled()
-{
-	return(!(iv_attrs.attr_wov_underv_disable) &&
-		 iv_wov_underv_enabled)
-		 ? true : false;
 }
 
 void PlatPmPPB::vpd_init(void)
 {
-	iv_raw_vpd_pts = 0;
-	iv_biased_vpd_pts = 0;
-	iv_poundW_data = 0;
-	iv_iddqt = 0;
-	iv_operating_points = 0;
-	iv_attr_mvpd_poundV_raw = 0;
-	iv_attr_mvpd_poundV_biased = 0;
+	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
+	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
+	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
+	iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
+	memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
 
-	get_mvpd_poundV();
+	if ((iv_poundV_raw_data.VddNomVltg    > l_fstChlt_vpd_data.VddNomVltg)
+	||	(iv_poundV_raw_data.VddPSVltg     > l_fstChlt_vpd_data.VddPSVltg)
+	||	(iv_poundV_raw_data.VddTurboVltg  > l_fstChlt_vpd_data.VddTurboVltg)
+	||	(iv_poundV_raw_data.VddUTurboVltg > l_fstChlt_vpd_data.VddUTurboVltg)
+	||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
+	{
+		memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
+		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
+	}
 
 	if(!iv_procChip.getChildren<fapi2::TARGET_TYPE_EQ>(fapi2::TARGET_STATE_FUNCTIONAL).size())
 	{
@@ -750,46 +710,40 @@ void PlatPmPPB::load_mvpd_operating_point ()
 	}
 }
 
-void PlatPmPPB::compute_boot_safe()
+enum avslibconstants
 {
-	// query VPD if any of the voltage attributes are zero
-	if(!iv_attrs.vdd_voltage_mv
-	|| !iv_attrs.vcs_voltage_mv
-	|| !iv_attrs.vdn_voltage_mv)
-	{
-		// ----------------
-		// get VPD data (#V,#W)
-		// ----------------
-		vpd_init();
-		// Compute the VPD operating points
-		compute_vpd_pts();
-		safe_mode_init();
+    // AVSBUS_FREQUENCY specified in Khz, Default value 10 MHz
+    MAX_POLL_COUNT_AVS = 0x1000,
+    AVS_CRC_DATA_MASK = 0xfffffff8,
+    O2S_FRAME_SIZE = 0x20,
+    O2S_IN_DELAY1 = 0x3F,
+    AVSBUS_FREQUENCY = 0x2710
+};
 
-		// set VCS voltage to UltraTurbo Voltage from MVPD data (if no override)
-		if (!iv_attrs.vcs_voltage_mv)
-		{
-			iv_attrs.vcs_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERSAVE].vcs_mv + (double)(iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma * 100 * revle32(64)) / 1000000);
-		}
+const uint32_t OCB_O2SCTRLS[2][2] =
+{
+    OCB_O2SCTRLS0A,
+    OCB_O2SCTRLS0B,
+    OCB_O2SCTRLS1A,
+    OCB_O2SCTRLS1B
+};
 
-		// set VDN voltage to PowerSave Voltage from MVPD data (if no override)
-		if(!iv_attrs.vdn_voltage_mv)
-		{
-			iv_attrs.vdn_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERBUS].vdd_mv + (double)(iv_attr_mvpd_poundV_biased[POWERBUS].idd_100ma * 100 * revle32(50)) / 1000000)
-		}
-	}
-	else
-	{
-		// Set safe frequency to the default BOOT_FREQ_MULT
-		fapi2::ATTR_BOOT_FREQ_MULT_Type l_boot_freq_mult;
-		FAPI_ATTR_GET(fapi2::ATTR_BOOT_FREQ_MULT, iv_procChip, l_boot_freq_mult);
-		uint32_t l_boot_freq_mhz = ((l_boot_freq_mult * 133333) / iv_attrs.proc_dpll_divider) / 1000;
-		FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip, l_boot_freq_mhz);
-		FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.vdd_voltage_mv);
-	}
-	FAPI_ATTR_SET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
-	FAPI_ATTR_SET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
-	FAPI_ATTR_SET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
-}
+const uint32_t OCB_O2SCTRL1[2][2] =
+{
+    OCB_O2SCTRL10A,
+    OCB_O2SCTRL10B,
+    OCB_O2SCTRL11A,
+    OCB_O2SCTRL11B
+};
+
+
+const uint32_t OCB_O2SCTRL2[2][2] =
+{
+    OCB_O2SCTRL20A,
+    OCB_O2SCTRL20B,
+    OCB_O2SCTRL21A,
+    OCB_O2SCTRL21B
+};
 
 void avsInitExtVoltageControl(
 	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
@@ -809,9 +763,9 @@ void avsInitExtVoltageControl(
 
 	//uint32_t O2SCTRLF_value = 0b10000010000011111100000000000000;
 	ocb_o2sctrlf0a_t O2SCTRLF_value;
-	O2SCTRLF_value.fields.o2s_frame_size_an = p9avslib::O2S_FRAME_SIZE;
-	O2SCTRLF_value.fields.o2s_out_count1_an = p9avslib::O2S_FRAME_SIZE;
-	O2SCTRLF_value.fields.o2s_in_delay1_an = p9avslib::O2S_IN_DELAY1;
+	O2SCTRLF_value.fields.o2s_frame_size_an = 0x20;
+	O2SCTRLF_value.fields.o2s_out_count1_an = 0x20;
+	O2SCTRLF_value.fields.o2s_in_delay1_an = 0x3F;
 
 	l_data64.insertFromRight<0, 6>(O2SCTRLF_value.fields.o2s_frame_size_an);
 	l_data64.insertFromRight<6, 6>(O2SCTRLF_value.fields.o2s_out_count1_an);
@@ -827,79 +781,22 @@ void avsInitExtVoltageControl(
 
 	// uint32_t O2SCTRLS_value = 0b00000000000010000000000000000000;
 	ocb_o2sctrls0a_t O2SCTRLS_value;
-	O2SCTRLS_value.fields.o2s_in_count2_an = p9avslib::O2S_FRAME_SIZE;
+	O2SCTRLS_value.fields.o2s_in_count2_an = 0x20;
 
 	l_data64.flush<0>();
 	l_data64.insertFromRight<12, 6>(O2SCTRLS_value.fields.o2s_in_count2_an);
-	putScom(i_target, p9avslib::OCB_O2SCTRLS[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	// O2SCTRL2
-	// [    0] o2s_bridge_enable
-	// [    1] pmcocr1_reserved_1
-	// [    2] o2s_cpol = 0;            Low idle clock
-	// [    3] o2s_cpha = 0;            First edge
-	// [ 4:13] o2s_clock_divider = 0xFA    Yield 1MHz with 2GHz nest
-	// [14:16] pmcocr1_reserved_2
-	// [   17] o2s_nr_of_frames = 1; Two frames
-	// [18:20] o2s_port_enable (only port 0 (18) by default
+	putScom(i_target, OCB_O2SCTRLS[i_avsBusNum][i_o2sBridgeNum], l_data64);
+	l_avsbus_frequency = 0x2710 / 1000;
 
-	// Divider calculation (which can be overwritten)
-	//  Nest Frequency:  2000MHz (0x7D0)
-	//  AVSBus Frequency:    1MHz (0x1) (eg  1us per bit)
-	//
-	// Divider = Nest Frequency / (AVSBus Frequency * 8) - 1
-	//
-	// @note:  PPE can multiply by a recipricol.  A precomputed
-	// 1 / (AVSBus frequency *8) held in an attribute allows a
-	// fully l_data64 driven computation without a divide operation.
-
-	ocb_o2sctrl10a_t O2SCTRL1_value;
-	O2SCTRL1_value.fields.o2s_bridge_enable_an = 1;
-
-	//Nest frequency attribute in MHz
-	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>(), l_nest_frequency);
-	// AVSBus frequency attribute in KHz
-	FAPI_ATTR_GET(fapi2::ATTR_AVSBUS_FREQUENCY, fapi2::Target<fapi2::TARGET_TYPE_SYSTEM>(), l_value);
-	if (l_value == 0)
-	{
-		l_avsbus_frequency = p9avslib::AVSBUS_FREQUENCY / 1000;
-	}
-	else
-	{
-		l_avsbus_frequency = l_value / 1000;
-	}
-
-	// Divider = Nest Frequency / (AVSBus Frequency * 8) - 1
-	l_divider = (l_nest_frequency / (l_avsbus_frequency * 8)) - 1;
-
-	O2SCTRL1_value.fields.o2s_clock_divider_an = l_divider;
-	O2SCTRL1_value.fields.o2s_nr_of_frames_an = 1;
-	O2SCTRL1_value.fields.o2s_cpol_an = 0;
-	O2SCTRL1_value.fields.o2s_cpha_an = 1;
+	l_divider = (ATTR_FREQ_PB_MHZ / (l_avsbus_frequency * 8)) - 1;
 
 	l_data64.flush<0>();
-	l_data64.insertFromRight<0, 1>(O2SCTRL1_value.fields.o2s_bridge_enable_an);
-	l_data64.insertFromRight<2, 1>(O2SCTRL1_value.fields.o2s_cpol_an);
-	l_data64.insertFromRight<3, 1>(O2SCTRL1_value.fields.o2s_cpha_an);
-	l_data64.insertFromRight<4, 10>(O2SCTRL1_value.fields.o2s_clock_divider_an);
-	l_data64.insertFromRight<17, 1>(O2SCTRL1_value.fields.o2s_nr_of_frames_an);
+	l_data64 |= PPC_BIT(0);
+	l_data64 |= PPC_BIT(3);
+	l_data64.insertFromRight<4, 10>(l_divider);
+	l_data64 |= PPC_BIT(17);
 	putScom(i_target, p9avslib::OCB_O2SCTRL1[i_avsBusNum][i_o2sBridgeNum], l_data64);
-
-	// O2SCTRL1
-	// OCC O2S Control2
-	// [ 0:16] o2s_inter_frame_delay = filled in with ATTR l_data64
-	// Needs to be 10us or greater for SPIVID part operation
-	// Set to ~16us for conservatism using a 100ns hang pulse
-	// 16us = 16000ns -> 16000/100 = 160 = 0xA0;  aligned to 0:16 -> 0x005
-	ocb_o2sctrl20a_t O2SCTRL2_value;
-	O2SCTRL2_value.fields.o2s_inter_frame_delay_an = 0x0;
-
-	l_data64.flush<0>();
-	l_data64.insertFromRight<0, 17>
-	(O2SCTRL2_value.fields.o2s_inter_frame_delay_an);
-	putScom(i_target, p9avslib::OCB_O2SCTRL2[i_avsBusNum][i_o2sBridgeNum], l_data64);
-
-fapi_try_exit:
-	return fapi2::current_err;
+	putScom(i_target, p9avslib::OCB_O2SCTRL2[i_avsBusNum][i_o2sBridgeNum], 0);
 }
 
 fapi2::ReturnCode
@@ -1055,7 +952,7 @@ void p9_fbc_eff_config_links_query_endp(
 }
 
 template<fapi2::TargetType T>
-fapi2::ReturnCode p9_fbc_eff_config_links_map_endp(
+static void p9_fbc_eff_config_links_map_endp(
 	const fapi2::Target<T>& i_target,
 	const p9_fbc_link_ctl_t i_link_ctl_arr[],
 	const uint8_t i_link_ctl_arr_size,
@@ -1065,7 +962,7 @@ fapi2::ReturnCode p9_fbc_eff_config_links_map_endp(
 	bool l_found = false;
 
 	FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, i_target, l_loc_unit_id);
-	for (uint8_t l_link_id = 0; (l_link_id < i_link_ctl_arr_size) && !l_found; l_link_id++)
+	for (uint8_t l_link_id = 0; l_link_id < i_link_ctl_arr_size && !l_found; l_link_id++)
 	{
 		if ((static_cast<fapi2::TargetType>(i_link_ctl_arr[l_link_id].endp_type) == T) && (i_link_ctl_arr[l_link_id].endp_unit_id == l_loc_unit_id))
 		{
@@ -1075,42 +972,53 @@ fapi2::ReturnCode p9_fbc_eff_config_links_map_endp(
 	}
 }
 
-void avsDriveCommand(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-				const uint8_t  i_avsBusNum,
-				const uint8_t  i_o2sBridgeNum,
-				const uint32_t i_RailSelect,
-				const uint32_t i_CmdType,
-				const uint32_t i_CmdGroup,
-				enum avsBusOpType i_opType)
+void avsDriveCommand(
+	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+	const uint8_t  i_avsBusNum,
+	const uint8_t  i_o2sBridgeNum,
+	const uint32_t i_RailSelect,
+	const uint32_t i_CmdType,
+	const uint32_t i_CmdGroup,
+	enum avsBusOpType i_opType)
 {
 	fapi2::buffer<uint64_t> l_data64;
 	fapi2::buffer<uint32_t> l_data64WithoutCRC;
-	uint32_t l_crc;
-	// clear sticky bits in o2s_status_reg
-	l_data64.setBit<1, 1>();
-	putScom(i_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	// MSB sent out first always, which should be start code 0b01
-	// compose and send frame
-	//      CRC(31:29),
-	//      l_Reserved(28:13) (read), CmdData(28:13) (write)
-	//      RailSelect(12:9),
-	//      l_CmdDataType(8:5),
-	//      l_CmdGroup(4),
-	//      l_CmdType(3:2),
-	//      l_StartCode(1:0)
-	l_data64.flush<0>();
-	l_data64.insertFromRight<0, 2>(1);
+	putScom(i_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPC_BIT(1));
+	l_data64 = 0;
+	l_data64 |= PPC_BIT(1);
 	l_data64.insertFromRight<2, 2>(i_CmdType);
 	l_data64.insertFromRight<4, 1>(i_CmdGroup);
-	l_data64.insertFromRight<5, 4>(0);
 	l_data64.insertFromRight<9, 4>(i_RailSelect);
-	l_data64.insertFromRight<13, 16>(0);
-	l_data64.insertFromRight<29, 3>(0);
-	// Generate CRC
 	l_data64.extract(l_data64WithoutCRC, 0, 32);
-	l_crc = avsCRCcalc(l_data64WithoutCRC);
-	l_data64.insertFromRight<29, 3>(l_crc);
+	l_data64.insertFromRight<29, 3>(avsCRCcalc(l_data64WithoutCRC));
 	putScom(i_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 	// Wait on o2s_ongoing = 0
 	avsPollVoltageTransDone(i_target, i_avsBusNum, i_o2sBridgeNum);
+}
+
+uint32_t avsCRCcalc(const uint32_t i_avs_cmd)
+{
+    //Polynomial = x^3 + x^1 + x^0 = 1*x^3 + 0*x^2 + 1*x^1 + 1*x^0
+    //           = divisor(1011)
+    uint32_t o_crc_value = 0;
+    uint32_t l_polynomial = 0xB0000000;
+    uint32_t l_msb =        0x80000000;
+
+    o_crc_value = i_avs_cmd & AVS_CRC_DATA_MASK;
+
+    while (o_crc_value & AVS_CRC_DATA_MASK)
+    {
+        if (o_crc_value & l_msb)
+        {
+            o_crc_value = o_crc_value ^ l_polynomial;
+            l_polynomial = l_polynomial >> 1;
+        }
+        else
+        {
+            l_polynomial = l_polynomial >> 1;
+        }
+
+        l_msb = l_msb >> 1;
+    }
+    return o_crc_value;
 }

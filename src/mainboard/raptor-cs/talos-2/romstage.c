@@ -120,7 +120,6 @@ static void prepare_dimm_data(void)
 	};
 
 	get_spd_smbus(&blk);
-	hexdump(blk.spd_array[2], blk.len);		// Remove when no longer useful
 	dump_spd_info(&blk);
 
 	/*

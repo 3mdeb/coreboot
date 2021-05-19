@@ -16,14 +16,6 @@
 #define XSCOM_LOG_REG				0x00090012
 #define XSCOM_ERR_REG				0x00090013
 
-/*
- * WARNING:
- * Indirect access uses the same approach as Hostboot, yet all our tests so far
- * were unsuccessful. It is possible that the devices we were trying to access
- * must be initialized or otherwise enabled first. Because of that we decided to
- * leave it as it is for now, with heavy debugging, and return to this when we
- * are sure that it doesn't work because of error in implementation.
- */
 void write_scom_indirect(uint64_t reg_address, uint64_t value)
 {
 	uint64_t addr;
@@ -83,5 +75,6 @@ void reset_scom_engine(void)
 	write_scom_direct(XSCOM_RCVED_STAT_REG, 0);
 	write_scom_direct(XSCOM_LOG_REG, 0);
 	write_scom_direct(XSCOM_ERR_REG, 0);
+	clear_hmer();
 	eieio();
 }

@@ -174,67 +174,79 @@ void PlatPmPPB::attr_init(void)
 	iv_nest_freq_mhz      = iv_attrs.attr_nest_frequency_mhz;
 }
 
+uint32_t sysparm_uplift(const uint32_t i_vpd_mv,
+						const uint32_t i_vpd_ma,
+						const uint32_t i_loadline_uohm,
+						const uint32_t i_distloss_uohm,
+						const uint32_t i_distoffset_uohm)
+{
+	return (uint32_t)((double)i_vpd_mv + (((double)(i_vpd_ma * (i_loadline_uohm + i_distloss_uohm)) / 1000 + (double)i_distoffset_uohm)) / 1000);
+}
+
+double calc_bias(const int8_t i_value)
+{
+	return 1.0 + ((0.5 / 100) * (double)i_value);
+}
+
+uint32_t bias_adjust_mv(
+	const uint32_t i_value,
+	const int32_t i_bias_0p5pct)
+{
+	return (uint32_t)ceil((double)i_value * calc_bias(i_bias_0p5pct));
+}
+
+uint32_t bias_adjust_mhz(
+	const uint32_t i_value,
+	const int32_t i_bias_0p5pct)
+{
+	return ((uint32_t)floor((double)i_value * calc_bias(i_bias_0p5pct)));
+}
+
 static void PlatPmPPB::compute_vpd_pts(void)
 {
-    uint32_t l_vdd_loadline_uohm = revle32(iv_vdd_sysparam.loadline_uohm);
-    uint32_t l_vdd_distloss_uohm = revle32(iv_vdd_sysparam.distloss_uohm);
-    uint32_t l_vdd_distoffset_uv = revle32(iv_vdd_sysparam.distoffset_uv);
-    uint32_t l_vcs_loadline_uohm = revle32(iv_vcs_sysparam.loadline_uohm);
-    uint32_t l_vcs_distloss_uohm = revle32(iv_vcs_sysparam.distloss_uohm);
-    uint32_t l_vcs_distoffset_uv = revle32(iv_vcs_sysparam.distoffset_uv);
+	for (int p = 0; p < NUM_OP_POINTS; p++)
+	{
+		iv_operating_points[VPD_PT_SET_RAW][p].vdd_mv = iv_raw_vpd_pts[p].vdd_mv;
+		iv_operating_points[VPD_PT_SET_RAW][p].vcs_mv = iv_raw_vpd_pts[p].vcs_mv;
+		iv_operating_points[VPD_PT_SET_RAW][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
+		iv_operating_points[VPD_PT_SET_RAW][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
+		iv_operating_points[VPD_PT_SET_RAW][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
+		iv_operating_points[VPD_PT_SET_RAW][p].pstate = iv_raw_vpd_pts[p].pstate;
 
-    for (int p = 0; p < NUM_OP_POINTS; p++)
-    {
-        iv_operating_points[VPD_PT_SET_RAW][p].vdd_mv = iv_raw_vpd_pts[p].vdd_mv;
-        iv_operating_points[VPD_PT_SET_RAW][p].vcs_mv = iv_raw_vpd_pts[p].vcs_mv;
-        iv_operating_points[VPD_PT_SET_RAW][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
-        iv_operating_points[VPD_PT_SET_RAW][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
-        iv_operating_points[VPD_PT_SET_RAW][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
-        iv_operating_points[VPD_PT_SET_RAW][p].pstate = iv_raw_vpd_pts[p].pstate;
-    }
+		iv_operating_points[VPD_PT_SET_SYSP][p].vdd_mv = (uint32_t)((double)iv_raw_vpd_pts[p].vdd_mv + (((double)(iv_raw_vpd_pts[p].idd_100ma * 100 * (revle32(iv_vdd_sysparam.loadline_uohm) + revle32(iv_vdd_sysparam.distloss_uohm))) / 1000 + (double)revle32(iv_vdd_sysparam.distoffset_uv))) / 1000);
+		iv_operating_points[VPD_PT_SET_SYSP][p].vcs_mv = (uint32_t)((double)iv_raw_vpd_pts[p].vcs_mv + (((double)(iv_raw_vpd_pts[p].ics_100ma * 100 * (revle32(iv_vcs_sysparam.loadline_uohm) + revle32(iv_vcs_sysparam.distloss_uohm))) / 1000 + (double)revle32(iv_vcs_sysparam.distoffset_uv))) / 1000);
+		iv_operating_points[VPD_PT_SET_SYSP][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
+		iv_operating_points[VPD_PT_SET_SYSP][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
+		iv_operating_points[VPD_PT_SET_SYSP][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
+		iv_operating_points[VPD_PT_SET_SYSP][p].pstate = iv_raw_vpd_pts[p].pstate;
 
-    for (int p = 0; p < NUM_OP_POINTS; p++)
-    {
-        iv_operating_points[VPD_PT_SET_SYSP][p].vdd_mv = sysparm_uplift(iv_raw_vpd_pts[p].vdd_mv, iv_raw_vpd_pts[p].idd_100ma * 100, l_vdd_loadline_uohm, l_vdd_distloss_uohm, l_vdd_distoffset_uv);
-        iv_operating_points[VPD_PT_SET_SYSP][p].vcs_mv = sysparm_uplift(iv_raw_vpd_pts[p].vcs_mv, iv_raw_vpd_pts[p].ics_100ma * 100, l_vcs_loadline_uohm, l_vcs_distloss_uohm, l_vcs_distoffset_uv);
-        iv_operating_points[VPD_PT_SET_SYSP][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
-        iv_operating_points[VPD_PT_SET_SYSP][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
-        iv_operating_points[VPD_PT_SET_SYSP][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
-        iv_operating_points[VPD_PT_SET_SYSP][p].pstate = iv_raw_vpd_pts[p].pstate;
-    }
+		iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vdd_mv, iv_bias[p].vdd_ext_hp);
+		iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vcs_mv, iv_bias[p].vcs_ext_hp);
+		iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz = bias_adjust_mhz(iv_raw_vpd_pts[p].frequency_mhz, iv_bias[p].frequency_hp);
+		iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma = iv_biased_vpd_pts[p].idd_100ma;
+		iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma = iv_biased_vpd_pts[p].ics_100ma;
+	}
 
-    for (int p = 0; p < NUM_OP_POINTS; p++)
-    {
-        iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vdd_mv, iv_bias[p].vdd_ext_hp);
-        iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv = bias_adjust_mv(iv_raw_vpd_pts[p].vcs_mv, iv_bias[p].vcs_ext_hp);
-        iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz = bias_adjust_mhz(iv_raw_vpd_pts[p].frequency_mhz, iv_bias[p].frequency_hp);
-        iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma = iv_biased_vpd_pts[p].idd_100ma;
-        iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma = iv_biased_vpd_pts[p].ics_100ma;
-    }
+	iv_reference_frequency_khz = iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz * 1000;
 
-    iv_reference_frequency_khz = (iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz) * 1000;
+	for (int p = 0; p < NUM_OP_POINTS; p++)
+	{
+		iv_operating_points[VPD_PT_SET_BIASED][p].pstate = (((iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz - iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz) * 1000) / iv_frequency_step_khz);
 
-    for (int p = 0; p < NUM_OP_POINTS; p++)
-    {
-        iv_operating_points[VPD_PT_SET_BIASED][p].pstate = (((iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz - iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz) * 1000) / iv_frequency_step_khz);
-    }
-
-    for (int p = 0; p < NUM_OP_POINTS; p++)
-    {
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vdd_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv, iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma * 100, l_vdd_loadline_uohm, l_vdd_distloss_uohm, l_vdd_distoffset_uv);
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vcs_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv, iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma * 100, l_vcs_loadline_uohm, l_vcs_distloss_uohm, l_vcs_distoffset_uv);
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].idd_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma;
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].ics_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma;
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].frequency_mhz = iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz;
-        iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].pstate = iv_operating_points[VPD_PT_SET_BIASED][p].pstate;
-    }
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vdd_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv, iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma * 100, revle32(iv_vdd_sysparam.loadline_uohm), revle32(iv_vdd_sysparam.distloss_uohm), revle32(iv_vdd_sysparam.distoffset_uv));
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vcs_mv = sysparm_uplift(iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv, iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma * 100, revle32(iv_vcs_sysparam.loadline_uohm), revle32(iv_vcs_sysparam.distloss_uohm), revle32(iv_vcs_sysparam.distoffset_uv));
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].idd_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma;
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].ics_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma;
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].frequency_mhz = iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz;
+		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].pstate = iv_operating_points[VPD_PT_SET_BIASED][p].pstate;
+	}
 }
 
 void PlatPmPPB::safe_mode_init(void)
 {
-    uint8_t l_ps_pstate = 0;
-    Safe_mode_parameters l_safe_mode_values;
-    uint32_t l_ps_freq_khz = iv_operating_points[VPD_PT_SET_BIASED][POWERSAVE].frequency_mhz * 1000;
+	uint8_t l_ps_pstate = 0;
+	Safe_mode_parameters l_safe_mode_values;
+	uint32_t l_ps_freq_khz = iv_operating_points[VPD_PT_SET_BIASED][POWERSAVE].frequency_mhz * 1000;
 
 	if(!iv_attrs.attr_pm_safe_voltage_mv && !iv_attrs.attr_pm_safe_frequency_mhz)
 	{
@@ -242,6 +254,36 @@ void PlatPmPPB::safe_mode_init(void)
 		safe_mode_computation(l_ps_pstate, &l_safe_mode_values);
 		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip,iv_attrs.attr_pm_safe_frequency_mhz);
 		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
+	}
+}
+
+int PlatPmPPB::freq2pState (
+	const uint32_t i_freq_khz,
+	Pstate* o_pstate)
+{
+	float pstate32 = 0;
+	pstate32 = ((float)((iv_reference_frequency_khz) - (float)i_freq_khz)) / (float) (iv_frequency_step_khz);
+	// @todo Bug fix from Characterization team to deal with VPD not being
+	// exactly in step increments
+	//       - not yet included to separate changes
+	// As higher Pstate numbers represent lower frequencies, the pstate must be
+	// snapped to the nearest *higher* integer value for safety.  (e.g. slower
+	// frequencies are safer).
+	if (i_freq_khz)
+	{
+		*o_pstate = (Pstate)internal_ceil(pstate32);
+	}
+	else
+	{
+		*o_pstate = (Pstate)pstate32;
+	}
+	if (pstate32 < 0)
+	{
+		*o_pstate = 0;
+	}
+	else if (pstate32 > 255)
+	{
+		*o_pstate = 255;
 	}
 }
 
@@ -255,11 +297,17 @@ void PlatPmPPB::compute_boot_safe()
 	iv_attr_mvpd_poundV_raw = 0;
 	iv_attr_mvpd_poundV_biased = 0;
 
-	iv_attr_mvpd_poundV_raw[].frequency_mhz  = {0};
-	iv_attr_mvpd_poundV_raw[].vdd_mv = {0};
-	iv_attr_mvpd_poundV_raw[].idd_100ma = {0};
-	iv_attr_mvpd_poundV_raw[].vcs_mv = {0};
-	iv_attr_mvpd_poundV_raw[].ics_100ma = {0};
+	iv_attr_mvpd_poundV_raw[].frequency_mhz = {0};
+	iv_attr_mvpd_poundV_raw[].vdd_mv        = {0};
+	iv_attr_mvpd_poundV_raw[].idd_100ma     = {0};
+	iv_attr_mvpd_poundV_raw[].vcs_mv        = {0};
+	iv_attr_mvpd_poundV_raw[].ics_100ma     = {0};
+
+	iv_bias[].frequency_hp    = {0};
+	iv_bias[].vdd_ext_hp      = {0};
+	iv_bias[].vdd_int_hp      = {0};
+	iv_bias[].vdn_ext_hp      = {0};
+	iv_bias[].vcs_ext_hp      = {0};
 
 	vpd_init();
 	compute_vpd_pts();
@@ -648,9 +696,7 @@ void PlatPmPPB::get_mvpd_poundW (void)
 
 void PlatPmPPB::vpd_init(void)
 {
-	std::vector<fapi2::Target<fapi2::TARGET_TYPE_EQ>> l_eqChiplets;
 	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
-	fapi2::Target<fapi2::TARGET_TYPE_EQ> l_firstEqChiplet;
 	iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
 	memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
 
@@ -660,7 +706,7 @@ void PlatPmPPB::vpd_init(void)
 	||	(iv_poundV_raw_data.VddUTurboVltg > l_fstChlt_vpd_data.VddUTurboVltg)
 	||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
 	{
-		memcpy(&l_fstChlt_vpd_data,&iv_poundV_raw_data,sizeof(iv_poundV_raw_data));
+		memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
 		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
 	}
 
@@ -668,11 +714,6 @@ void PlatPmPPB::vpd_init(void)
 	{
 		break;
 	}
-	iv_bias[].frequency_hp    = {0};
-	iv_bias[].vdd_ext_hp      = {0};
-	iv_bias[].vdd_int_hp      = {0};
-	iv_bias[].vdn_ext_hp      = {0};
-	iv_bias[].vcs_ext_hp      = {0};
 
 	get_extint_bias();
 	get_mvpd_poundW();
@@ -687,7 +728,7 @@ void PlatPmPPB::vpd_init(void)
 #define VPD_PV_ULTRA       3
 #define VPD_PV_POWERBUS    4
 
-void PlatPmPPB::load_mvpd_operating_point ()
+void PlatPmPPB::load_mvpd_operating_point(void)
 {
 	const uint8_t pv_op_order[NUM_OP_POINTS] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
 	for (uint32_t i = 0; i < NUM_OP_POINTS; i++)
@@ -697,7 +738,7 @@ void PlatPmPPB::load_mvpd_operating_point ()
 		iv_raw_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].idd_100ma;
 		iv_raw_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_raw[pv_op_order[i]].vcs_mv;
 		iv_raw_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].ics_100ma;
-		iv_raw_vpd_pts[i].pstate = iv_attr_mvpd_poundV_raw[ULTRA].frequency_mhz
+		iv_raw_vpd_pts[i].pstate         = iv_attr_mvpd_poundV_raw[ULTRA].frequency_mhz
 			- iv_attr_mvpd_poundV_raw[pv_op_order[i]].frequency_mhz * 1000 / 16666;
 
 		iv_biased_vpd_pts[i].frequency_mhz  = iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz;
@@ -705,128 +746,116 @@ void PlatPmPPB::load_mvpd_operating_point ()
 		iv_biased_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].idd_100ma;
 		iv_biased_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_biased[pv_op_order[i]].vcs_mv;
 		iv_biased_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].ics_100ma;
-		iv_biased_vpd_pts[i].pstate = iv_attr_mvpd_poundV_biased[ULTRA].frequency_mhz
+		iv_biased_vpd_pts[i].pstate         = iv_attr_mvpd_poundV_biased[ULTRA].frequency_mhz
 			- iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz * 1000 / 16666;
 	}
 }
 
 enum avslibconstants
 {
-    // AVSBUS_FREQUENCY specified in Khz, Default value 10 MHz
-    MAX_POLL_COUNT_AVS = 0x1000,
-    AVS_CRC_DATA_MASK = 0xfffffff8,
-    O2S_FRAME_SIZE = 0x20,
-    O2S_IN_DELAY1 = 0x3F,
-    AVSBUS_FREQUENCY = 0x2710
+	// AVSBUS_FREQUENCY specified in Khz, Default value 10 MHz
+	MAX_POLL_COUNT_AVS = 0x1000,
+	AVS_CRC_DATA_MASK = 0xfffffff8,
+	O2S_FRAME_SIZE = 0x20,
+	O2S_IN_DELAY1 = 0x3F,
+	AVSBUS_FREQUENCY = 0x2710
 };
 
 const uint32_t OCB_O2SCTRLS[2][2] =
 {
-    OCB_O2SCTRLS0A,
-    OCB_O2SCTRLS0B,
-    OCB_O2SCTRLS1A,
-    OCB_O2SCTRLS1B
+	OCB_O2SCTRLS0A,
+	OCB_O2SCTRLS0B,
+	OCB_O2SCTRLS1A,
+	OCB_O2SCTRLS1B
 };
 
 const uint32_t OCB_O2SCTRL1[2][2] =
 {
-    OCB_O2SCTRL10A,
-    OCB_O2SCTRL10B,
-    OCB_O2SCTRL11A,
-    OCB_O2SCTRL11B
+	OCB_O2SCTRL10A,
+	OCB_O2SCTRL10B,
+	OCB_O2SCTRL11A,
+	OCB_O2SCTRL11B
 };
 
 
 const uint32_t OCB_O2SCTRL2[2][2] =
 {
-    OCB_O2SCTRL20A,
-    OCB_O2SCTRL20B,
-    OCB_O2SCTRL21A,
-    OCB_O2SCTRL21B
+	OCB_O2SCTRL20A,
+	OCB_O2SCTRL20B,
+	OCB_O2SCTRL21A,
+	OCB_O2SCTRL21B
 };
 
 void avsInitExtVoltageControl(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+	chiplet_id_t proc_target,
 	const uint8_t i_avsBusNum,
 	const uint8_t i_o2sBridgeNum)
 {
-
-	fapi2::buffer<uint64_t> l_data64;
-	uint32_t l_avsbus_frequency, l_value, l_nest_frequency;
-	uint16_t l_divider;
-
-	// O2SCTRLF
-	// [ 0: 5] o2s_frame_size = 32; -> 0x20
-	// [ 6:11] o2s_out_count1 = 32; -> 0x20
-	// [12:17] o2s_in_delay1  =  0;     No concurrent input
-	// [18:23] o2s_in_l_count1  =  X;     No input on first frame
-
-	//uint32_t O2SCTRLF_value = 0b10000010000011111100000000000000;
-	ocb_o2sctrlf0a_t O2SCTRLF_value;
-	O2SCTRLF_value.fields.o2s_frame_size_an = 0x20;
-	O2SCTRLF_value.fields.o2s_out_count1_an = 0x20;
-	O2SCTRLF_value.fields.o2s_in_delay1_an = 0x3F;
-
-	l_data64.insertFromRight<0, 6>(O2SCTRLF_value.fields.o2s_frame_size_an);
-	l_data64.insertFromRight<6, 6>(O2SCTRLF_value.fields.o2s_out_count1_an);
-	l_data64.insertFromRight<12, 6>(O2SCTRLF_value.fields.o2s_in_delay1_an);
-	putScom(i_target, p9avslib::OCB_O2SCTRLF[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	// Note:  the buffer is a 32bit buffer.  make sure it is left
-	// aligned for the SCOM
-
-	// O2SCTRLS
-	// [ 0: 5] o2s_out_count2  = 0;
-	// [ 6:11] o2s_in_delay2   = 0;
-	// [12:17] o2s_in_l_count2   = 32; -> 0x20;
-
-	// uint32_t O2SCTRLS_value = 0b00000000000010000000000000000000;
-	ocb_o2sctrls0a_t O2SCTRLS_value;
-	O2SCTRLS_value.fields.o2s_in_count2_an = 0x20;
-
-	l_data64.flush<0>();
-	l_data64.insertFromRight<12, 6>(O2SCTRLS_value.fields.o2s_in_count2_an);
-	putScom(i_target, OCB_O2SCTRLS[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	l_avsbus_frequency = 0x2710 / 1000;
-
-	l_divider = (ATTR_FREQ_PB_MHZ / (l_avsbus_frequency * 8)) - 1;
-
-	l_data64.flush<0>();
-	l_data64 |= PPC_BIT(0);
-	l_data64 |= PPC_BIT(3);
-	l_data64.insertFromRight<4, 10>(l_divider);
-	l_data64 |= PPC_BIT(17);
-	putScom(i_target, p9avslib::OCB_O2SCTRL1[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	putScom(i_target, p9avslib::OCB_O2SCTRL2[i_avsBusNum][i_o2sBridgeNum], 0);
+	write_scom_for_chiplet(
+		proc_target,
+		p9avslib::OCB_O2SCTRLF[i_avsBusNum][i_o2sBridgeNum],
+		PPC_BIT(0)
+		| PPC_BIT(6)
+		| PPC_BITMASK(12, 17));
+	write_scom_for_chiplet(
+		proc_target,
+		OCB_O2SCTRLS[i_avsBusNum][i_o2sBridgeNum],
+		PPC_BIT(16));
+	write_scom_for_chiplet(
+		proc_target,
+		p9avslib::OCB_O2SCTRL1[i_avsBusNum][i_o2sBridgeNum],
+		PPC_BIT(0)
+		| PPC_BIT(3)
+		| ((ATTR_FREQ_PB_MHZ / 80 - 1) & 0x3FF) << 50
+		| PPC_BIT(17));
+	write_scom_for_chiplet(
+		proc_target,
+		p9avslib::OCB_O2SCTRL2[i_avsBusNum][i_o2sBridgeNum],
+		0);
 }
 
-fapi2::ReturnCode
-avsIdleFrame(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-			 const uint8_t i_avsBusNum,
-			 const uint8_t i_o2sBridgeNum)
+static void avsIdleFrame(
+	chiplet_id_t proc_target,
+	const uint8_t i_avsBusNum,
+	const uint8_t i_o2sBridgeNum)
 {
-	fapi2::buffer<uint64_t> l_idleframe = 0xFFFFFFFFFFFFFFFF;
-	fapi2::buffer<uint64_t> l_scomdata;
 	// clear sticky bits in o2s_status_reg
-	l_scomdata.setBit<1, 1>();
-	putScom(i_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], l_scomdata);
+	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPPC_BIT(1));
 	// Send the idle frame
-	l_scomdata = l_idleframe;
-	putScom(i_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], l_scomdata));
+	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], 0xFFFFFFFFFFFFFFFF);
 	// Wait on o2s_ongoing = 0
-	avsPollVoltageTransDone(i_target, i_avsBusNum, i_o2sBridgeNum);
+	avsPollVoltageTransDone(proc_target, i_avsBusNum, i_o2sBridgeNum);
 }
 
-fapi2::ReturnCode
-avsVoltageRead(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
-			   const uint8_t i_bus_num,
-			   const uint8_t BRIDGE_NUMBER,
-			   const uint32_t i_rail_select,
-			   uint32_t& l_present_voltage_mv)
+static void
+avsPollVoltageTransDone(
+	chiplet_id_t proc_target,
+	const uint8_t i_avsBusNum,
+	const uint8_t i_o2sBridgeNum)
+{
+	uint64_t ocb_o2sst;
+
+	for(uint8_t l_count = 0; l_count < 0x1000; ++l_count)
+	{
+		ocb_o2sst = read_scom_for_chiplet(proc_target, p9avslib::OCB_O2SST[i_avsBusNum][i_o2sBridgeNum]);
+		if (!(ocb_o2sst & PPC_BIT(0)))
+		{
+			return;
+		}
+	}
+}
+
+static void avsVoltageRead(
+	chiplet_id_t proc_target,
+	const uint8_t i_bus_num,
+	const uint8_t BRIDGE_NUMBER,
+	const uint32_t i_rail_select,
+	uint32_t& l_present_voltage_mv)
 {
 	fapi2::buffer<uint64_t> l_data64;
 	// Drive a Read Command
 	avsDriveCommand(
-		i_target,
+		proc_target,
 		i_bus_num,
 		BRIDGE_NUMBER,
 		i_rail_select,
@@ -834,13 +863,13 @@ avsVoltageRead(const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
 		0xFFFF);
 
 	// Read returned voltage value from Read frame
-	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
+	getScom(proc_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 	// Extracting bits 8:23 , which contains voltage read data
 	l_present_voltage_mv = (l_data64 & 0x00FFFF0000000000) >> 40;
 }
 
-void avsValidateResponse(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+static void avsValidateResponse(
+	chiplet_id_t proc_target,
 	const uint8_t i_avsBusNum,
 	const uint8_t i_o2sBridgeNum,
 	const uint8_t i_throw_assert,
@@ -855,7 +884,7 @@ void avsValidateResponse(
 	o_goodResponse = false;
 
 	// Read the data response register
-	getScom(i_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
+	getScom(proc_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 
 	// Status Return Code and Received CRC
 	// out SS len
@@ -867,21 +896,20 @@ void avsValidateResponse(
 	l_rsp_computed_crc = avsCRCcalc(l_rsp_data);
 
 	if (l_data_status_code == 0                 // no error code
-	 && l_rsp_rcvd_crc == l_rsp_computed_crc    // good crc
-	 && l_rsp_data != 0                         // valid response
-	 && l_rsp_data != 0xFFFFFFFF)
+	&& l_rsp_rcvd_crc == l_rsp_computed_crc     // good crc
+	&& l_rsp_data != 0                          // valid response
+	&& l_rsp_data != 0xFFFFFFFF)
 	{
 		o_goodResponse = true;
 	}
 }
 
-fapi2::ReturnCode p9_fbc_eff_config_links_query_link_en(
-	const fapi2::Target<fapi2::TARGET_TYPE_XBUS>& i_target,
+static void p9_fbc_eff_config_links_query_link_en(
+	chiplet_id_t xbus_target,
 	uint8_t& o_link_is_enabled)
 {
 	fapi2::ATTR_LINK_TRAIN_Type l_link_train;
-	FAPI_ATTR_GET(fapi2::ATTR_LINK_TRAIN, i_target, l_link_train);
-
+	FAPI_ATTR_GET(fapi2::ATTR_LINK_TRAIN, xbus_target, l_link_train);
 	if (l_link_train == fapi2::ENUM_ATTR_LINK_TRAIN_BOTH)
 	{
 		o_link_is_enabled = fapi2::ENUM_ATTR_PROC_FABRIC_X_ATTACHED_CHIP_CNFG_TRUE;
@@ -901,7 +929,7 @@ fapi2::ReturnCode p9_fbc_eff_config_links_query_link_en(
 }
 
 template<fapi2::TargetType T>
-void p9_fbc_eff_config_links_query_endp(
+static void p9_fbc_eff_config_links_query_endp(
 	const fapi2::Target<T>& i_loc_target,
 	const uint8_t i_loc_fbc_chip_id,
 	const uint8_t i_loc_fbc_group_id,
@@ -964,7 +992,7 @@ static void p9_fbc_eff_config_links_map_endp(
 	FAPI_ATTR_GET(fapi2::ATTR_CHIP_UNIT_POS, i_target, l_loc_unit_id);
 	for (uint8_t l_link_id = 0; l_link_id < i_link_ctl_arr_size && !l_found; l_link_id++)
 	{
-		if ((static_cast<fapi2::TargetType>(i_link_ctl_arr[l_link_id].endp_type) == T) && (i_link_ctl_arr[l_link_id].endp_unit_id == l_loc_unit_id))
+		if(static_cast<fapi2::TargetType>(i_link_ctl_arr[l_link_id].endp_type) == T) && (i_link_ctl_arr[l_link_id].endp_unit_id == l_loc_unit_id)
 		{
 			o_link_id = l_link_id;
 			l_found = true;
@@ -973,7 +1001,7 @@ static void p9_fbc_eff_config_links_map_endp(
 }
 
 void avsDriveCommand(
-	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& i_target,
+	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& proc_target,
 	const uint8_t  i_avsBusNum,
 	const uint8_t  i_o2sBridgeNum,
 	const uint32_t i_RailSelect,
@@ -983,7 +1011,7 @@ void avsDriveCommand(
 {
 	fapi2::buffer<uint64_t> l_data64;
 	fapi2::buffer<uint32_t> l_data64WithoutCRC;
-	putScom(i_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPC_BIT(1));
+	putScom(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPC_BIT(1));
 	l_data64 = 0;
 	l_data64 |= PPC_BIT(1);
 	l_data64.insertFromRight<2, 2>(i_CmdType);
@@ -991,34 +1019,33 @@ void avsDriveCommand(
 	l_data64.insertFromRight<9, 4>(i_RailSelect);
 	l_data64.extract(l_data64WithoutCRC, 0, 32);
 	l_data64.insertFromRight<29, 3>(avsCRCcalc(l_data64WithoutCRC));
-	putScom(i_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], l_data64);
+	putScom(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], l_data64);
 	// Wait on o2s_ongoing = 0
-	avsPollVoltageTransDone(i_target, i_avsBusNum, i_o2sBridgeNum);
+	avsPollVoltageTransDone(proc_target, i_avsBusNum, i_o2sBridgeNum);
 }
 
 uint32_t avsCRCcalc(const uint32_t i_avs_cmd)
 {
-    //Polynomial = x^3 + x^1 + x^0 = 1*x^3 + 0*x^2 + 1*x^1 + 1*x^0
-    //           = divisor(1011)
-    uint32_t o_crc_value = 0;
-    uint32_t l_polynomial = 0xB0000000;
-    uint32_t l_msb =        0x80000000;
+	//Polynomial = x^3 + x^1 + x^0 = 1*x^3 + 0*x^2 + 1*x^1 + 1*x^0
+	//           = divisor(1011)
+	uint32_t o_crc_value = 0;
+	uint32_t l_polynomial = 0xB0000000;
+	uint32_t l_msb =        0x80000000;
 
-    o_crc_value = i_avs_cmd & AVS_CRC_DATA_MASK;
+	o_crc_value = i_avs_cmd & AVS_CRC_DATA_MASK;
 
-    while (o_crc_value & AVS_CRC_DATA_MASK)
-    {
-        if (o_crc_value & l_msb)
-        {
-            o_crc_value = o_crc_value ^ l_polynomial;
-            l_polynomial = l_polynomial >> 1;
-        }
-        else
-        {
-            l_polynomial = l_polynomial >> 1;
-        }
-
-        l_msb = l_msb >> 1;
-    }
-    return o_crc_value;
+	while (o_crc_value & AVS_CRC_DATA_MASK)
+	{
+		if (o_crc_value & l_msb)
+		{
+			o_crc_value = o_crc_value ^ l_polynomial;
+			l_polynomial = l_polynomial >> 1;
+		}
+		else
+		{
+			l_polynomial = l_polynomial >> 1;
+		}
+		l_msb = l_msb >> 1;
+	}
+	return o_crc_value;
 }

@@ -7,6 +7,71 @@
 #define VPD_PV_ULTRA       3
 #define VPD_PV_POWERBUS    4
 
+
+const uint32_t OCB_O2SCTRLF[2][2] =
+{
+    OCB_O2SCTRLF0A,
+    OCB_O2SCTRLF0B,
+    OCB_O2SCTRLF1A,
+    OCB_O2SCTRLF1B
+};
+
+const uint32_t OCB_O2SCTRLS[2][2] =
+{
+    OCB_O2SCTRLS0A,
+    OCB_O2SCTRLS0B,
+    OCB_O2SCTRLS1A,
+    OCB_O2SCTRLS1B
+};
+
+const uint32_t OCB_O2SCTRL1[2][2] =
+{
+    OCB_O2SCTRL10A,
+    OCB_O2SCTRL10B,
+    OCB_O2SCTRL11A,
+    OCB_O2SCTRL11B
+};
+
+const uint32_t OCB_O2SCTRL2[2][2] =
+{
+    OCB_O2SCTRL20A,
+    OCB_O2SCTRL20B,
+    OCB_O2SCTRL21A,
+    OCB_O2SCTRL21B
+};
+
+const uint32_t OCB_O2SST[2][2] =
+{
+    OCB_O2SST0A,
+    OCB_O2SST0B,
+    OCB_O2SST1A,
+    OCB_O2SST1B
+};
+
+const uint32_t OCB_O2SCMD[2][2] =
+{
+    OCB_O2SCMD0A,
+    OCB_O2SCMD0B,
+    OCB_O2SCMD1A,
+    OCB_O2SCMD1B
+};
+
+const uint32_t OCB_O2SWD[2][2] =
+{
+    OCB_O2SWD0A,
+    OCB_O2SWD0B,
+    OCB_O2SWD1A,
+    OCB_O2SWD1B
+};
+
+const uint32_t OCB_O2SRD[2][2] =
+{
+    OCB_O2SRD0A,
+    OCB_O2SRD0B,
+    OCB_O2SRD1A,
+    OCB_O2SRD1B
+};
+
 void* call_host_set_voltages(void *io_pArgs)
 {
 	TargetHandleList l_procList;
@@ -22,27 +87,10 @@ PlatPmPPB {
 	iv_procChip (i_target), iv_pstates_enabled(false), iv_resclk_enabled(0),
 	iv_vdm_enabled(0), iv_ivrm_enabled(0), iv_wof_enabled(0), iv_safe_voltage (0),
 	iv_safe_frequency(0), iv_reference_frequency_mhz(0), iv_reference_frequency_khz(0),
-	iv_frequency_step_khz(0), iv_proc_dpll_divider(0), iv_nest_freq_mhz(0),
+	16666(0), iv_proc_dpll_divider(0), iv_nest_freq_mhz(0),
 	iv_wov_underv_enabled(0), iv_wov_overv_enabled(0)
 	iv_attrs.attr_dpll_bias = 0;
 	iv_attrs.attr_undervolting = 0;
-}
-
-uint32_t revle32(const uint32_t i_x)
-{
-	uint32_t rx;
-#ifndef _BIG_ENDIAN
-	uint8_t* pix = (uint8_t*)(&i_x);
-	uint8_t* prx = (uint8_t*)(&rx);
-	prx[0] = pix[3];
-	prx[1] = pix[2];
-	prx[2] = pix[1];
-	prx[3] = pix[0];
-#else
-	rx = i_x;
-#endif
-
-	return rx;
 }
 
 void PlatPmPPB::attr_init(void)
@@ -125,8 +173,8 @@ void PlatPmPPB::attr_init(void)
 	FAPI_ATTR_GET(fapi2::FREQ_CORE_FLOOR_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_floor_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_PB_MHZ, FAPI_SYSTEM, iv_attrs.attr_nest_frequency_mhz);
 	FAPI_ATTR_GET(fapi2::ATTR_FREQ_CORE_CEILING_MHZ, FAPI_SYSTEM, iv_attrs.attr_freq_core_ceiling_mhz);
-	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ,iv_procChip, iv_attrs.attr_pm_safe_frequency_mhz);
-	FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
+	iv_attrs.attr_pm_safe_frequency_mhz = 0;
+	iv_attrs.attr_pm_safe_voltage_mv = 0;
 
 	#define SET_DEFAULT(_attr_name, _attr_default) \
 	if (!(iv_attrs._attr_name)) \
@@ -177,29 +225,22 @@ void PlatPmPPB::attr_init(void)
 	iv_wof_enabled     = true;
 	iv_wov_underv_enabled = true;
 	iv_wov_overv_enabled = true;
-	iv_frequency_step_khz = 16666;
 	iv_nest_freq_mhz      = iv_attrs.attr_nest_frequency_mhz;
 }
 
 void p9_setup_evid(chiplet_id_t proc_chip_target)
 {
 	pm_pstate_parameter_block::AttributeList attrs;
+	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
 	PlatPmPPB l_pmPPB(proc_chip_target);
 	l_pmPPB.attr_init();
 
 	iv_raw_vpd_pts = 0;
 	iv_biased_vpd_pts = 0;
 	iv_poundW_data = 0;
-	iv_iddqt = 0;
 	iv_operating_points = 0;
 	iv_attr_mvpd_poundV_raw = 0;
 	iv_attr_mvpd_poundV_biased = 0;
-
-	iv_attr_mvpd_poundV_raw[].frequency_mhz = {0};
-	iv_attr_mvpd_poundV_raw[].vdd_mv        = {0};
-	iv_attr_mvpd_poundV_raw[].idd_100ma     = {0};
-	iv_attr_mvpd_poundV_raw[].vcs_mv        = {0};
-	iv_attr_mvpd_poundV_raw[].ics_100ma     = {0};
 
 	iv_bias[].frequency_hp    = {0};
 	iv_bias[].vdd_ext_hp      = {0};
@@ -207,29 +248,9 @@ void p9_setup_evid(chiplet_id_t proc_chip_target)
 	iv_bias[].vdn_ext_hp      = {0};
 	iv_bias[].vcs_ext_hp      = {0};
 
-	fapi2::voltageBucketData_t l_fstChlt_vpd_data;
-	iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
-	memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
-
-	if ((iv_poundV_raw_data.VddNomVltg    > l_fstChlt_vpd_data.VddNomVltg)
-	||	(iv_poundV_raw_data.VddPSVltg     > l_fstChlt_vpd_data.VddPSVltg)
-	||	(iv_poundV_raw_data.VddTurboVltg  > l_fstChlt_vpd_data.VddTurboVltg)
-	||	(iv_poundV_raw_data.VddUTurboVltg > l_fstChlt_vpd_data.VddUTurboVltg)
-	||	(iv_poundV_raw_data.VdnPbVltg     > l_fstChlt_vpd_data.VdnPbVltg) )
-	{
-		memcpy(&l_fstChlt_vpd_data, &iv_poundV_raw_data, sizeof(iv_poundV_raw_data));
-		iv_poundV_bucket_id = iv_poundV_raw_data.bucketId;
-	}
-
-	memcpy(iv_attr_mvpd_poundV_biased, iv_attr_mvpd_poundV_raw, sizeof(iv_attr_mvpd_poundV_raw));
-
-	for (auto p = 0; p < NUM_OP_POINTS; p++)
-	{
-		iv_attr_mvpd_poundV_raw[p].frequency_mhz = (uint16_t)floor(iv_attr_mvpd_poundV_raw[p].frequency_mhz);
-		iv_attr_mvpd_poundV_raw[p].vdd_mv        = (uint16_t)ceil(iv_attr_mvpd_poundV_raw[p].vdd_mv);
-		iv_attr_mvpd_poundV_raw[p].vcs_mv        = (uint16_t)iv_attr_mvpd_poundV_raw[p].vcs_mv;
-	}
-	iv_attr_mvpd_poundV_biased[VPD_PV_POWERBUS].vdd_mv = (uint32_t)ceil((double)iv_attr_mvpd_poundV_raw[VPD_PV_POWERBUS].vdd_mv);
+	iv_poundV_raw_data = {0};
+	l_fstChlt_vpd_data = {0};
+	iv_poundV_bucket_id = 0;
 
 	if (CHIPE_EC == 0x20)
 	{
@@ -244,308 +265,90 @@ void p9_setup_evid(chiplet_id_t proc_chip_target)
 	iv_wof_enabled = false;
 
 	const uint8_t pv_op_order[NUM_OP_POINTS] = {VPD_PV_POWERSAVE, VPD_PV_NOMINAL, VPD_PV_TURBO, VPD_PV_ULTRA};
-	for (uint32_t i = 0; i < NUM_OP_POINTS; i++)
-	{
-		iv_raw_vpd_pts[i].frequency_mhz  = iv_attr_mvpd_poundV_raw[pv_op_order[i]].frequency_mhz;
-		iv_raw_vpd_pts[i].vdd_mv         = iv_attr_mvpd_poundV_raw[pv_op_order[i]].vdd_mv;
-		iv_raw_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].idd_100ma;
-		iv_raw_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_raw[pv_op_order[i]].vcs_mv;
-		iv_raw_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_raw[pv_op_order[i]].ics_100ma;
-		iv_raw_vpd_pts[i].pstate         = iv_attr_mvpd_poundV_raw[ULTRA].frequency_mhz
-			- iv_attr_mvpd_poundV_raw[pv_op_order[i]].frequency_mhz * 1000 / 16666;
 
-		iv_biased_vpd_pts[i].frequency_mhz  = iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz;
-		iv_biased_vpd_pts[i].vdd_mv         = iv_attr_mvpd_poundV_biased[pv_op_order[i]].vdd_mv;
-		iv_biased_vpd_pts[i].idd_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].idd_100ma;
-		iv_biased_vpd_pts[i].vcs_mv         = iv_attr_mvpd_poundV_biased[pv_op_order[i]].vcs_mv;
-		iv_biased_vpd_pts[i].ics_100ma      = iv_attr_mvpd_poundV_biased[pv_op_order[i]].ics_100ma;
-		iv_biased_vpd_pts[i].pstate         = iv_attr_mvpd_poundV_biased[ULTRA].frequency_mhz
-			- iv_attr_mvpd_poundV_biased[pv_op_order[i]].frequency_mhz * 1000 / 16666;
-	}
-
-	for (int p = 0; p < NUM_OP_POINTS; p++)
-	{
-		iv_operating_points[VPD_PT_SET_RAW][p].vdd_mv = iv_raw_vpd_pts[p].vdd_mv;
-		iv_operating_points[VPD_PT_SET_RAW][p].vcs_mv = iv_raw_vpd_pts[p].vcs_mv;
-		iv_operating_points[VPD_PT_SET_RAW][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
-		iv_operating_points[VPD_PT_SET_RAW][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
-		iv_operating_points[VPD_PT_SET_RAW][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
-		iv_operating_points[VPD_PT_SET_RAW][p].pstate = iv_raw_vpd_pts[p].pstate;
-
-		iv_operating_points[VPD_PT_SET_SYSP][p].vdd_mv = (uint32_t)((double)iv_raw_vpd_pts[p].vdd_mv + (((double)(iv_raw_vpd_pts[p].idd_100ma * 100 * (revle32(iv_vdd_sysparam.loadline_uohm) + revle32(iv_vdd_sysparam.distloss_uohm))) / 1000 + (double)revle32(iv_vdd_sysparam.distoffset_uv))) / 1000);
-		iv_operating_points[VPD_PT_SET_SYSP][p].vcs_mv = (uint32_t)((double)iv_raw_vpd_pts[p].vcs_mv + (((double)(iv_raw_vpd_pts[p].ics_100ma * 100 * (revle32(iv_vcs_sysparam.loadline_uohm) + revle32(iv_vcs_sysparam.distloss_uohm))) / 1000 + (double)revle32(iv_vcs_sysparam.distoffset_uv))) / 1000);
-		iv_operating_points[VPD_PT_SET_SYSP][p].idd_100ma = iv_raw_vpd_pts[p].idd_100ma;
-		iv_operating_points[VPD_PT_SET_SYSP][p].ics_100ma = iv_raw_vpd_pts[p].ics_100ma;
-		iv_operating_points[VPD_PT_SET_SYSP][p].frequency_mhz = iv_raw_vpd_pts[p].frequency_mhz;
-		iv_operating_points[VPD_PT_SET_SYSP][p].pstate = iv_raw_vpd_pts[p].pstate;
-
-		iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv = (uint32_t)ceil((double)iv_raw_vpd_pts[p].vdd_mv * (1.0 + (0.005 * (double)iv_bias[p].vdd_ext_hp)));
-		iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv = (uint32_t)ceil((double)iv_raw_vpd_pts[p].vcs_mv * (1.0 + (0.005 * (double)iv_bias[p].vcs_ext_hp)));
-		iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz = (uint32_t)floor((double)iv_raw_vpd_pts[p].frequency_mhz * (1.0 + (0.005 * (double)iv_bias[p].frequency_hp)));
-		iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma = iv_biased_vpd_pts[p].idd_100ma;
-		iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma = iv_biased_vpd_pts[p].ics_100ma;
-	}
-
-	iv_reference_frequency_khz = iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz * 1000;
-
-	for (int p = 0; p < NUM_OP_POINTS; p++)
-	{
-		iv_operating_points[VPD_PT_SET_BIASED][p].pstate = (((iv_operating_points[VPD_PT_SET_BIASED][ULTRA].frequency_mhz - iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz) * 1000) / iv_frequency_step_khz);
-
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vdd_mv =
-			(uint32_t)((double)iv_operating_points[VPD_PT_SET_BIASED][p].vdd_mv
-			+ (((double)(iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma
-			* 100 * (revle32(iv_vdd_sysparam.loadline_uohm)
-			+ revle32(iv_vdd_sysparam.distloss_uohm)))
-			/ 1000 + (double)revle32(iv_vdd_sysparam.distoffset_uv))) / 1000);
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].vcs_mv =
-			(uint32_t)((double)iv_operating_points[VPD_PT_SET_BIASED][p].vcs_mv
-			+ (((double)(iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma * 100
-			* (revle32(iv_vcs_sysparam.loadline_uohm)
-			+ revle32(iv_vcs_sysparam.distloss_uohm)))
-			/ 1000 + (double)revle32(iv_vcs_sysparam.distoffset_uv))) / 1000);
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].idd_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].idd_100ma;
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].ics_100ma = iv_operating_points[VPD_PT_SET_BIASED][p].ics_100ma;
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].frequency_mhz = iv_operating_points[VPD_PT_SET_BIASED][p].frequency_mhz;
-		iv_operating_points[VPD_PT_SET_BIASED_SYSP][p].pstate = iv_operating_points[VPD_PT_SET_BIASED][p].pstate;
-	}
-
-	uint8_t l_ps_pstate;
 	Safe_mode_parameters l_safe_mode_values;
-	uint32_t l_ps_freq_khz = iv_operating_points[VPD_PT_SET_BIASED][POWERSAVE].frequency_mhz * 1000;
+	uint32_t l_safe_mode_op_ps2freq_mhz = 4766;
 
-	if (!iv_attrs.attr_pm_safe_voltage_mv && !iv_attrs.attr_pm_safe_frequency_mhz)
-	{
-		freq2pState(l_ps_freq_khz, &l_ps_pstate);
-
-		safe_mode_computation(l_ps_pstate, &l_safe_mode_values);
-
-		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip,iv_attrs.attr_pm_safe_frequency_mhz);
-		FAPI_ATTR_GET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, iv_attrs.attr_pm_safe_voltage_mv);
-	}
-
-	iv_attrs.vcs_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERSAVE].vcs_mv
-		+ (double)(iv_attr_mvpd_poundV_biased[POWERSAVE].ics_100ma * revle32(64)) / 10000);
-	iv_attrs.vdn_voltage_mv = (uint32_t)((double)iv_attr_mvpd_poundV_biased[POWERBUS].vdd_mv
-		+ (double)(iv_attr_mvpd_poundV_biased[POWERBUS].idd_100ma * revle32(50)) / 10000)
-
-	FAPI_ATTR_SET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
-	FAPI_ATTR_SET(fapi2::ATTR_VCS_BOOT_VOLTAGE, iv_procChip, iv_attrs.vcs_voltage_mv);
-	FAPI_ATTR_SET(fapi2::ATTR_VDN_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdn_voltage_mv);
-
-	memcpy(&attrs ,&iv_attrs, sizeof(iv_attrs));
-
-	if (attrs.vdd_voltage_mv)
-	{
-		p9_setup_evid_voltageWrite(proc_chip_target, 0, 0, attrs.vdd_voltage_mv, VDD_SETUP); // VDD_SETUP = 6
-	}
-	if (attrs.vdn_voltage_mv)
-	{
-		p9_setup_evid_voltageWrite(proc_chip_target, 1, 0, attrs.vdn_voltage_mv, VDN_SETUP); // VDN_SETUP = 7
-	}
-	if (attrs.vcs_voltage_mv)
-	{
-		p9_setup_evid_voltageWrite(proc_chip_target, 0, 1, attrs.vcs_voltage_mv, VCS_SETUP); // VCS_SETUP = 8
-	}
-}
-
-static void PlatPmPPB::safe_mode_computation(
-	const Pstate i_ps_pstate,
-	Safe_mode_parameters *o_safe_mode_values)
-{
-	Safe_mode_parameters l_safe_mode_values;
-
-	l_safe_mode_values.safe_op_freq_mhz = max(4800, iv_operating_points[VPD_PT_SET_BIASED_SYSP][POWERSAVE].frequency_mhz)
-
-	l_safe_mode_values.safe_op_ps =
-		((float)(iv_reference_frequency_khz)
-		- (float)(l_safe_mode_values.safe_op_freq_mhz * 1000))
-		/ (float)iv_frequency_step_khz;
-
-	uint32_t l_safe_mode_op_ps2freq_mhz =
-		(iv_reference_frequency_khz
-		- (l_safe_mode_values.safe_op_ps * iv_frequency_step_khz)) / 1000;
-
-	while (l_safe_mode_op_ps2freq_mhz < l_safe_mode_values.safe_op_freq_mhz)
-	{
-		l_safe_mode_values.safe_op_ps--;
-		l_safe_mode_op_ps2freq_mhz =
-			(iv_reference_frequency_khz
-			- (l_safe_mode_values.safe_op_ps * iv_frequency_step_khz)) / 1000;
-	}
-
-	// Calculate safe jump value for large frequency
-	l_safe_mode_values.safe_vdm_jump_value =
-			large_jump_interpolate(l_safe_mode_values.safe_op_ps, i_ps_pstate);
-
-	// Calculate safe mode frequency - Round up to nearest MHz
-	// The uplifted frequency is based on the fact that the DPLL percentage is a
-	// "down" value. Hence:
-	//     X (uplifted safe) = Y (safe operating) / (1 - droop percentage)
-	l_safe_mode_values.safe_mode_freq_mhz =
-		(uint32_t)(((float)l_safe_mode_op_ps2freq_mhz * 1000 /
-		  (1 - (float)l_safe_mode_values.safe_vdm_jump_value/32) + 500) / 1000);
-
-	l_safe_mode_values.safe_mode_ps = ((float)(iv_reference_frequency_khz) -
-									   (float)(l_safe_mode_values.safe_mode_freq_mhz * 1000)) /
-									   (float)iv_frequency_step_khz;
-
-
-	l_safe_mode_values.safe_mode_mv = ps2v_mv(l_safe_mode_values.safe_mode_ps);
-
-	FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, l_safe_mode_values.safe_mode_mv);
-	FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip, l_safe_mode_values.safe_mode_freq_mhz);
+	l_safe_mode_values.safe_vdm_jump_value = 0;
+	l_safe_mode_values.safe_mode_mv = ps2v_mv();
 
 	if (!iv_attrs.vdd_voltage_mv)
 	{
 		iv_attrs.vdd_voltage_mv = l_safe_mode_values.safe_mode_mv;
 	}
 
-	memcpy(o_safe_mode_values,&l_safe_mode_values, sizeof(Safe_mode_parameters));
+	memcpy(l_safe_mode_values, &l_safe_mode_values, sizeof(Safe_mode_parameters));
+	iv_attrs.attr_pm_safe_frequency_mhz = 4766;
+	iv_attrs.attr_pm_safe_voltage_mv = l_safe_mode_values.safe_mode_mv;
+
+	FAPI_ATTR_SET(fapi2::ATTR_VDD_BOOT_VOLTAGE, iv_procChip, iv_attrs.vdd_voltage_mv);
+	FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_VOLTAGE_MV, iv_procChip, l_safe_mode_values.safe_mode_mv);
+	FAPI_ATTR_SET(fapi2::ATTR_SAFE_MODE_FREQUENCY_MHZ, iv_procChip, 4766);
+
+	memcpy(&attrs ,&iv_attrs, sizeof(iv_attrs));
+
+	if (attrs.vdd_voltage_mv)
+	{
+		p9_setup_evid_voltageWrite(proc_chip_target, attrs.vdd_voltage_mv);
+	}
 }
 
-uint32_t PlatPmPPB::large_jump_interpolate(
-	const Pstate i_pstate,
-	const Pstate i_ps_pstate)
+static void PlatPmPPB::safe_mode_computation(Safe_mode_parameters *l_safe_mode_values)
 {
 
-	uint8_t l_jump_value_set_ps  = iv_poundW_data.poundw[POWERSAVE].vdm_normal_freq_drop & 0x0F;
-	uint8_t l_jump_value_set_nom = iv_poundW_data.poundw[NOMINAL].vdm_normal_freq_drop & 0x0F;
-
-	uint32_t l_slope_value =
-		(int16_t)(((double)(l_jump_value_set_nom - l_jump_value_set_ps)
-		/ (double)(iv_operating_points[VPD_PT_SET_BIASED][POWERSAVE].pstate
-			- iv_operating_points[VPD_PT_SET_BIASED][NOMINAL].pstate))
-		* (1 << 12));
-
-	uint32_t l_vdm_jump_value =
-		(uint32_t)((int32_t)l_jump_value_set_ps
-		+ (((int32_t)l_slope_value * (i_ps_pstate - i_pstate)) >> 12));
-	return l_vdm_jump_value;
 }
 
-uint32_t PlatPmPPB::ps2v_mv(const Pstate i_pstate)
+uint32_t PlatPmPPB::ps2v_mv()
 {
 
 	uint32_t region_start, region_end;
 	const char* pv_op_str[NUM_OP_POINTS] = PV_OP_ORDER_STR;
 
-	if(i_pstate > iv_operating_points[VPD_PT_SET_BIASED_SYSP][NOMINAL].pstate)
-	{
-		region_start = POWERSAVE;
-		region_end = NOMINAL;
-	}
-	else if(i_pstate > iv_operating_points[VPD_PT_SET_BIASED_SYSP][TURBO].pstate)
-	{
-		region_start = NOMINAL;
-		region_end = TURBO;
-	}
-	else
-	{
-		region_start = TURBO;
-		region_end = ULTRA;
-	}
-
-	uint32_t l_SlopeValue = (int16_t)(((float)(iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_end].vdd_mv
-			- iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_start].vdd_mv)
-		/ (float)(iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_start].pstate
-			- iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_end].pstate)) * (1 << 12));
-
-	uint32_t l_vdd =
-		((l_SlopeValue * (-i_pstate + iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_start].pstate)) >> 12)
-		   + iv_operating_points[VPD_PT_SET_BIASED_SYSP][region_start].vdd_mv;
-
+	uint32_t l_SlopeValue = (int16_t)(((float)0/(float)0) * (1 << 12));
+	uint32_t l_vdd = (l_SlopeValue * (-285)) >> 12;
 	return ((l_vdd << 1) + 1) >> 1;
-}
-
-static void PlatPmPPB::freq2pState (
-	const uint32_t i_freq_khz,
-	Pstate* o_pstate)
-{
-	float pstate32 = ((float)(iv_reference_frequency_khz - (float)i_freq_khz)) / (float)iv_frequency_step_khz;
-	// @todo Bug fix from Characterization team to deal with VPD not being
-	// exactly in step increments
-	//       - not yet included to separate changes
-	// As higher Pstate numbers represent lower frequencies, the pstate must be
-	// snapped to the nearest *higher* integer value for safety.  (e.g. slower
-	// frequencies are safer).
-	if (i_freq_khz)
-	{
-		*o_pstate = (Pstate)ceil(pstate32);
-	}
-	else
-	{
-		*o_pstate = (Pstate)pstate32;
-	}
-	if (pstate32 < 0)
-	{
-		*o_pstate = 0;
-	}
-	else if (pstate32 > 255)
-	{
-		*o_pstate = 255;
-	}
 }
 
 void p9_setup_evid_voltageWrite(
 	chiplet_id_t proc_chip_target,
-	const uint8_t i_bus_num,
-	const uint8_t i_rail_select,
-	const uint32_t i_voltage_mv,
-	const P9_SETUP_EVID_CONSTANTS i_evid_value)
+	const uint32_t i_voltage_mv)
 
 {
 	uint8_t     l_goodResponse = 0;
-	uint8_t     l_throwAssert = true;
 	uint32_t    l_present_voltage_mv;
 	uint32_t    l_target_mv;
-	uint32_t    l_count;
-	int32_t     l_delta_mv = 0;
-	// VCS_SETUP = 8
-	if (i_evid_value != VCS_SETUP)
-	{
-		avsInitExtVoltageControl(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
-	}
+	int32_t     l_delta_mv;
+	avsIdleFrame(proc_chip_target, 0);
 
-	avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
-
-	l_count = 0;
 	do
 	{
 		fapi2::buffer<uint64_t> l_data64;
 		// Drive a Read Command
 		avsDriveCommand(
 			proc_chip_target,
-			i_bus_num,
-			BRIDGE_NUMBER,
-			i_rail_select,
+			0,
+			0,
 			3,
 			0xFFFF);
-		// Read returned voltage value from Read frame
-		getScom(proc_chip_target, p9avslib::OCB_O2SRD[i_bus_num][BRIDGE_NUMBER], l_data64);
-		// Extracting bits 8:23 , which contains voltage read data
+
+		getScom(proc_chip_target, p9avslib::OCB_O2SRD[0][1], l_data64);
 		l_present_voltage_mv = (l_data64 & 0x00FFFF0000000000) >> 40;
-		// Throw an assertion if we don't get a good response.
-		l_throwAssert = l_count >= AVSBUS_RETRY_COUNT;
-		avsValidateResponse(proc_chip_target, i_bus_num, BRIDGE_NUMBER, l_throwAssert, l_goodResponse);
+		avsValidateResponse(proc_chip_target, 0, l_goodResponse);
 		if (!l_goodResponse)
 		{
-			avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
+			avsIdleFrame(proc_chip_target, 0);
 		}
-		l_count++;
 	}
 	while (!l_goodResponse);
 
-	// Compute the delta
 	l_delta_mv = l_present_voltage_mv - i_voltage_mv;
 
-	// Break into steps limited by attr.attr_ext_vrm_step_size_mv
 	while (l_delta_mv)
 	{
 		uint32_t l_abs_delta_mv = abs(l_delta_mv);
-		if (50 > 0 && l_abs_delta_mv > 50)
+		if (l_abs_delta_mv > 50)
 		{
-			if (l_delta_mv > 0)  // Decreasing
+			if (l_delta_mv > 0)
 			{
 				l_target_mv = l_present_voltage_mv - 50;
 			}
@@ -558,32 +361,14 @@ void p9_setup_evid_voltageWrite(
 		{
 			l_target_mv = i_voltage_mv;
 		}
-		l_count = 0;
-
 		do
 		{
-			// Set Boot voltage
-			avsDriveCommand(
-			proc_chip_target,
-			i_bus_num,
-			BRIDGE_NUMBER,
-			i_rail_select,
-			0,
-			l_target_mv);
-
-			// Throw an assertion if we don't get a good response.
-			l_throwAssert =  l_count >= AVSBUS_RETRY_COUNT;
-			avsValidateResponse(
-				proc_chip_target,
-				i_bus_num,
-				BRIDGE_NUMBER,
-				l_throwAssert,
-				l_goodResponse);
+			avsDriveCommand(proc_chip_target, i_bus_num, i_rail_select, 0, l_target_mv);
+			avsValidateResponse(proc_chip_target, i_bus_num, l_goodResponse);
 			if (!l_goodResponse)
 			{
-				avsIdleFrame(proc_chip_target, i_bus_num, BRIDGE_NUMBER);
+				avsIdleFrame(proc_chip_target, i_bus_num, 1);
 			}
-			l_count++;
 		}
 		while (!l_goodResponse);
 	}
@@ -634,24 +419,6 @@ static void PlatPmPPB::validate_quad_spec_data(void)
 			iv_poundW_data.poundw[i].vdm_vid_compare_per_quad[eq_chiplet_unit_pos] = (l_vdm_compare_biased_mv[i] - 512) >> 2;
 		}
 	}
-}
-
-double ceil(double x)
-{
-	if ((x - (int)(x)) > 0)
-	{
-		return (int)x + 1;
-	}
-	return ((int)x);
-}
-
-double floor(double x)
-{
-	if(x >= 0)
-	{
-		return (int)x;
-	}
-	return (int)(x - 0.9999999999999999);
 }
 
 static void PlatPmPPB::get_mvpd_poundW(void)
@@ -707,7 +474,7 @@ static void PlatPmPPB::get_mvpd_poundW(void)
 	}
 
 	// Validate the WOF content is non-zero if WOF is enabled
-	if (CHIP_EC > 0x20 && iv_wof_enabled)
+	if (CHIP_EC > 0x20)
 	{
 		bool b_tdp_ac = true;
 		bool b_tdp_dc = true;
@@ -776,148 +543,38 @@ static void PlatPmPPB::get_mvpd_poundW(void)
 	}
 }
 
-enum avslibconstants
+static void avsIdleFrame(chiplet_id_t proc_target, const uint8_t i_avsBusNum)
 {
-	// AVSBUS_FREQUENCY specified in Khz, Default value 10 MHz
-	MAX_POLL_COUNT_AVS = 0x1000,
-	AVS_CRC_DATA_MASK = 0xfffffff8,
-	O2S_FRAME_SIZE = 0x20,
-	O2S_IN_DELAY1 = 0x3F,
-	AVSBUS_FREQUENCY = 0x2710
-};
-
-const uint32_t OCB_O2SCTRLS[2][2] =
-{
-	OCB_O2SCTRLS0A,
-	OCB_O2SCTRLS0B,
-	OCB_O2SCTRLS1A,
-	OCB_O2SCTRLS1B
-};
-
-const uint32_t OCB_O2SCTRL1[2][2] =
-{
-	OCB_O2SCTRL10A,
-	OCB_O2SCTRL10B,
-	OCB_O2SCTRL11A,
-	OCB_O2SCTRL11B
-};
-
-
-const uint32_t OCB_O2SCTRL2[2][2] =
-{
-	OCB_O2SCTRL20A,
-	OCB_O2SCTRL20B,
-	OCB_O2SCTRL21A,
-	OCB_O2SCTRL21B
-};
-
-void avsInitExtVoltageControl(
-	chiplet_id_t proc_target,
-	const uint8_t i_avsBusNum,
-	const uint8_t i_o2sBridgeNum)
-{
-	write_scom_for_chiplet(
-		proc_target,
-		p9avslib::OCB_O2SCTRLF[i_avsBusNum][i_o2sBridgeNum],
-		PPC_BIT(0)
-		| PPC_BIT(6)
-		| PPC_BITMASK(12, 17));
-	write_scom_for_chiplet(
-		proc_target,
-		OCB_O2SCTRLS[i_avsBusNum][i_o2sBridgeNum],
-		PPC_BIT(16));
-	write_scom_for_chiplet(
-		proc_target,
-		p9avslib::OCB_O2SCTRL1[i_avsBusNum][i_o2sBridgeNum],
-		PPC_BIT(0)
-		| PPC_BIT(3)
-		| ((ATTR_FREQ_PB_MHZ / 80 - 1) & 0x3FF) << 50
-		| PPC_BIT(17));
-	write_scom_for_chiplet(
-		proc_target,
-		p9avslib::OCB_O2SCTRL2[i_avsBusNum][i_o2sBridgeNum],
-		0);
-}
-
-static void avsIdleFrame(
-	chiplet_id_t proc_target,
-	const uint8_t i_avsBusNum,
-	const uint8_t i_o2sBridgeNum)
-{
-	// clear sticky bits in o2s_status_reg
-	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPPC_BIT(1));
-	// Send the idle frame
-	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], 0xFFFFFFFFFFFFFFFF);
-	// Wait on o2s_ongoing = 0
-	avsPollVoltageTransDone(proc_target, i_avsBusNum, i_o2sBridgeNum);
-}
-
-static void
-avsPollVoltageTransDone(
-	chiplet_id_t proc_target,
-	const uint8_t i_avsBusNum,
-	const uint8_t i_o2sBridgeNum)
-{
+	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][1], PPPC_BIT(1));
+	write_scom_for_chiplet(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][1], 0xFFFFFFFFFFFFFFFF);
 	uint64_t ocb_o2sst;
-
 	for(uint8_t l_count = 0; l_count < 0x1000; ++l_count)
 	{
-		ocb_o2sst = read_scom_for_chiplet(proc_target, p9avslib::OCB_O2SST[i_avsBusNum][i_o2sBridgeNum]);
-		if (!(ocb_o2sst & PPC_BIT(0)))
+		ocb_o2sst = read_scom_for_chiplet(proc_target, p9avslib::OCB_O2SST[i_avsBusNum][1]);
+		if (ocb_o2sst & PPC_BIT(0) == 0)
 		{
 			return;
 		}
 	}
 }
 
-static void avsVoltageRead(
-	chiplet_id_t proc_target,
-	const uint8_t i_bus_num,
-	const uint8_t BRIDGE_NUMBER,
-	const uint32_t i_rail_select,
-	uint32_t& l_present_voltage_mv)
+static void avsValidateResponse(chiplet_id_t proc_target, const uint8_t i_avsBusNum, uint8_t& o_goodResponse)
 {
-	fapi2::buffer<uint64_t> l_data64;
-	// Drive a Read Command
-	avsDriveCommand(
-		proc_target,
-		i_bus_num,
-		BRIDGE_NUMBER,
-		i_rail_select,
-		3,
-		0xFFFF);
-
-	// Read returned voltage value from Read frame
-	getScom(proc_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	// Extracting bits 8:23 , which contains voltage read data
-	l_present_voltage_mv = (l_data64 & 0x00FFFF0000000000) >> 40;
-}
-
-static void avsValidateResponse(
-	chiplet_id_t proc_target,
-	const uint8_t i_avsBusNum,
-	const uint8_t i_o2sBridgeNum,
-	const uint8_t i_throw_assert,
-	uint8_t& o_goodResponse)
-{
-	fapi2::buffer<uint64_t> l_data64;
-	fapi2::buffer<uint32_t> l_rsp_rcvd_crc;
-	fapi2::buffer<uint8_t>  l_data_status_code;
-	fapi2::buffer<uint32_t> l_rsp_data;
+	uint64_t l_data64;
+	uint32_t l_rsp_rcvd_crc;
+	uint8_t l_data_status_code;
+	uint32_t l_rsp_data;
 
 	uint32_t l_rsp_computed_crc;
 	o_goodResponse = false;
 
 	// Read the data response register
-	getScom(proc_target, p9avslib::OCB_O2SRD[i_avsBusNum][i_o2sBridgeNum], l_data64);
+	getScom(proc_target, p9avslib::OCB_O2SRD[i_avsBusNum][1], l_data64);
 
-	// Status Return Code and Received CRC
-	// out SS len
 	l_data_status_code = ~PPC_BITMASK(0, 1) & l_data64;
 	l_rsp_rcvd_crc = (~PPC_BITMASK(29, 31) & l_data64) >> 32;
-	l_rsp_data = ~PPC_BITMASK(0, 31) & l_data_64;
+	l_rsp_data = ~PPC_BITMASK(0, 31) & l_data64;
 
-	// Compute CRC on Response frame
 	l_rsp_computed_crc = avsCRCcalc(l_rsp_data);
 
 	if (l_data_status_code == 0                 // no error code
@@ -1028,7 +685,6 @@ static void p9_fbc_eff_config_links_map_endp(
 void avsDriveCommand(
 	const fapi2::Target<fapi2::TARGET_TYPE_PROC_CHIP>& proc_target,
 	const uint8_t  i_avsBusNum,
-	const uint8_t  i_o2sBridgeNum,
 	const uint32_t i_RailSelect,
 	const uint32_t i_CmdType,
 	const uint32_t i_CmdGroup,
@@ -1036,17 +692,15 @@ void avsDriveCommand(
 {
 	fapi2::buffer<uint64_t> l_data64;
 	fapi2::buffer<uint32_t> l_data64WithoutCRC;
-	putScom(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][i_o2sBridgeNum], PPC_BIT(1));
-	l_data64 = 0;
-	l_data64 |= PPC_BIT(1);
+	putScom(proc_target, p9avslib::OCB_O2SCMD[i_avsBusNum][1], PPC_BIT(1));
+	l_data64 = PPC_BIT(1);
 	l_data64.insertFromRight<2, 2>(i_CmdType);
 	l_data64.insertFromRight<4, 1>(i_CmdGroup);
 	l_data64.insertFromRight<9, 4>(i_RailSelect);
-	l_data64.extract(l_data64WithoutCRC, 0, 32);
+	l_data64WithoutCRC = l_data64 & PPC_BITMASK(0, 31);
 	l_data64.insertFromRight<29, 3>(avsCRCcalc(l_data64WithoutCRC));
-	putScom(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][i_o2sBridgeNum], l_data64);
-	// Wait on o2s_ongoing = 0
-	avsPollVoltageTransDone(proc_target, i_avsBusNum, i_o2sBridgeNum);
+	putScom(proc_target, p9avslib::OCB_O2SWD[i_avsBusNum][1], l_data64);
+	avsPollVoltageTransDone(proc_target, i_avsBusNum, 1);
 }
 
 uint32_t avsCRCcalc(const uint32_t i_avs_cmd)
@@ -1057,9 +711,9 @@ uint32_t avsCRCcalc(const uint32_t i_avs_cmd)
 	uint32_t l_polynomial = 0xB0000000;
 	uint32_t l_msb =        0x80000000;
 
-	o_crc_value = i_avs_cmd & AVS_CRC_DATA_MASK;
+	o_crc_value = i_avs_cmd & 0xFFFFFFF8;
 
-	while (o_crc_value & AVS_CRC_DATA_MASK)
+	while (o_crc_value & 0xFFFFFFF8)
 	{
 		if (o_crc_value & l_msb)
 		{
@@ -1073,4 +727,39 @@ uint32_t avsCRCcalc(const uint32_t i_avs_cmd)
 		l_msb = l_msb >> 1;
 	}
 	return o_crc_value;
+}
+
+uint32_t revle32(const uint32_t i_x)
+{
+	uint32_t rx;
+#ifndef _BIG_ENDIAN
+	uint8_t* pix = (uint8_t*)(&i_x);
+	uint8_t* prx = (uint8_t*)(&rx);
+	prx[0] = pix[3];
+	prx[1] = pix[2];
+	prx[2] = pix[1];
+	prx[3] = pix[0];
+#else
+	rx = i_x;
+#endif
+
+	return rx;
+}
+
+double ceil(double x)
+{
+	if ((x - (int)(x)) > 0)
+	{
+		return (int)x + 1;
+	}
+	return ((int)x);
+}
+
+double floor(double x)
+{
+	if(x >= 0)
+	{
+		return (int)x;
+	}
+	return (int)(x - 0.9999999999999999);
 }

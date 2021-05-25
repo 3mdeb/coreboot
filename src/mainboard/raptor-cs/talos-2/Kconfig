@@ -54,6 +54,11 @@ config MAX_CPUS
 	int
 	default 1
 
+# Doing delays with monotonic timers is suboptimal on this platform
+config GENERIC_UDELAY
+	bool
+	default n
+
 config MAINBOARD_VENDOR
 	string
 	default "Raptor CS"

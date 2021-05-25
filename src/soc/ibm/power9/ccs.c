@@ -207,8 +207,8 @@ void ccs_execute(chiplet_id_t id, int mca_i)
 	  delay(10ns)
 	if MC01.MCBIST.MBA_SCOMFIR.CCS_STATQ != 0x40..00: report failure  // only [1] set, others 0
 	*/
-	time = wait_us(poll_timeout, !(read_scom_for_chiplet(id, CCS_STATQ) &
-	                               PPC_BIT(CCS_STATQ_CCS_IP)));
+	time = wait_us(poll_timeout, (udelay(1), !(read_scom_for_chiplet(id, CCS_STATQ) &
+	                               PPC_BIT(CCS_STATQ_CCS_IP))));
 
 	/* This isn't useful for anything but calibration steps, do we want it? */
 	if (!time)

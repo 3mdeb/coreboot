@@ -820,9 +820,10 @@ static uint64_t write_ctr_time(mca_data_t *mca)
 	const int small_step = 0;
 	const int num_valid_samples = 5;
 	int fw_rd_wr = MAX(mca->nwtr_s + 11, ps_to_nck(7500) + 3);
-	return 1000 + (num_valid_samples * (fw_rd_wr + 16) *
-	               (1024/(small_step + 1) + 128/(big_step + 1)) +
-	               2 * (big_step + 1)/(small_step + 1)) * 24;
+	/* Multiplied by 2, the original equation sometimes resulted in timeouts */
+	return 2 * (1000 + (num_valid_samples * (fw_rd_wr + 16) *
+	                    (1024/(small_step + 1) + 128/(big_step + 1)) +
+	                    2 * (big_step + 1)/(small_step + 1)) * 24);
 }
 
 static void write_ctr_post(int mcs_i, int mca_i, int rp,

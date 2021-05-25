@@ -734,7 +734,7 @@ void istep_14_1(void)
 		 * (mcbist_is_done(0) || mcbist_is_done(1)) instead? Maybe even unmask
 		 * FIRs and set FIFO mode off inside mcbist_is_done()?
 		 */
-		long time = wait_us(1000*1000*60, mcbist_is_done(mcs_i));
+		long time = wait_us(1000*1000*60, (udelay(1), mcbist_is_done(mcs_i)));
 
 		/* TODO: dump error/status registers on failure */
 		if (!time)

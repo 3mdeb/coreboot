@@ -7,6 +7,8 @@
 #define SPR_PVR_REV_MASK			(PPC_BITMASK(52, 55) | PPC_BITMASK(60, 63))
 #define SPR_PVR_REV(maj, min)			(PPC_SHIFT((maj), 55) | PPC_SHIFT((min), 63))
 
+#define SPR_HRMOR				0x139
+
 #define SPR_HMER				0x150
 /* Bits in HMER/HMEER */
 #define SPR_HMER_MALFUNCTION_ALERT		PPC_BIT(0)
@@ -35,6 +37,12 @@ static inline uint64_t read_spr(int spr)
 	return val;
 }
 
+static inline void write_spr(int spr, uint64_t val)
+{
+	asm volatile("mtspr %0, %1" :: "i"(spr), "r"(val) : "memory");
+}
+
+
 static inline uint64_t read_hmer(void)
 {
 	return read_spr(SPR_HMER);
@@ -42,7 +50,7 @@ static inline uint64_t read_hmer(void)
 
 static inline void clear_hmer(void)
 {
-	asm volatile("mtspr %0, %1" :: "i"(SPR_HMER), "r"(0) : "memory");
+	write_spr(SPR_HMER, 0);
 }
 
 static inline uint64_t read_msr(void)

@@ -2,6 +2,7 @@
 /*
  * Early initialization code for POWER8.
  */
+#include <cpu/power/spr.h>
 
 #define FIXUP_ENDIAN						   \
 	tdi   0,0,0x48;	  /* Reverse endian of b . + 8		*/ \
@@ -61,7 +62,7 @@ _start:
 ignoreHRMOR:
 	/* Now we are at address 0x80000000F82030xx */
 	andc	%r11, %r11, %r12	/* Clear bit for 2M */
-	mtspr	313, %r11			/* Update HRMOR */
+	mtspr	SPR_HRMOR, %r11		/* Update HRMOR */
 	isync
 
 	/* We can't just "b stopIgnoringHRMOR", it would use relative offset */

@@ -35,6 +35,8 @@ void istep_8_11(void);
 uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
 uint64_t capp_chiplets[] = {N0_CHIPLET_ID, N2_CHIPLET_ID};
 
+#define OCB_O2SWD0B (0x0006C718)
+#define OCB_O2SRD0B (0x6C719)
 #define PERV_ROOT_CTRL6_SCOM (0x00050016)
 #define PU_PB_CENT_SM0_PB_CENT_FIR_REG (0x5011C00)
 #define PU_PB_CENT_SM1_EXTFIR_MASK_REG_OR (0x5011C33)

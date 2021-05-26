@@ -14,6 +14,7 @@
 #include <cbmem.h>
 #include <arch/stages.h>
 #include <cpu/power/spr.h>
+#include <timestamp.h>
 
 void stage_entry(uintptr_t stage_arg)
 {
@@ -35,6 +36,9 @@ void stage_entry(uintptr_t stage_arg)
 		asm volatile("or 1, 1, %0; sync" :: "r"(hrmor) : "memory");
 
 		_cbmem_top_ptr = stage_arg;
+	}
+	else {
+		timestamp_init(read_spr(SPR_TB));
 	}
 
 	main();

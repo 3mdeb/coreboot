@@ -9,6 +9,9 @@
 #define PERV_NET_CTRL0 (0x000F0040)
 #define PERV_NET_CTRL0_WOR (0x000F0042)
 
+uint64_t obus_chiplets[] = {OB0_CHIPLET_ID, OB3_CHIPLET_ID};
+uint64_t capp_chiplets[] = {N0_CHIPLET_ID, N2_CHIPLET_ID};
+
 static void p9_chiplet_enable_ridi(void)
 {
 	chiplet_id_t target_list[] = {
@@ -1049,6 +1052,7 @@ static void p9_chiplet_scominit(void)
 	// Invoke NX SCOM initfile
 	p9_nx_scom();
 	// Invoke CXA SCOM initfile
+
 	for(size_t capp_index = 0; capp_index < ARRAY_SIZE(capp_chiplets); ++capp_index)
 	{
 		p9_cxa_scom(capp_chiplets[capp_index]);

@@ -8,11 +8,13 @@ romstage-y += rom_media.c
 romstage-y += vpd.c
 ramstage-y += rom_media.c
 
-LINUX_DTB = talos-ii.dtb
-$(obj)/$(LINUX_DTB):
-	dtc -p 4096 -I dts -O dtb -o $(obj)/$(LINUX_DTB) -i $(MB_DIR) $(MB_DIR)/$(patsubst %.dtb,%.dts,$(LINUX_DTB))
-# dtc -I dts -O dtb device-tree.dts -o device-tree-blob
+TALOS_DTB = talos-2.dtb
+TALOS_DTS = talos-2.dts
+MB_DIR = src/mainboard/raptor-cs/talos-2
+$(obj)/$(TALOS_DTB):
+	dtc -I dts -O dtb $(MB_DIR)/$(TALOS_DTS) -o $(obj)/$(TALOS_DTB)
 
-cbfs-files-y += $(LINUX_DTB)
-$(LINUX_DTB)-file := $(obj)/$(LINUX_DTB)
-$(LINUX_DTB)-type := raw
+# dtc -I dts -O dtb device-tree.dts -o device-tree-blob
+cbfs-files-y += $(TALOS_DTB)
+$(TALOS_DTB)-file := $(obj)/$(TALOS_DTB)
+$(TALOS_DTB)-type := raw

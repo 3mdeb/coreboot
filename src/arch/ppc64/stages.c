@@ -59,7 +59,7 @@ bool fit_payload_arch(struct prog *payload, struct fit_config_node *config,
 
 	/* Place FDT */
 	/* TODO: remove hardcoded size */
-	fdt->offset = 0xf0000000;
+	fdt->offset = 0xfe000000;
 	fdt->size = 318539;
 
 	/* Mark as reserved for future allocations. */
@@ -68,7 +68,7 @@ bool fit_payload_arch(struct prog *payload, struct fit_config_node *config,
 	/* Kernel expects FDT as argument */
 	arg = (void *)fdt->offset;
 
-	prog_set_entry(payload, (void *)0x10 /* kernel->offset + 0x10 ? */, arg);
+	prog_set_entry(payload, (void *)(kernel->offset + 0x10), arg);
 
 	bootmem_dump_ranges();
 

@@ -324,3 +324,8 @@ payloads/external/Yabits/uefi/build/uefi.elf yabits:
 
 payloads/external/BOOTBOOT/bootboot/dist/bootbootcb.elf:
 	$(MAKE) -C payloads/external/BOOTBOOT all
+
+# skiboot
+
+skiboot.lid:
+	make -C payloads/external/skiboot all

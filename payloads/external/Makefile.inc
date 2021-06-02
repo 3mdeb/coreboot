@@ -327,5 +327,5 @@ payloads/external/BOOTBOOT/bootboot/dist/bootbootcb.elf:
 
 # skiboot
 
-skiboot.lid:
-	make -C payloads/external/skiboot all
+payloads/external/skiboot/talos-skiboot/skiboot.lid:
+	$(MAKE) -C payloads/external/skiboot all

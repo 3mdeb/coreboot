@@ -15,16 +15,15 @@ static int dt_platform_fixup(struct device_tree_fixup *fixup,
 
 	printk(BIOS_ERR, "dt_platform_fixup called **************************\n");
 
-	dt_print_node(tree->root);
 	/* Memory devices are always direct children of root */
 	list_for_each(node, tree->root->children, list_node) {
 		const char *devtype = dt_find_string_prop(node, "device_type");
 		if (devtype && !strcmp(devtype, "memory")) {
 			dt_add_u32_prop(node, "ibm,chip-id", 0 /* FIXME for second CPU */);
-			//~ dt_add_u32_prop(node, "phandle", i++);
-			dt_print_node(node);
 		}
 	}
+
+	dt_print_node(tree->root);
 
 	printk(BIOS_ERR, "dt_platform_fixup exiting **************************\n");
 	return 0;

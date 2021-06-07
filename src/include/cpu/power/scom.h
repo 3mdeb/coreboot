@@ -33,6 +33,7 @@
 #ifndef __ASSEMBLER__
 #include <types.h>
 #include <arch/io.h>
+#include <cpu/power/spr.h>
 
 // TODO: these are probably specific to POWER9
 typedef enum
@@ -85,36 +86,72 @@ typedef enum
 	EC23_CHIPLET_ID = 0x37      ///< Core23 chiplet (Quad5, EX11, C1)
 } chiplet_id_t;
 
+static const chiplet_id_t mcs_to_nest[] =
+{
+	[MC01_CHIPLET_ID] = N3_CHIPLET_ID,
+	[MC23_CHIPLET_ID] = N1_CHIPLET_ID,
+};
+
+void reset_scom_engine(void);
+
 static uint64_t read_scom_direct(uint64_t reg_address)
 {
 	uint64_t val;
-	asm volatile(
-		"ldcix %0, %1, %2":
-		"=r"(val):
-		"b"(0x800603FC00000000),
-		"r"(reg_address << 3));
-	eieio();
+	uint64_t hmer = 0;
+	do {
+		/*
+		 * Clearing HMER on every SCOM access seems to slow down CCS up
+		 * to a point where it starts hitting timeout on "less ideal"
+		 * DIMMs for write centering. Clear it only if this do...while
+		 * executes more than once.
+		 */
+		if ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED)
+			clear_hmer();
+
+		eieio();
+		asm volatile(
+			"ldcix %0, %1, %2":
+			"=r"(val):
+			"b"(MMIO_GROUP0_CHIP0_SCOM_BASE_ADDR),
+			"r"(reg_address << 3));
+		eieio();
+		hmer = read_hmer();
+	} while ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED);
+
+	if (hmer & SPR_HMER_XSCOM_STATUS) {
+		reset_scom_engine();
+		/*
+		 * All F's are returned in case of error, but code polls for a set bit
+		 * after changes that can make such error appear (e.g. clock settings).
+		 * Return 0 so caller won't have to test for all F's in that case.
+		 */
+		return 0;
+	}
 	return val;
 }
 
 static void write_scom_direct(uint64_t reg_address, uint64_t data)
 {
-	asm volatile(
-		"stdcix %0, %1, %2"::
-		"r"(data),
-		"b"(0x800603FC00000000),
-		"r"(reg_address << 3));
-	eieio();
+	uint64_t hmer = 0;
+	do {
+		/* See comment in read_scom_direct() */
+		if ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED)
+			clear_hmer();
+
+		eieio();
+		asm volatile(
+			"stdcix %0, %1, %2"::
+			"r"(data),
+			"b"(MMIO_GROUP0_CHIP0_SCOM_BASE_ADDR),
+			"r"(reg_address << 3));
+		eieio();
+		hmer = read_hmer();
+	} while ((hmer & SPR_HMER_XSCOM_STATUS) == SPR_HMER_XSCOM_OCCUPIED);
+
+	if (hmer & SPR_HMER_XSCOM_STATUS)
+		reset_scom_engine();
 }
 
-/*
- * WARNING:
- * Indirect access uses the same approach as Hostboot, yet all our tests so far
- * were unsuccessful. It is possible that the devices we were trying to access
- * must be initialized or otherwise enabled first. Because of that we decided to
- * leave it as it is for now, with heavy debugging, and return to this when we
- * are sure that it doesn't work because of error in implementation.
- */
 uint64_t read_scom_indirect(uint64_t reg_address);
 void write_scom_indirect(uint64_t reg_address, uint64_t data);
 
@@ -134,6 +171,22 @@ static inline uint64_t read_scom(uint64_t addr)
 		return read_scom_direct(addr);
 }
 
+static inline void scom_and_or(uint64_t addr, uint64_t and, uint64_t or)
+{
+	uint64_t data = read_scom(addr);
+	write_scom(addr, (data & and) | or);
+}
+
+static inline void scom_and(uint64_t addr, uint64_t and)
+{
+	scom_and_or(addr, and, 0);
+}
+
+static inline void scom_or(uint64_t addr, uint64_t or)
+{
+	scom_and_or(addr, ~0, or);
+}
+
 static inline void write_scom_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t data)
 {
 	addr &= ~PPC_BITMASK(34,39);
@@ -146,6 +199,22 @@ static inline uint64_t read_scom_for_chiplet(chiplet_id_t chiplet, uint64_t addr
 	addr &= ~PPC_BITMASK(34,39);
 	addr |= ((chiplet & 0x3F) << 24);
 	return read_scom(addr);
+}
+
+static inline void scom_and_or_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t and, uint64_t or)
+{
+	uint64_t data = read_scom_for_chiplet(chiplet, addr);
+	write_scom_for_chiplet(chiplet, addr, (data & and) | or);
+}
+
+static inline void scom_and_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t and)
+{
+	scom_and_or_for_chiplet(chiplet, addr, and, 0);
+}
+
+static inline void scom_or_for_chiplet(chiplet_id_t chiplet, uint64_t addr, uint64_t or)
+{
+	scom_and_or_for_chiplet(chiplet, addr, ~0, or);
 }
 
 #endif /* __ASSEMBLER__ */

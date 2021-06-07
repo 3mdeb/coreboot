@@ -1,0 +1,36 @@
+name: Build coreboot for the POWER9 Talos II target
+on:
+  push:
+    branches:
+      - talos_2_support
+  pull_request:
+    branches:
+      - talos_2_support
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    container:
+      image: coreboot/coreboot-sdk:65718760fa
+      options: --user 1001:1001 --workdir /home/coreboot
+
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Build
+      run: |
+        cp configs/config.raptor-cs-talos-2 .config
+        make olddefconfig
+        make -j $(nproc)
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: coreboot-binary
+        path: |
+          build/coreboot.rom
+          build/coreboot.rom.signed.ecc
+        retention-days: 7

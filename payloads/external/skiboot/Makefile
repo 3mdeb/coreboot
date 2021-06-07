@@ -10,6 +10,8 @@ config=config.its
 
 unexport $(COREBOOT_EXPORTS)
 
+.PHONY: all clean distclean
+
 all: $(CURDIR)/$(uimage)
 
 $(CURDIR)/$(uimage): $(skiboot_dir)/$(skiboot) $(CURDIR)/fdt.bin
@@ -22,17 +24,13 @@ $(CURDIR)/fdt.bin:
 $(skiboot_dir)/$(skiboot): $(skiboot_dir)
 	$(MAKE) -C $(skiboot_dir) -j`nproc` CROSS=powerpc64-linux-gnu- DEBUG=1
 
-clean:
-# 	rm -rf $(skiboot_dir)
-# 	# $(MAKE) -C $(skiboot_dir) CROSS=powerpc64-linux-gnu- distclean
-# 	rm $(skiboot)
-# 	rm $(uimage)
-
-distclean:
-# 	rm -rf $(skiboot_dir)
-# 	rm $(skiboot)
-# 	rm $(uimage)
-
 $(skiboot_dir):
 	git clone $(skiboot_git_repo) $(skiboot_dir)
 	cd $(skiboot_dir) && git checkout $(skiboot_revision)
+
+distclean: clean
+
+clean:
+	rm -rf $(skiboot_dir)
+	rm -f $(skiboot)
+	rm -f $(uimage)

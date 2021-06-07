@@ -15,7 +15,6 @@ unexport $(COREBOOT_EXPORTS)
 all: $(CURDIR)/$(uimage)
 
 $(CURDIR)/$(uimage): $(skiboot_dir)/$(skiboot) $(CURDIR)/fdt.bin
-	cp $(skiboot_dir)/$(skiboot) $(CURDIR)/$(skiboot)
 	mkimage -f $(config) $(uimage)
 
 $(CURDIR)/fdt.bin:

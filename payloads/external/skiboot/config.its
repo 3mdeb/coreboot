@@ -6,7 +6,7 @@
 	images {
 		kernel {
 			description = "skiboot";
-			data = /incbin/("skiboot.lid");
+			data = /incbin/("talos-skiboot/skiboot.lid");
 			type = "kernel";
 			arch = "powerpc";
 			compression = "none";

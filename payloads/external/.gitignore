@@ -9,4 +9,4 @@ U-Boot/u-boot/
 Memtest86Plus/memtest86plus/
 iPXE/ipxe/
 skiboot/talos-skiboot
-skiboot/skiboot.uimage
+skiboot/build

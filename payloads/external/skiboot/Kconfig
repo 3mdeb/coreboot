@@ -3,7 +3,7 @@
 if PAYLOAD_SKIBOOT
 
 config PAYLOAD_FILE
-	default "payloads/external/skiboot/skiboot.uimage"
+	default "payloads/external/skiboot/build/skiboot.uimage"
 
 config SKIBOOT_REVISION
 	string "Revision of skiboot payload"

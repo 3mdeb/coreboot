@@ -1,13 +1,12 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
+config=config.its
+dts=../../../$(CONFIG_SKIBOOT_DEVICE_TREE)
+fdt=fdt.bin
 skiboot_dir=$(CURDIR)/talos-skiboot
 skiboot_git_repo=https://git.raptorcs.com/git/talos-skiboot
-skiboot_revision=9858186353f2203fe477f316964e03609d12fd1d
-dts=talos_ii_device-tree_stripped.dts
-fdt=fdt.bin
 skiboot=skiboot.lid
 uimage=skiboot.uimage
-config=config.its
 
 unexport $(COREBOOT_EXPORTS)
 
@@ -15,7 +14,7 @@ unexport $(COREBOOT_EXPORTS)
 
 all: $(CURDIR)/$(uimage)
 
-$(CURDIR)/$(uimage): $(skiboot_dir)/$(skiboot) $(CURDIR)/fdt.bin
+$(CURDIR)/$(uimage): $(skiboot_dir)/$(skiboot) $(CURDIR)/$(fdt)
 	mkimage -f $(config) $(uimage)
 
 $(CURDIR)/$(fdt): $(dts)
@@ -26,7 +25,7 @@ $(skiboot_dir)/$(skiboot): $(skiboot_dir)
 
 $(skiboot_dir):
 	git clone $(skiboot_git_repo) $(skiboot_dir)
-	cd $(skiboot_dir) && git checkout $(skiboot_revision)
+	cd $(skiboot_dir) && git checkout $(CONFIG_SKIBOOT_REVISION)
 
 distclean: clean
 

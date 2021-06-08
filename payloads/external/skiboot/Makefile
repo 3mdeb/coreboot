@@ -31,8 +31,10 @@ $(skiboot_dir):
 $(build_dir):
 	mkdir -p $(build_dir)
 
-distclean: clean
+distclean:
+	rm -rf $(skiboot_dir)
+	rm -rf $(build_dir)
 
 clean:
-	rm -rf $(skiboot_dir)
+	$(MAKE) -C $(skiboot_dir) CROSS=powerpc64-linux-gnu- RM="rm -f" clean > /dev/null
 	rm -rf $(build_dir)

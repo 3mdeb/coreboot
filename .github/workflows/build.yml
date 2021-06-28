@@ -5,6 +5,7 @@ on:
       - talos_2_support
       - squashed_talos_2_support
       - talos_2_support_ramstage
+      - talos_2_support_payload_test
   pull_request:
     branches:
       - talos_2_support
@@ -69,6 +70,31 @@ jobs:
         cp configs/config.raptor-cs-talos-2-bootblock-in-seeprom .config
         make olddefconfig
         make -j $(nproc)
+
+  test:
+    runs-on: [self-hosted, builder]
+    steps:
+    - name: Generate ssh config
+      run: |
+        mkdir -p ~/.ssh
+        cat << EOF > ~/.ssh/config
+        Host *
+          StrictHostKeyChecking no
+        EOF
+        chmod 700 ~/.ssh
+        chmod 600 ~/.ssh/config
+
+    - name: Test SSH
+      run: |
+        eval $(ssh-agent -s)
+        echo "Adding key"
+        echo "${TALOS_KEY}" | ssh-add -
+        echo "Starting SSH"
+        ssh "${TALOS_USER}@${TALOS_IP}" 'cat ~/test'
+      env:
+        TALOS_USER: ${{ secrets.TALOS_USERNAME }}
+        TALOS_IP: ${{ secrets.TALOS_IP }}
+        TALOS_KEY: ${{ secrets.TALOS_KEY }}
 
   build-freebsd:
     runs-on: macos-latest

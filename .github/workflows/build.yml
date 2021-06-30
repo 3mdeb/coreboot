@@ -63,6 +63,17 @@ jobs:
           build/coreboot.rom.signed.ecc
         retention-days: 7
 
+    - name: Test coreboot image on Talos II
+      on:
+        schedule:
+          # run every day at 2AM
+          - cron "0 2 * * *"
+      run: |
+        docker run -v $GITHUB_WORKSPACE:/home/coreboot:rw -i --rm \
+          --workdir=/home/coreboot -u$(id -u):$(id -g) 3mdeb/coreboot-sdk:mkimage << EOF
+          ./.github/flash_talos.sh
+          EOF
+
     - name: Build Talos II target (bootblock in SEEPROM)
       run: |
         make clean

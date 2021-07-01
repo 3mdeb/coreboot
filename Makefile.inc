@@ -586,7 +586,7 @@ $(ECCTOOL):
 	cd $(objutil)/ffs && autoreconf -i && ./configure
 	+$(MAKE) -C $(objutil)/ffs
 
-$(SBSIGNTOOLS):
+$(SBSIGNTOOLS)/create-container:
 	@printf "    Compile SB SIGNING UTILS\n"
 	cp -r $(top)/3rdparty/sb-signing-utils $(objutil)
 	cd $(objutil)/sb-signing-utils && autoreconf -i -Wno-unsupported && ./configure
@@ -703,7 +703,7 @@ install-git-commit-clangfmt:
 include util/crossgcc/Makefile.inc
 
 .PHONY: tools
-tools: $(objutil)/kconfig/conf $(objutil)/kconfig/toada $(CBFSTOOL) $(objutil)/cbfstool/cbfs-compression-tool $(FMAPTOOL) $(RMODTOOL) $(IFWITOOL) $(objutil)/nvramtool/nvramtool $(objutil)/sconfig/sconfig $(IFDTOOL) $(CBOOTIMAGE) $(AMDFWTOOL) $(AMDCOMPRESS) $(FUTILITY) $(BINCFG) $(IFITTOOL) $(objutil)/supermicro/smcbiosinfo $(ECCTOOL) $(SBSIGNTOOLS)
+tools: $(objutil)/kconfig/conf $(objutil)/kconfig/toada $(CBFSTOOL) $(objutil)/cbfstool/cbfs-compression-tool $(FMAPTOOL) $(RMODTOOL) $(IFWITOOL) $(objutil)/nvramtool/nvramtool $(objutil)/sconfig/sconfig $(IFDTOOL) $(CBOOTIMAGE) $(AMDFWTOOL) $(AMDCOMPRESS) $(FUTILITY) $(BINCFG) $(IFITTOOL) $(objutil)/supermicro/smcbiosinfo $(ECCTOOL) $(SBSIGNTOOLS)/create-container
 
 ###########################################################################
 # Common recipes for all stages
@@ -1162,7 +1162,7 @@ add_intermediate = \
 	$(1): $(obj)/coreboot.pre $(2) | $(INTERMEDIATE) \
 	$(eval INTERMEDIATE+=$(1)) $(eval PHONY+=$(1))
 
-$(obj)/coreboot.rom: $(obj)/coreboot.pre $(RAMSTAGE) $(CBFSTOOL) $(ECCTOOL) $(SBSIGNTOOLS) $$(INTERMEDIATE)
+$(obj)/coreboot.rom: $(obj)/coreboot.pre $(RAMSTAGE) $(CBFSTOOL) $(ECCTOOL) $(SBSIGNTOOLS)/create-container $$(INTERMEDIATE)
 	@printf "    CBFS       $(subst $(obj)/,,$(@))\n"
 # The full ROM may be larger than the CBFS part, so create an empty
 # file (filled with \377 = 0xff) and copy the CBFS image over it.

@@ -1,6 +1,6 @@
 ## SPDX-License-Identifier: GPL-2.0-only
 
-TOOLCHAIN_ARCHES := i386 x64 arm aarch64 riscv ppc64 nds32le
+TOOLCHAIN_ARCHES := i386 x64 arm aarch64 riscv ppc64 ppc64le nds32le
 
 help_toolchain help::
 	@echo  '*** Toolchain targets ***'

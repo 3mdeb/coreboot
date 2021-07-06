@@ -586,7 +586,7 @@ myhelp()
 	printf "    [-S|--scripting]              build scripting support for GDB\n\n"
 	printf "Platforms for GCC & GDB:\n"
 	printf "    x86_64 i386-elf i386-mingw32 riscv-elf arm aarch64\n"
-	printf "    powerpc64le-linux-gnu nds32le-elf\n\n"
+	printf "    powerpc64-linux-gnu powerpc64le-linux-gnu nds32le-elf\n\n"
 }
 
 printversion() {

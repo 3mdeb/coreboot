@@ -66,6 +66,9 @@ build-riscv:
 build-ppc64:
 	@$(MAKE) build_tools BUILD_PLATFORM=powerpc64-linux-gnu
 
+build-ppc64le:
+	@$(MAKE) build_tools BUILD_PLATFORM=powerpc64le-linux-gnu
+
 build-nds32le:
 	@$(MAKE) build_tools BUILD_PLATFORM=nds32le-elf
 
@@ -85,6 +88,7 @@ distclean: clean
 
 .PHONY: build_gcc build_iasl build_gdb build_clang all all_with_gdb \
 	all_without_gdb build_tools build-i386 build-x64 build-arm  \
-	build-aarch64 build-riscv build-ppc64 build-nds32le build-nasm \
+	build-aarch64 build-riscv build-ppc64 build-ppc64le build-nds32le \
+	build-nasm \
 	clean distclean clean_tempfiles
 .NOTPARALLEL:

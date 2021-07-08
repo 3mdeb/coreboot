@@ -20,3 +20,6 @@ scp $BOOTBLOCK_SOURCE $TALOS:$BOOTBLOCK_BMC_LOCATION >> $LOG_FILE 2>&1
 echo "Flash coreboot image"
 ssh $TALOS pflash -f -e -P $COREBOOT_PARTITION -p $COREBOOT_BMC_LOCATION >> $LOG_FILE 2>&1
 ssh $TALOS pflash -f -e -P $BOOTBLOCK_PARTITION -p $BOOTBLOCK_BMC_LOCATION >> $LOG_FILE 2>&1
+
+echo "Power on Talos II"
+ssh $TALOS obmcutil -w poweron >> $LOG_FILE

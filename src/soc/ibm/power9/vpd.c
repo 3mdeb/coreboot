@@ -37,7 +37,7 @@
  *  - 0x84 byte -- resource type (this byte is missing from PNOR image) (opt)
  *
  * VPD Record (this is a part of binary VPD which is stored in .rvpd-files):
- *  - 2 bytes    -- size of the record's data (>= 40)
+ *  - 2 bytes    -- size of the record's data in LE (>= 40)
  *  - RT keyword -- always the first record with 4 bytes of data
  *  - other keywords (as many as data size allows)
  *  - PF keyword -- padding, always present
@@ -87,18 +87,18 @@
 /* Size of this structure should be rounded to 16 bytes */
 struct memd_hdr {
 	char eyecatch[4];	// Magic number to determine validity "OKOK"
-	char header_version[4]; // Version of this header
+	char header_version[4];	// Version of this header
 	char memd_version[4];	// Version of the MEMD payload
 	uint32_t section_size;	// <max MEMD instance size in bytes>/1000 + 1
-	uint16_t section_count; // Number of MEMD instances
+	uint16_t section_count;	// Number of MEMD instances
 	char reserved[8];	// Reserved bytes
 } __attribute__((packed));
 
 /* Combines pointer to VPD area with configuration information */
 struct vpd_info {
-	const uint8_t *data; // VPD area pointer
-	int mcs_i;           // MCS position (spans CPUs)
-	int freq;            // Frequency in MHz
+	const uint8_t *data;	// VPD area pointer
+	int mcs_i;		// MCS position (spans CPUs)
+	int freq;		// Frequency in MHz
 	int dimm0_rank;
 	int dimm1_rank;
 };
@@ -280,7 +280,7 @@ static const uint8_t *find_vpd_kwd(const struct vpd_info *vpd, const char *name,
 	offset += VPD_RECORD_SIZE_LEN;
 	record_size = le16toh(record_size);
 
-	/* Skip mandatory "RT" and one byte of data size (always 4) */
+	/* Skip mandatory "RT" and one byte of record size (always 4) */
 	offset += VPD_KWD_NAME_LEN + 1;
 
 	if (memcmp(&data[offset], "MEMD", VPD_RECORD_NAME_LEN))

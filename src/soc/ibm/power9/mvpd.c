@@ -91,29 +91,21 @@ static struct ring_hdr *find_ring(uint8_t chiplet_id, uint16_t ring_id,
 	return NULL;
 }
 
-/* Finds a specific ring in MVPD partition and extracts it */
-bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
-		       uint8_t chiplet_id, uint16_t ring_id, uint8_t *buf,
-		       uint32_t buf_size)
+static const uint8_t *mvpd_get_keyword(const char *record_name,
+				       const char *kwd_name,
+				       size_t *kwd_size, void **mmaped_data)
 {
-	const struct region_device *mvpd_device;
+	const struct region_device *mvpd_device = mvpd_device_ro();
 
 	uint8_t mvpd_buf[MVPD_TOC_SIZE];
 	struct mvpd_toc_entry *mvpd_toc = (struct mvpd_toc_entry *)mvpd_buf;
 
 	struct mvpd_toc_entry *toc_entry = NULL;
 	uint16_t record_offset = 0;
-	const uint8_t *record_data = NULL;
+	uint8_t *record_data = NULL;
 	uint16_t record_size = 0;
 
-	const uint8_t *rings = NULL;
-	size_t rings_size = 0;
-
-	struct ring_hdr *ring = NULL;
-	uint32_t ring_size = 0;
-
-	mvpd_device_init();
-	mvpd_device = mvpd_device_ro();
+	const uint8_t *kwd = NULL;
 
 	/* Copy all TOC at once */
 	if (rdev_readat(mvpd_device, mvpd_buf, 0,
@@ -134,14 +126,38 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 	if (!record_data)
 		die("Failed to map %s record!\n", record_name);
 
-	rings = vpd_find_kwd(record_data, record_name, kwd_name, &rings_size);
+	kwd = vpd_find_kwd(record_data, record_name, kwd_name, kwd_size);
+	if (kwd == NULL)
+		die("Failed to find %s keyword in %s!\n", kwd_name,
+		    record_name);
+
+	*mmaped_data = record_data;
+	return kwd;
+}
+
+bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
+		       uint8_t chiplet_id, uint16_t ring_id, uint8_t *buf,
+		       uint32_t buf_size)
+{
+	void *mmaped_data = NULL;
+
+	const uint8_t *rings = NULL;
+	size_t rings_size = 0;
+
+	struct ring_hdr *ring = NULL;
+	uint32_t ring_size = 0;
+
+	mvpd_device_init();
+
+	rings = mvpd_get_keyword(record_name, kwd_name, &rings_size,
+				 &mmaped_data);
 	if (rings == NULL)
 		die("Failed to find %s keyword in %s!\n", kwd_name,
 		    record_name);
 
 	ring = find_ring(chiplet_id, ring_id, rings, rings_size);
 	if (ring == NULL) {
-		if (rdev_munmap(mvpd_device, (void *)record_data))
+		if (rdev_munmap(mvpd_device_ro(), mmaped_data))
 			die("Failed to unmap %s record!\n", record_name);
 
 		return false;
@@ -151,7 +167,7 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 	if (buf_size >= ring_size)
 		memcpy(buf, ring, ring_size);
 
-	if (rdev_munmap(mvpd_device, (void *)record_data))
+	if (rdev_munmap(mvpd_device_ro(), mmaped_data))
 		die("Failed to unmap %s record!\n", record_name);
 
 	return (buf_size >= ring_size);

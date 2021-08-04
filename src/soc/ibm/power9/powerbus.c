@@ -28,27 +28,6 @@ static const uint32_t EPSILON_R_T2_LE[] = {   67,   69,   71,   74,   79,  103 }
 static const uint32_t EPSILON_W_T0_LE[] = {    0,    0,    0,    0,    0,    5 };
 static const uint32_t EPSILON_W_T1_LE[] = {   15,   16,   17,   19,   21,   33 };
 
-/* HE epsilon (4 chips per-group) */
-static const uint32_t EPSILON_R_T0_HE[] = {    7,    7,    8,    8,   10,   22 };
-static const uint32_t EPSILON_R_T1_HE[] = {   92,   94,   96,   99,  104,  128 };
-static const uint32_t EPSILON_R_T2_HE[] = {  209,  210,  213,  216,  221,  245 };
-static const uint32_t EPSILON_W_T0_HE[] = {   28,   29,   30,   32,   34,   46 };
-static const uint32_t EPSILON_W_T1_HE[] = {  117,  118,  119,  121,  123,  135 };
-
-/* HE epsilon (flat 4 Zeppelin) */
-static const uint32_t EPSILON_R_T0_F4[] = {    7,    7,    8,    8,   10,   22 };
-static const uint32_t EPSILON_R_T1_F4[] = {    7,    7,    8,    8,   10,   22 };
-static const uint32_t EPSILON_R_T2_F4[] = {   83,   84,   87,   90,   95,  119 };
-static const uint32_t EPSILON_W_T0_F4[] = {    0,    0,    0,    0,    0,    5 };
-static const uint32_t EPSILON_W_T1_F4[] = {   18,   19,   20,   22,   24,   36 };
-
-/* HE epsilon (flat 8 configuration) */
-static const uint32_t EPSILON_R_T0_F8[] = {    7,    7,    8,    8,   10,   22 };
-static const uint32_t EPSILON_R_T1_F8[] = {    7,    7,    8,    8,   10,   22 };
-static const uint32_t EPSILON_R_T2_F8[] = {  148,  149,  152,  155,  160,  184 };
-static const uint32_t EPSILON_W_T0_F8[] = {    0,    0,    0,    0,    0,    5 };
-static const uint32_t EPSILON_W_T1_F8[] = {   76,   77,   78,   80,   82,   94 };
-
 /* See get_first_valid_pdV_pbFreq() in Hostboot */
 
 static bool read_voltage_data(struct powerbus_cfg *cfg)
@@ -204,61 +183,23 @@ static void calculate_epsilons(struct powerbus_cfg *cfg)
 	uint32_t *eps_r = cfg->eps_r;
 	uint32_t *eps_w = cfg->eps_w;
 
-	uint8_t eps_table_type = EPS_TYPE_LE; /* ATTR_PROC_EPS_TABLE_TYPE from talos.xml */
-
 	uint64_t scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
 	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
 	bool node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
 
-	switch (eps_table_type) {
-		case EPS_TYPE_HE:
-			if (node_pump_mode) {
-				eps_r[0] = EPSILON_R_T0_HE[floor_ratio];
-				eps_r[1] = EPSILON_R_T1_HE[floor_ratio];
-				eps_r[2] = EPSILON_R_T2_HE[floor_ratio];
+	/* Assuming that ATTR_PROC_EPS_TABLE_TYPE = EPS_TYPE_LE in talos.xml is always correct*/
 
-				eps_w[0] = EPSILON_W_T0_HE[floor_ratio];
-				eps_w[1] = EPSILON_W_T1_HE[floor_ratio];
-			} else {
-				eps_r[0] = EPSILON_R_T0_F4[floor_ratio];
-				eps_r[1] = EPSILON_R_T1_F4[floor_ratio];
-				eps_r[2] = EPSILON_R_T2_F4[floor_ratio];
+	eps_r[0] = EPSILON_R_T0_LE[floor_ratio];
 
-				eps_w[0] = EPSILON_W_T0_F4[floor_ratio];
-				eps_w[1] = EPSILON_W_T1_F4[floor_ratio];
-			}
+	if (node_pump_mode)
+		eps_r[1] = EPSILON_R_T1_LE[floor_ratio];
+	else
+		eps_r[1] = EPSILON_R_T0_LE[floor_ratio];
 
-			break;
-		case EPS_TYPE_HE_F8:
-			eps_r[0] = EPSILON_R_T0_F8[floor_ratio];
+	eps_r[2] = EPSILON_R_T2_LE[floor_ratio];
 
-			if (node_pump_mode)
-				eps_r[1] = EPSILON_R_T1_F8[floor_ratio];
-			else
-				eps_r[1] = EPSILON_R_T0_F8[floor_ratio];
-
-			eps_r[2] = EPSILON_R_T2_F8[floor_ratio];
-
-			eps_w[0] = EPSILON_W_T0_F8[floor_ratio];
-			eps_w[1] = EPSILON_W_T1_F8[floor_ratio];
-			break;
-		case EPS_TYPE_LE:
-			eps_r[0] = EPSILON_R_T0_LE[floor_ratio];
-
-			if (node_pump_mode)
-				eps_r[1] = EPSILON_R_T1_LE[floor_ratio];
-			else
-				eps_r[1] = EPSILON_R_T0_LE[floor_ratio];
-
-			eps_r[2] = EPSILON_R_T2_LE[floor_ratio];
-
-			eps_w[0] = EPSILON_W_T0_LE[floor_ratio];
-			eps_w[1] = EPSILON_W_T1_LE[floor_ratio];
-			break;
-		default:
-			printk(BIOS_WARNING, "Invalid epsilon table type 0x%.8X", eps_table_type);
-			break;
-	}
+	eps_w[0] = EPSILON_W_T0_LE[floor_ratio];
+	eps_w[1] = EPSILON_W_T1_LE[floor_ratio];
 
 	/* Dump base epsilon values */
 	printk(BIOS_DEBUG, "Base epsilon values read from table:\n");

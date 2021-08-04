@@ -101,10 +101,10 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 	uint8_t mvpd_buf[MVPD_TOC_SIZE];
 	struct mvpd_toc_entry *mvpd_toc = (struct mvpd_toc_entry *)mvpd_buf;
 
-	struct mvpd_toc_entry *cp00 = NULL;
-	uint16_t cp00_offset = 0;
-	const uint8_t *cp00_data = NULL;
-	uint16_t cp00_size = 0;
+	struct mvpd_toc_entry *toc_entry = NULL;
+	uint16_t record_offset = 0;
+	const uint8_t *record_data = NULL;
+	uint16_t record_size = 0;
 
 	const uint8_t *rings = NULL;
 	size_t rings_size = 0;
@@ -120,28 +120,28 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 			sizeof(mvpd_buf)) != sizeof(mvpd_buf))
 		die("Failed to read MVPD TOC!\n");
 
-	cp00 = find_record(mvpd_toc, record_name);
-	if (cp00 == NULL)
+	toc_entry = find_record(mvpd_toc, record_name);
+	if (toc_entry == NULL)
 		die("Failed to find %s MVPD record!\n", record_name);
-	cp00_offset = le16toh(cp00->offset);
+	record_offset = le16toh(toc_entry->offset);
 
 	/* Read size of the record */
-	if (rdev_readat(mvpd_device, &cp00_size, cp00_offset,
-			sizeof(cp00_size)) != sizeof(cp00_size))
+	if (rdev_readat(mvpd_device, &record_size, record_offset,
+			sizeof(record_size)) != sizeof(record_size))
 		die("Failed to read size of %s!\n", record_name);
 
-	cp00_data = rdev_mmap(mvpd_device, cp00_offset, cp00_size);
-	if (!cp00_data)
+	record_data = rdev_mmap(mvpd_device, record_offset, record_size);
+	if (!record_data)
 		die("Failed to map %s record!\n", record_name);
 
-	rings = vpd_find_kwd(cp00_data, record_name, kwd_name, &rings_size);
+	rings = vpd_find_kwd(record_data, record_name, kwd_name, &rings_size);
 	if (rings == NULL)
 		die("Failed to find %s keyword in %s!\n", kwd_name,
 		    record_name);
 
 	ring = find_ring(chiplet_id, ring_id, rings, rings_size);
 	if (ring == NULL) {
-		if (rdev_munmap(mvpd_device, (void *)cp00_data))
+		if (rdev_munmap(mvpd_device, (void *)record_data))
 			die("Failed to unmap %s record!\n", record_name);
 
 		return false;
@@ -151,7 +151,7 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 	if (buf_size >= ring_size)
 		memcpy(buf, ring, ring_size);
 
-	if (rdev_munmap(mvpd_device, (void *)cp00_data))
+	if (rdev_munmap(mvpd_device, (void *)record_data))
 		die("Failed to unmap %s record!\n", record_name);
 
 	return (buf_size >= ring_size);

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+
 #include <cpu/power/istep_8.h>
 #include <cpu/power/scom.h>
 

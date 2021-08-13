@@ -889,24 +889,21 @@ static void istep_16_1(int this_core)
 
 static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd)
 {
-	struct ring_query query = {
-		.kwd_name = "#G",
-		.ring_id = EC_GPTR,
-		.min_instance_id = 0x20,
-		.max_instance_id = 0x20,
-		.ring_class = RING_CLASS_GPTR_EX,
-	};
-	enum ring_status ring_status;
-
 	static uint8_t ppe[16 * KiB];
-	uint32_t ppe_size = sizeof(ppe);
 
 	static uint8_t buf1[MAX_RING_BUF_SIZE];
 	static uint8_t buf2[MAX_RING_BUF_SIZE];
 	static uint8_t buf3[MAX_RING_BUF_SIZE];
 
+	uint32_t ppe_size = sizeof(ppe);
+
 	struct tor_hdr *rings;
 	struct tor_hdr *overlays;
+
+	if (dd < 20)
+		die("DD must be at least 20!");
+	if (!hw->overlays.dd_support)
+		die("Overlays must support DD!");
 
 	copy_section(&rings, &hw->rings, hw, dd, FIND);
 	copy_section(&overlays, &hw->overlays, hw, dd, FIND);
@@ -915,11 +912,10 @@ static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd)
 
 	printk(BIOS_EMERG, "original ppe_size = 0x%08x\n", ppe_size);
 
-	tor_fetch_and_insert_vpd_rings((struct tor_hdr *)ppe, &ppe_size, &query,
+	tor_fetch_and_insert_vpd_rings((struct tor_hdr *)ppe, &ppe_size,
 				       sizeof(ppe), overlays,
-				       PT_CME, 32, buf1, buf2, buf3, &ring_status);
+				       PT_CME, 32, buf1, buf2, buf3);
 
-	printk(BIOS_EMERG, "ring_status = %d\n", ring_status);
 	printk(BIOS_EMERG, "new ppe_size = 0x%08x\n", ppe_size);
 }
 

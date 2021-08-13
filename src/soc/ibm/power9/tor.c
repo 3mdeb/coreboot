@@ -12,6 +12,10 @@
 
 #define UNDEFINED_PPE_TYPE (uint8_t)0xff
 
+#define NUM_OF_CORES   (uint8_t)24
+#define NUM_OF_QUADS   (uint8_t)6
+#define CORES_PER_QUAD (NUM_OF_CORES/NUM_OF_QUADS)
+
 #define TOR_VERSION 7
 
 #define TOR_MAGIC      (uint32_t)0x544F52   // "TOR"
@@ -190,6 +194,134 @@ const struct ring_info EC_INSTANCE_RING_INFO[] = {
 static const struct chiplet_info EC_CHIPLET_INFO = {
 	6,  // 6 common rings for Core chiplet
 	1,  // 1 instance specific ring for each Core chiplet
+};
+
+static const struct ring_query RING_QUERIES_PDG[] = {
+    /* ring_id          ring_class          kwd_name  instance_id  */
+    /*                                                min   max    */
+    { PERV_GPTR       , RING_CLASS_GPTR_NEST , "#G" , 0x01 , 0x01 },
+    { PERV_TIME       , RING_CLASS_NEST      , "#G" , 0x01 , 0x01 },
+    { OCC_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x01 , 0x01 },
+    { OCC_TIME        , RING_CLASS_NEST      , "#G" , 0x01 , 0x01 },
+    { SBE_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x01 , 0x01 },
+    { PERV_ANA_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x01 , 0x01 },
+    { PERV_PLL_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x01 , 0x01 },
+    { N0_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x02 , 0x02 },
+    { N0_TIME         , RING_CLASS_NEST      , "#G" , 0x02 , 0x02 },
+    { N0_NX_GPTR      , RING_CLASS_GPTR_NEST , "#G" , 0x02 , 0x02 },
+    { N0_NX_TIME      , RING_CLASS_NEST      , "#G" , 0x02 , 0x02 },
+    { N0_CXA0_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x02 , 0x02 },
+    { N0_CXA0_TIME    , RING_CLASS_NEST      , "#G" , 0x02 , 0x02 },
+    { N1_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x03 , 0x03 },
+    { N1_TIME         , RING_CLASS_NEST      , "#G" , 0x03 , 0x03 },
+    { N1_IOO0_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x03 , 0x03 },
+    { N1_IOO0_TIME    , RING_CLASS_NEST      , "#G" , 0x03 , 0x03 },
+    { N1_IOO1_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x03 , 0x03 },
+    { N1_IOO1_TIME    , RING_CLASS_NEST      , "#G" , 0x03 , 0x03 },
+    { N1_MCS23_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x03 , 0x03 },
+    { N1_MCS23_TIME   , RING_CLASS_NEST      , "#G" , 0x03 , 0x03 },
+    { N2_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x04 , 0x04 },
+    { N2_TIME         , RING_CLASS_NEST      , "#G" , 0x04 , 0x04 },
+    { N2_CXA1_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x04 , 0x04 },
+    { N2_CXA1_TIME    , RING_CLASS_NEST      , "#G" , 0x04 , 0x04 },
+    { N2_PSI_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x04 , 0x04 },
+    { N3_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x05 , 0x05 },
+    { N3_TIME         , RING_CLASS_NEST      , "#G" , 0x05 , 0x05 },
+    { N3_MCS01_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x05 , 0x05 },
+    { N3_MCS01_TIME   , RING_CLASS_NEST      , "#G" , 0x05 , 0x05 },
+    { N3_NP_GPTR      , RING_CLASS_GPTR_NEST , "#G" , 0x05 , 0x05 },
+    { N3_NP_TIME      , RING_CLASS_NEST      , "#G" , 0x05 , 0x05 },
+    { XB_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x06 , 0x06 },
+    { XB_TIME         , RING_CLASS_NEST      , "#G" , 0x06 , 0x06 },
+    { XB_IO0_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x06 , 0x06 },
+    { XB_IO0_TIME     , RING_CLASS_NEST      , "#G" , 0x06 , 0x06 },
+    { XB_IO1_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x06 , 0x06 },
+    { XB_IO1_TIME     , RING_CLASS_NEST      , "#G" , 0x06 , 0x06 },
+    { XB_IO2_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x06 , 0x06 },
+    { XB_IO2_TIME     , RING_CLASS_NEST      , "#G" , 0x06 , 0x06 },
+    { XB_PLL_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x06 , 0x06 },
+    { MC_GPTR         , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_TIME         , RING_CLASS_NEST      , "#G" , 0x07 , 0xFF },
+    { MC_IOM01_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_IOM23_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_PLL_GPTR     , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_OMI0_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_OMI1_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_OMI2_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_OMIPPE_GPTR  , RING_CLASS_GPTR_NEST , "#G" , 0x07 , 0xFF },
+    { MC_OMIPPE_TIME  , RING_CLASS_NEST      , "#G" , 0x07 , 0xFF },
+    { OB0_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x09 , 0x09 },
+    { OB0_TIME        , RING_CLASS_NEST      , "#G" , 0x09 , 0x09 },
+    { OB0_PLL_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x09 , 0x09 },
+    { OB1_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x0A , 0x0A },
+    { OB1_TIME        , RING_CLASS_NEST      , "#G" , 0x0A , 0x0A },
+    { OB1_PLL_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x0A , 0x0A },
+    { OB2_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x0B , 0x0B },
+    { OB2_TIME        , RING_CLASS_NEST      , "#G" , 0x0B , 0x0B },
+    { OB2_PLL_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x0B , 0x0B },
+    { OB3_GPTR        , RING_CLASS_GPTR_NEST , "#G" , 0x0C , 0x0C },
+    { OB3_TIME        , RING_CLASS_NEST      , "#G" , 0x0C , 0x0C },
+    { OB3_PLL_GPTR    , RING_CLASS_GPTR_NEST , "#G" , 0x0C , 0x0C },
+    { PCI0_GPTR       , RING_CLASS_GPTR_NEST , "#G" , 0x0D , 0x0D },
+    { PCI0_TIME       , RING_CLASS_NEST      , "#G" , 0x0D , 0x0D },
+    { PCI0_PLL_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x0D , 0x0D },
+    { PCI1_GPTR       , RING_CLASS_GPTR_NEST , "#G" , 0x0E , 0x0E },
+    { PCI1_TIME       , RING_CLASS_NEST      , "#G" , 0x0E , 0x0E },
+    { PCI1_PLL_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x0E , 0x0E },
+    { PCI2_GPTR       , RING_CLASS_GPTR_NEST , "#G" , 0x0F , 0x0F },
+    { PCI2_TIME       , RING_CLASS_NEST      , "#G" , 0x0F , 0x0F },
+    { PCI2_PLL_GPTR   , RING_CLASS_GPTR_NEST , "#G" , 0x0F , 0x0F },
+    { EQ_GPTR         , RING_CLASS_GPTR_EQ   , "#G" , 0x10 , 0xFF },
+    { EQ_TIME         , RING_CLASS_EQ        , "#G" , 0x10 , 0xFF },
+    { EX_L3_GPTR      , RING_CLASS_GPTR_EX   , "#G" , 0x10 , 0xFF },
+    { EX_L3_TIME      , RING_CLASS_EX        , "#G" , 0x10 , 0xFF },
+    { EX_L2_GPTR      , RING_CLASS_GPTR_EX   , "#G" , 0x10 , 0xFF },
+    { EX_L2_TIME      , RING_CLASS_EX        , "#G" , 0x10 , 0xFF },
+    { EX_L3_REFR_GPTR , RING_CLASS_GPTR_EX   , "#G" , 0x10 , 0xFF },
+    { EQ_ANA_GPTR     , RING_CLASS_GPTR_EQ   , "#G" , 0x10 , 0xFF },
+    { EQ_DPLL_GPTR    , RING_CLASS_GPTR_EQ   , "#G" , 0x10 , 0xFF },
+    { EC_GPTR         , RING_CLASS_GPTR_EC   , "#G" , 0x20 , 0xFF },
+    { EC_TIME         , RING_CLASS_EC        , "#G" , 0x20 , 0xFF },
+};
+
+static const struct ring_query RING_QUERIES_PDR[] = {
+    /* ring_id          ring_class          kwd_name  instance_id  */
+    /*                                                min   max    */
+    { PERV_REPR       , RING_CLASS_NEST      , "#R" , 0x01 , 0x01 },
+    { OCC_REPR        , RING_CLASS_NEST      , "#R" , 0x01 , 0x01 },
+    { SBE_REPR        , RING_CLASS_NEST      , "#R" , 0x01 , 0x01 },
+    { N0_REPR         , RING_CLASS_NEST      , "#R" , 0x02 , 0x02 },
+    { N0_NX_REPR      , RING_CLASS_NEST      , "#R" , 0x02 , 0x02 },
+    { N0_CXA0_REPR    , RING_CLASS_NEST      , "#R" , 0x02 , 0x02 },
+    { N1_REPR         , RING_CLASS_NEST      , "#R" , 0x03 , 0x03 },
+    { N1_IOO0_REPR    , RING_CLASS_NEST      , "#R" , 0x03 , 0x03 },
+    { N1_IOO1_REPR    , RING_CLASS_NEST      , "#R" , 0x03 , 0x03 },
+    { N1_MCS23_REPR   , RING_CLASS_NEST      , "#R" , 0x03 , 0x03 },
+    { N2_REPR         , RING_CLASS_NEST      , "#R" , 0x04 , 0x04 },
+    { N2_CXA1_REPR    , RING_CLASS_NEST      , "#R" , 0x04 , 0x04 },
+    { N3_REPR         , RING_CLASS_NEST      , "#R" , 0x05 , 0x05 },
+    { N3_MCS01_REPR   , RING_CLASS_NEST      , "#R" , 0x05 , 0x05 },
+    { N3_NP_REPR      , RING_CLASS_NEST      , "#R" , 0x05 , 0x05 },
+    { XB_REPR         , RING_CLASS_NEST      , "#R" , 0x06 , 0x06 },
+    { XB_IO0_REPR     , RING_CLASS_NEST      , "#R" , 0x06 , 0x06 },
+    { XB_IO1_REPR     , RING_CLASS_NEST      , "#R" , 0x06 , 0x06 },
+    { XB_IO2_REPR     , RING_CLASS_NEST      , "#R" , 0x06 , 0x06 },
+    { MC_REPR         , RING_CLASS_NEST      , "#R" , 0x07 , 0x08 },
+    { MC_IOM23_REPR   , RING_CLASS_NEST      , "#R" , 0x07 , 0x08 },
+    { MC_OMIPPE_REPR  , RING_CLASS_NEST      , "#R" , 0x07 , 0x08 },
+    { OB0_REPR        , RING_CLASS_NEST      , "#R" , 0x09 , 0x09 },
+    { OB1_REPR        , RING_CLASS_NEST      , "#R" , 0x0A , 0x0A },
+    { OB2_REPR        , RING_CLASS_NEST      , "#R" , 0x0B , 0x0B },
+    { OB3_REPR        , RING_CLASS_NEST      , "#R" , 0x0C , 0x0C },
+    { PCI0_REPR       , RING_CLASS_NEST      , "#R" , 0x0D , 0x0D },
+    { PCI1_REPR       , RING_CLASS_NEST      , "#R" , 0x0E , 0x0E },
+    { PCI2_REPR       , RING_CLASS_NEST      , "#R" , 0x0F , 0x0F },
+    { EQ_REPR         , RING_CLASS_EQ_INS    , "#R" , 0x10 , 0x15 },
+    { EX_L3_REFR_TIME , RING_CLASS_EX_INS    , "#R" , 0x10 , 0x15 },
+    { EX_L3_REPR      , RING_CLASS_EX_INS    , "#R" , 0x10 , 0x15 },
+    { EX_L2_REPR      , RING_CLASS_EX_INS    , "#R" , 0x10 , 0x15 },
+    { EX_L3_REFR_REPR , RING_CLASS_EX_INS    , "#R" , 0x10 , 0x15 },
+    { EC_REPR         , RING_CLASS_EC_INS    , "#R" , 0x20 , 0x37 },
 };
 
 /* Retrieves properties for specified kind of TOR */
@@ -446,16 +578,24 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	ring_section->size = htobe32(*ring_section_size);
 }
 
-void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
-				    uint32_t *ring_section_size,
-				    const struct ring_query *query,
-				    uint32_t max_ring_section_size,
-				    struct tor_hdr *overlays_section,
-				    enum ppe_type ppe_type,
-				    uint8_t chiplet_id,
-				    uint8_t *buf1, uint8_t *buf2, uint8_t *buf3,
-				    enum ring_status *ring_status)
+/*
+ * Extracts a ring from CP00 record of MVPD and appends it to the ring section
+ * applying overlay if necessary.  All buffers must be be at least
+ * MAX_RING_BUF_SIZE bytes in length.  Indicates result by setting *ring_status.
+ */
+static void tor_fetch_and_insert_vpd_ring(struct tor_hdr *ring_section,
+					  uint32_t *ring_section_size,
+					  const struct ring_query *query,
+					  uint32_t max_ring_section_size,
+					  struct tor_hdr *overlays_section,
+					  enum ppe_type ppe_type,
+					  uint8_t chiplet_id,
+					  uint8_t *buf1,
+					  uint8_t *buf2,
+					  uint8_t *buf3,
+					  enum ring_status *ring_status)
 {
+
 	bool success = false;
 	uint8_t instance_id = 0;
 	struct ring_hdr *ring = NULL;
@@ -497,4 +637,133 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 			ppe_type, instance_id, ring);
 
 	*ring_status = RING_FOUND;
+}
+
+void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
+				    uint32_t *ring_section_size,
+				    uint32_t max_ring_section_size,
+				    struct tor_hdr *overlays_section,
+				    enum ppe_type ppe_type,
+				    uint8_t chiplet_id,
+				    uint8_t *buf1, uint8_t *buf2, uint8_t *buf3)
+{
+	const size_t pdg_query_count =
+		sizeof(RING_QUERIES_PDG) / sizeof(RING_QUERIES_PDG[0]);
+	const size_t pdr_query_count =
+		sizeof(RING_QUERIES_PDR) / sizeof(RING_QUERIES_PDR[0]);
+	const size_t ring_query_count = pdg_query_count + pdr_query_count;
+
+	size_t i = 0;
+	uint8_t eq = 0;
+
+        const struct ring_query *eq_query = NULL;
+        const struct ring_query *ec_query = NULL;
+
+	/* Add all common rings */
+	for (i = 0; i < ring_query_count; ++i) {
+		uint8_t instance = 0;
+		uint8_t max_instance_id = 0;
+		const struct ring_query *query = NULL;
+
+		if (i < pdg_query_count)
+			query = &RING_QUERIES_PDG[i];
+		else
+			query = &RING_QUERIES_PDR[i - pdg_query_count];
+
+		if (query->ring_class == RING_CLASS_EQ_INS ||
+		    query->ring_class == RING_CLASS_EX_INS ||
+		    query->ring_class == RING_CLASS_EC_INS)
+			continue;
+
+		max_instance_id = query->max_instance_id;
+		/* 0xff meant multicast in Power8, but doesn't in Power9 */
+		if (max_instance_id == 0xff)
+			max_instance_id = query->min_instance_id;
+
+		if (ppe_type == PT_CME &&
+		    query->ring_class != RING_CLASS_EC &&
+		    query->ring_class != RING_CLASS_GPTR_EC)
+			continue;
+
+		if (ppe_type == PT_SGPE &&
+		    query->ring_class != RING_CLASS_EX &&
+		    query->ring_class != RING_CLASS_EQ &&
+		    query->ring_class != RING_CLASS_GPTR_EQ &&
+		    query->ring_class != RING_CLASS_GPTR_EX)
+			continue;
+
+		for (instance = query->min_instance_id;
+		     instance <= max_instance_id;
+		     ++instance) {
+			enum ring_status ring_status;
+			tor_fetch_and_insert_vpd_ring(ring_section,
+						      ring_section_size,
+						      query,
+						      max_ring_section_size,
+						      overlays_section,
+						      ppe_type,
+						      instance,
+						      buf1, buf2, buf3,
+						      &ring_status);
+
+			if (ring_status == RING_NOT_FOUND)
+				die("Failed to insert a common ring.");
+		}
+	}
+
+	/* Add all instance rings */
+
+	for (i = 0; i < pdr_query_count; ++i) {
+		const struct ring_query *query = &RING_QUERIES_PDR[i];
+		const enum ring_class class = query->ring_class;
+		if (class == RING_CLASS_EQ_INS && eq_query == NULL)
+			eq_query = query;
+		else if (class == RING_CLASS_EC_INS && ec_query == NULL)
+			ec_query = query;
+	}
+
+	for (eq = 0; eq < NUM_OF_QUADS; ++eq) {
+		/* EQ instances */
+		if ((ppe_type == PT_SBE || ppe_type == PT_SGPE) && eq_query != NULL) {
+			const uint8_t instance = eq_query->min_instance_id + eq;
+
+			enum ring_status ring_status;
+
+			tor_fetch_and_insert_vpd_ring(ring_section,
+						      ring_section_size,
+						      eq_query,
+						      max_ring_section_size,
+						      overlays_section,
+						      ppe_type,
+						      instance,
+						      buf1, buf2, buf3,
+						      &ring_status);
+
+			if (ring_status == RING_NOT_FOUND)
+				die("Failed to insert an EQ ring.");
+		}
+
+		if ((ppe_type == PT_SBE || ppe_type == PT_CME) && ec_query != NULL) {
+			uint8_t ec = 0;
+			for (ec = 4 * eq; ec < 4 * (eq + 1); ++ec) {
+				/* EC instances */
+				const uint8_t instance = ec_query->min_instance_id + ec;
+
+				enum ring_status ring_status;
+
+				tor_fetch_and_insert_vpd_ring(ring_section,
+							      ring_section_size,
+							      ec_query,
+							      max_ring_section_size,
+							      overlays_section,
+							      ppe_type,
+							      instance,
+							      buf1, buf2, buf3,
+							      &ring_status);
+
+				if (ring_status == RING_NOT_FOUND)
+					die("Failed to insert an EC ring.");
+			}
+		}
+	}
 }

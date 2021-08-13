@@ -367,7 +367,7 @@ enum ring_class {
 	RING_CLASS_EC_INS,     	// Instance EC rings
 };
 
-/* PPE types, enum values matches indecies inside rings section */
+/* PPE types, enum values match indices inside rings section */
 enum ppe_type {
 	PT_SBE,
 	PT_CME,
@@ -422,18 +422,18 @@ void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 		     enum ring_operation operation);
 
 /*
- * Extracts a ring from CP00 record of MVPD and appends it to the ring section
+ * Extracts rings from CP00 record of MVPD and appends them to the ring section
  * applying overlay if necessary.  All buffers must be be at least
- * MAX_RING_BUF_SIZE bytes in length.  Indicates result by setting *ring_status.
+ * MAX_RING_BUF_SIZE bytes in length.
  */
 void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 				    uint32_t *ring_section_size,
-				    const struct ring_query *query,
 				    uint32_t max_ring_section_size,
 				    struct tor_hdr *overlays_section,
 				    enum ppe_type ppe_type,
 				    uint8_t chiplet_id,
-				    uint8_t *buf1, uint8_t *buf2, uint8_t *buf3,
-				    enum ring_status *ring_status);
+				    uint8_t *buf1,
+				    uint8_t *buf2,
+				    uint8_t *buf3);
 
 #endif // __SOC_IBM_POWER9_TOR_H

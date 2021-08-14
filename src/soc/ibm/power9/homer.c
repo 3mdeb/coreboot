@@ -1141,6 +1141,129 @@ static void istep_16_1(int this_core)
 	//     p9_stop_save_scom() and others
 }
 
+// talos-hostboot/src/include/arch/pirformat.H
+union PIR
+{
+    uint32_t word;
+
+    struct
+    {
+	// Normal Core Mode
+	uint32_t reserved0:17;   // 00:16 = unused
+	uint32_t groupId:4;      // 17:20 = group id
+	uint32_t chipId:3;       // 21:23 = chip id
+	uint32_t reserved1:1;    //    24 = reserved
+	uint32_t coreId:5;       // 25:29 = core id (normal core)
+	uint32_t threadId:2;     // 30:31 = thread id (normal core)
+    } __attribute__((packed));
+};
+
+// talos-hostboot/src/include/kernel/doorbell.H
+enum
+{
+    DOORBELL_MSG_TYPE = 0x0000000028000000, /// Comes from the ISA.
+};
+
+// talos-hostboot/src/kernel/doorbell.C
+static void doorbell_send(uint64_t i_pir)
+{
+    uint64_t msgtype = DOORBELL_MSG_TYPE;
+    register uint64_t msg = msgtype | i_pir;
+    asm volatile("msgsnd %0" :: "r" (msg));
+
+    return;
+}
+
+/* talos-hostboot/src/kernel/start.S
+
+ ;// @fn intvect_system_reset_inactive
+ ;// Handle SRESET on an inactive processor.
+ ;//     This is due to either instruction start or winkle-wakeup.
+intvect_system_reset_inactive:
+ ;// Check winkle state in CPU.
+ ld r1, CPU_STATUS(r2)
+ extrdi. r1, r1, 1, CPU_STATUS_WINKLED
+ beq+ _start
+
+ ;// Now we are a winkled processor that is awoken.
+
+ ld r1, CPU_KERNEL_STACK_BOTTOM(r2)
+ ld r1, 0(r1)
+ mtsprg3 r1
+ b kernel_dispatch_task
+
+ */
+
+asm(
+"\
+.global slave_hw                       \n\
+slave_reset:                           \n\
+	bl      slave_hw               \n\
+	b       .                      \n\
+slave_reset_end:                       \n\
+");
+
+extern uint8_t slave_reset[];
+extern uint8_t slave_reset_end[];
+
+void slave_hw(void);
+
+void slave_hw(void)
+{
+	printk(BIOS_EMERG, "slave core: Hello, world!\n");
+}
+
+static void istep_16_2(int this_core, uint64_t cores)
+{
+	memcpy((void*)0x100, slave_reset, slave_reset_end - slave_reset);
+
+	printk(BIOS_EMERG, "this_core = %d\n", this_core);
+
+	for (int i = 0; i < MAX_CORES_PER_CHIP; i++) {
+		uint64_t val = read_scom_for_chiplet(EC00_CHIPLET_ID + i, 0xF0040);
+		if (val & PPC_BIT(0)) {
+			printk(BIOS_EMERG, "Core %d is functional%s\n", i,
+			       (val & PPC_BIT(1)) ? "" : " and running");
+			if (!(val & PPC_BIT(1)))
+				this_core = i;
+		}
+	}
+
+	printk(BIOS_EMERG, "this_core = %d\n", this_core);
+
+	for (int i = 0; i < MAX_CORES_PER_CHIP; i++) {
+		uint64_t val = read_scom_for_chiplet(EC00_CHIPLET_ID + i, 0xF0040);
+		if (val & PPC_BIT(0) && i != this_core) {
+			union PIR pir = {0};
+			pir.coreId = i;
+
+			printk(BIOS_EMERG, "Waking core %d with pir 0x%x\n", i, pir.word);
+
+			for (int thread = 0; thread < 4; ++thread) {
+				pir.threadId = thread;
+				printk(BIOS_EMERG, "Doorbell %d\n", pir.word);
+				doorbell_send(pir.word);
+				wait_ms(20, false);
+			}
+		}
+	}
+
+	for (int i = 0; i < MAX_CORES_PER_CHIP; i++) {
+		uint64_t val = read_scom_for_chiplet(EC00_CHIPLET_ID + i, 0xF0040);
+		if (val & PPC_BIT(0)) {
+			printk(BIOS_EMERG, "Core %d is functional%s\n", i,
+			       (val & PPC_BIT(1)) ? "" : " and running");
+		}
+	}
+}
+
+/* static uint64_t getLPCR(void) */
+/* { */
+/*     register uint64_t lpcr = 0; */
+/*     asm volatile("mfspr %0, 318" : "=r" (lpcr)); */
+/*     return lpcr; */
+/* } */
+
 static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
 {
 	write_scom_direct(PU_PBABAR0 + index, bar_addr & 0x1FFFFFFFFFFFFFFFull);
@@ -3608,6 +3731,7 @@ void build_homer_image(void *homer_bar)
 	stop_gpe_init(homer);
 
 	istep_16_1(this_core);
+	istep_16_2(this_core, cores);
 
 	istep_21_1(homer, cores);
 }

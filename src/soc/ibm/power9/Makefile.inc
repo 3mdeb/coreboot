@@ -27,5 +27,9 @@ ramstage-y += chip.c
 ramstage-y += homer.c
 ramstage-y += rom_media.c
 ramstage-y += timer.c
+ramstage-y += mvpd.c
+ramstage-y += vpd.c
+ramstage-y += tor.c
+ramstage-y += rs4.c
 
 endif

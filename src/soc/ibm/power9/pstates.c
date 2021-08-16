@@ -1,8 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
 #include "homer.h"
+#include "wof.h"
+#include <commonlib/region.h>
 #include <cpu/power/mvpd.h>
 #include <assert.h>
+#include <endian.h>
 #include <lib.h>
 #include <string.h>		// memcpy
 
@@ -47,6 +50,148 @@ static ResonantClockingSetup resclk =
 	{ 0, 1, 3, 2},	// L3 clock stepping array
 	580		// L3 voltage threshold
 };
+
+/*
+ * WOF image:
+ *  - header (struct wof_image_hdr)
+ *  - section table
+ *  - array of WOF tables
+ *
+ *  Section table:
+ *   - 
+ */
+
+#define WOF_IMAGE_MAGIC_VALUE (uint32_t)0x57544948 // "WTIH"
+#define WOF_IMAGE_VERSION     (uint32_t)1
+
+
+    
+struct wof_image_hdr
+{
+	uint32_t magic_number;
+	uint8_t  version;
+	uint8_t  entry_count;	// Number of entries in section table
+	uint32_t offset;	// BE offset to section table from image start
+} __attribute__((__packed__));
+
+   
+struct wof_image_entry
+{
+	uint32_t offset;	// BE offset to section from image start
+	uint32_t size;		// BE size of the section
+} __attribute__((__packed__));
+
+    
+struct wof_tables_hdr
+{
+    /// Magic Number
+    ///   Set to ASCII  "WFTH___x" where x is the version of the VFRT structure
+    uint32_t magic_number;
+
+    /// Reserved version
+    /// version 1 - mode is reserved (0)
+    /// version 2 - mode is SET to 1 or 2
+    union
+    {
+        uint32_t reserved_version;
+        struct
+        {
+            unsigned reserved_bits: 20;
+            unsigned mode: 4;  /// new to version 2 (1 = Nominal, 2 = Turbo)
+            uint8_t  version;
+        } __attribute__((__packed__));
+    };
+
+    /// VFRT Block Size
+    ///    Length, in bytes, of a VFRT
+    uint16_t vfrt_block_size;
+
+    /// VFRT block header size
+    uint16_t vfrt_block_header_size;
+
+    /// VFRT Data Size
+    ///    Length, in bytes, of the data field.
+    uint16_t vfrt_data_size;
+
+    /// Quad Active Size
+    ///    Total number of Active Quads
+    uint8_t quads_active_size;
+
+    /// Core count
+    uint8_t core_count;
+
+    /// Ceff Vdn Start
+    ///    CeffVdn value represented by index 0 (in 0.01%)
+    uint16_t vdn_start;
+
+    /// Ceff Vdn Step
+    ///    CeffVdn step value for each CeffVdn index (in 0.01%)
+    uint16_t vdn_step;
+
+    /// Ceff Vdn Size
+    ///    Number of CeffVdn indexes
+    uint16_t vdn_size;
+
+    /// Ceff Vdd Start
+    ///    CeffVdd value represented by index 0 (in 0.01%)
+    uint16_t vdd_start;
+
+    /// Ceff Vdd Step
+    ///    CeffVdd step value for each CeffVdd index (in 0.01%)
+    uint16_t vdd_step;
+
+    /// Ceff Vdd Size
+    ///    Number of CeffVdd indexes
+    uint16_t vdd_size;
+
+    /// Vratio Start
+    ///    Vratio value represented by index 0 (in 0.01%)
+    uint16_t vratio_start;
+
+    /// Vratio Step
+    ///   Vratio step value for each CeffVdd index (in 0.01%)
+    uint16_t vratio_step;
+
+    /// Vratio Size
+    ///    Number of Vratio indexes
+    uint16_t vratio_size;
+
+    /// Fratio Start
+    ///    Fratio value represented by index 0 (in 0.01%)
+    uint16_t fratio_start;
+
+    /// Fratio Step
+    ///   Fratio step value for each CeffVdd index (in 0.01%)
+    uint16_t fratio_step;
+
+    /// Fratio Size
+    ///    Number of Fratio indexes
+    uint16_t fratio_size;
+
+    /// Future usage
+    uint16_t Vdn_percent[8];
+
+    /// Socket Power (in Watts) for the WOF Tables
+    uint16_t socket_power_w;
+
+    /// Nest Frequency (in MHz) used in building the WOF Tables
+    uint16_t nest_frequency_mhz;
+
+    /// Core Sort Power Target Frequency (in MHz) – The #V frequency associated
+    /// with the sort power target for this table set. This will be either the
+    /// Nominal or Turbo #V frequency
+    uint16_t sort_power_freq_mhz;
+
+    /// Regulator Design Point Capacity (in Amps)
+    uint16_t rdp_capacity;
+
+    /// Up to 8 ASCII characters to be defined by the Table generation team to
+    /// back reference table sources
+    char wof_table_source_tag[8];
+
+    /// Up to 16 ASCII characters as a Package designator
+    char package_name[16];
+} __attribute__((packed, aligned(128)));
 
 static void copy_poundW_v2_to_v3(PoundW_data_per_quad *v3, PoundW_data *v2)
 {
@@ -322,6 +467,46 @@ static void update_resclk(int ref_freq_khz)
 
 		prev_idx = resclk.resclk_index[i];
 	}
+}
+
+static void wof_init(uint8_t *buf)
+{
+	const struct region_device *wof_device = NULL;
+
+	uint8_t hdr_buf[sizeof(struct wof_image_hdr)];
+	struct wof_image_hdr *hdr = (void *)hdr_buf;
+
+	uint32_t i = 0;
+	struct wof_image_entry *entries = NULL;
+
+	wof_device_init();
+	wof_device = wof_device_ro();
+
+	if (rdev_readat(wof_device, hdr_buf, 0, sizeof(hdr_buf)) != sizeof(hdr_buf))
+		die("Failed to read WOF header!\n");
+
+	if (be32toh(hdr->magic_number) != WOF_IMAGE_MAGIC_VALUE)
+		die("Incorrect magic value in WOF header!\n");
+
+	if (hdr->version != WOF_IMAGE_VERSION)
+		die("Expected WOF header version %d, got %d!",
+		    WOF_IMAGE_VERSION, hdr->version);
+
+	entries = rdev_mmap(wof_device, hdr->offset,
+			    hdr->entry_count*sizeof(entries));
+	if (!entries)
+		die("Failed to map section table of WOF!\n");
+
+	for (i = 0; i < hdr->entry_count; ++i) {
+		struct wof_tables_hdr *tables = rdev_mmap(wof_device,
+							  entries[i].offset,
+							  entries[i].size);
+	}
+
+	if (rdev_munmap(wof_device, entries))
+		die("Failed to unmap section table of WOF!\n");
+
+	wof_device_unmount();
 }
 
 /* Assumption: no bias is applied to operating points */
@@ -763,12 +948,15 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 	       oppb->iddq.good_normal_cores_per_sort;
 
 	/* TODO: WOF */
+
+	wof_init(homer->ppmr.wof_tables);
+
 	//~ // ----------------
 	//~ // WOF initialization
 	//~ // ----------------
 	//~ wof_init(o_buf = &homer->ppmr.wof_tables):
 		//~ - Search for proper data in WOFDATA PNOR partition
-		//~ - WOFDATA is 3M, make sure CBFS_CACHE is big enough
+		//~ - XXX WOFDATA is 3M, make sure CBFS_CACHE is big enough
 		//~ - search until match is found:
 		  //~ - core count
 		  //~ - socket power (nominal, as read from #V)

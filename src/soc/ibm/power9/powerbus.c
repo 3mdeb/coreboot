@@ -12,13 +12,7 @@
 #define MBOX_SCRATCH_REG1 0x00050038
 #define MBOX_SCRATCH_REG6_GROUP_PUMP_MODE (1 << 23)
 
-/*
- * EPS table type.
- * From src/import/chips/p9/procedures/xml/attribute_info/nest_attributes.xml
- */
-#define EPS_TYPE_LE	0x01
-#define EPS_TYPE_HE	0x02
-#define EPS_TYPE_HE_F8	0x03
+#define EPS_GUARDBAND 20
 
 /* From src/import/chips/p9/procedures/hwp/nest/p9_fbc_eff_config.C */
 /* LE epsilon (2 chips per-group) */
@@ -169,11 +163,13 @@ static void calculate_epsilons(struct powerbus_cfg *cfg)
 	uint32_t *eps_r = cfg->eps_r;
 	uint32_t *eps_w = cfg->eps_w;
 
+	uint32_t i;
+
 	uint64_t scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
 	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
 	bool node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
 
-	/* Assuming that ATTR_PROC_EPS_TABLE_TYPE = EPS_TYPE_LE in talos.xml is always correct*/
+	/* Assuming that ATTR_PROC_EPS_TABLE_TYPE = EPS_TYPE_LE in talos.xml is always correct */
 
 	eps_r[0] = EPSILON_R_T0_LE[floor_ratio];
 
@@ -193,8 +189,6 @@ static void calculate_epsilons(struct powerbus_cfg *cfg)
 
 	/* Scale base epsilon values if core is running 2x nest frequency */
 	if (ceiling_ratio == FABRIC_CORE_CEILING_RATIO_RATIO_8_8) {
-		uint32_t i;
-
 		uint8_t scale_percentage = 100 * freq_ceiling / (2 * pb_freq);
 		if (scale_percentage < 100)
 			die("scale_percentage is too small!");
@@ -202,16 +196,22 @@ static void calculate_epsilons(struct powerbus_cfg *cfg)
 
 		printk(BIOS_DEBUG, "Scaling based on ceiling frequency\n");
 
-		/* scale/apply guardband read epsilons */
 		for (i = 0; i < NUM_EPSILON_READ_TIERS; i++)
 			config_guardband_epsilon(scale_percentage, &eps_r[i]);
 
-		/* Scale write epsilons */
 		for (i = 0; i < NUM_EPSILON_WRITE_TIERS; i++)
 			config_guardband_epsilon(scale_percentage, &eps_w[i]);
 	}
 
-	printk(BIOS_DEBUG, "Final epsilon values:\n");
+	for (i = 0; i < NUM_EPSILON_READ_TIERS; i++)
+		config_guardband_epsilon(EPS_GUARDBAND, &eps_r[i]);
+
+	for (i = 0; i < NUM_EPSILON_WRITE_TIERS; i++)
+		config_guardband_epsilon(EPS_GUARDBAND, &eps_w[i]);
+
+	/* Dump final epsilon values */
+	printk(BIOS_DEBUG, "Scaled epsilon values based on %s%d percent guardband:\n",
+	       (EPS_GUARDBAND >= 0 ? "+" : "-"), EPS_GUARDBAND);
 	dump_epsilons(cfg);
 
 	/*

@@ -511,7 +511,6 @@ static void import_vfrt(const struct vfrt_hdr *src, struct homer_vfrt_entry *dst
 
 		/* Round towards zero */
 		dst->pstate[i] = (ref_freq - freq_khz) / freq_step;
-		printk(BIOS_EMERG, " freq_khz = %d -> pstate = %d \n", freq_khz, dst->pstate[i]);
 	}
 }
 

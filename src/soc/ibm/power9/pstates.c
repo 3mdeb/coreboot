@@ -67,10 +67,14 @@ static ResonantClockingSetup resclk =
  * WOF image:
  *  - header (struct wof_image_hdr)
  *  - section table
- *  - array of WOF tables with wof_tables_hdr for headers
+ *  - array of WOF tables
+ *
+ * WOF table:
+ *  - wof_tables_hdr for header
+ *  - data begins with vfrt_hdr
  */
 
-    
+/* Top-level header for WOF */
 struct wof_image_hdr
 {
 	uint32_t magic_number;	// WOF_IMAGE_MAGIC_VALUE
@@ -79,7 +83,7 @@ struct wof_image_hdr
 	uint32_t offset;	// BE offset to section table from image start
 } __attribute__((__packed__));
 
-   
+/* Entry of WOF's section table */
 struct wof_image_entry
 {
 	uint32_t offset;	// BE offset to section from image start
@@ -88,141 +92,75 @@ struct wof_image_entry
 
 /* The values of wof_tables_hdr::mode */
 enum {
-	WOF_MODE_UNKNOWN = 0,
+	WOF_MODE_UNKNOWN = 0,	// Matches any value
 	WOF_MODE_NOMINAL = 1,
 	WOF_MODE_TURBO   = 2
 };
 
-    
+/* Header of WOF's section */
 struct wof_tables_hdr
 {
 	uint32_t magic_number;	// WOF_TABLES_MAGIC_VALUE
 
 	struct
 	{
-		unsigned reserved_bits: 20;
-		unsigned mode: 4;		// version 1: 0; version 2: 1 or 2; WOF_MODE_*
+		unsigned reserved: 20;
+		unsigned mode: 4;	// version 1: 0; version 2: 1 or 2; WOF_MODE_*
 		uint8_t  version;
 	} __attribute__((__packed__));
 
-    /// VFRT Block Size
-    ///    Length, in bytes, of a VFRT
-    uint16_t vfrt_block_size;
+	uint16_t vfrt_block_size;
+	uint16_t vfrt_block_header_size;
+	uint16_t vfrt_data_size;
+	uint8_t quads_active_size;
+	uint8_t core_count;
+	uint16_t vdn_start;	// CeffVdn value represented by index 0 (in 0.01%)
+	uint16_t vdn_step;	// CeffVdn step value for each CeffVdn index (in 0.01%)
+	uint16_t vdn_size;	// Number of CeffVdn indexes
+	uint16_t vdd_start;	// CeffVdd value represented by index 0 (in 0.01%)
+	uint16_t vdd_step;	// CeffVdd step value for each CeffVdd index (in 0.01%)
+	uint16_t vdd_size;	// Number of CeffVdd indexes
+	uint16_t vratio_start;	// Vratio value represented by index 0 (in 0.01%)
+	uint16_t vratio_step;	// Vratio step value for each CeffVdd index (in 0.01%)
+	uint16_t vratio_size;	// Number of Vratio indexes
+	uint16_t fratio_start;	// Fratio value represented by index 0 (in 0.01%)
+	uint16_t fratio_step;	// Fratio step value for each CeffVdd index (in 0.01%)
+	uint16_t fratio_size;	// Number of Fratio indexes
 
-    /// VFRT block header size
-    uint16_t vfrt_block_header_size;
+	uint16_t vdn_percent[8];	// Currently unused
 
-    /// VFRT Data Size
-    ///    Length, in bytes, of the data field.
-    uint16_t vfrt_data_size;
+	uint16_t socket_power_w;
+	uint16_t nest_frequency_mhz;
+	uint16_t sort_power_freq_mhz;	// Either the Nominal or Turbo #V frequency
+	uint16_t rdp_capacity;		// Regulator Design Point Capacity (in Amps)
 
-    /// Quad Active Size
-    ///    Total number of Active Quads
-    uint8_t quads_active_size;
-
-    /// Core count
-    uint8_t core_count;
-
-    /// Ceff Vdn Start
-    ///    CeffVdn value represented by index 0 (in 0.01%)
-    uint16_t vdn_start;
-
-    /// Ceff Vdn Step
-    ///    CeffVdn step value for each CeffVdn index (in 0.01%)
-    uint16_t vdn_step;
-
-    /// Ceff Vdn Size
-    ///    Number of CeffVdn indexes
-    uint16_t vdn_size;
-
-    /// Ceff Vdd Start
-    ///    CeffVdd value represented by index 0 (in 0.01%)
-    uint16_t vdd_start;
-
-    /// Ceff Vdd Step
-    ///    CeffVdd step value for each CeffVdd index (in 0.01%)
-    uint16_t vdd_step;
-
-    /// Ceff Vdd Size
-    ///    Number of CeffVdd indexes
-    uint16_t vdd_size;
-
-    /// Vratio Start
-    ///    Vratio value represented by index 0 (in 0.01%)
-    uint16_t vratio_start;
-
-    /// Vratio Step
-    ///   Vratio step value for each CeffVdd index (in 0.01%)
-    uint16_t vratio_step;
-
-    /// Vratio Size
-    ///    Number of Vratio indexes
-    uint16_t vratio_size;
-
-    /// Fratio Start
-    ///    Fratio value represented by index 0 (in 0.01%)
-    uint16_t fratio_start;
-
-    /// Fratio Step
-    ///   Fratio step value for each CeffVdd index (in 0.01%)
-    uint16_t fratio_step;
-
-    /// Fratio Size
-    ///    Number of Fratio indexes
-    uint16_t fratio_size;
-
-    /// Future usage
-    uint16_t Vdn_percent[8];
-
-    /// Socket Power (in Watts) for the WOF Tables
-    uint16_t socket_power_w;
-
-    /// Nest Frequency (in MHz) used in building the WOF Tables
-    uint16_t nest_frequency_mhz;
-
-    /// Core Sort Power Target Frequency (in MHz) – The #V frequency associated
-    /// with the sort power target for this table set. This will be either the
-    /// Nominal or Turbo #V frequency
-    uint16_t sort_power_freq_mhz;
-
-    /// Regulator Design Point Capacity (in Amps)
-    uint16_t rdp_capacity;
-
-    /// Up to 8 ASCII characters to be defined by the Table generation team to
-    /// back reference table sources
-    char wof_table_source_tag[8];
-
-    /// Up to 16 ASCII characters as a Package designator
-    char package_name[16];
+	char wof_table_source_tag[8];
+	char package_name[16];
 } __attribute__((packed, aligned(128)));
 
-#define VFRT_HDR_MAGIC 0x5654 // "VT"
+#define VFRT_HDR_MAGIC   0x5654 // "VT"
+#define VFRT_HDR_VERSION 2
 
+/* Header of data within a WOF table */
 struct vfrt_hdr
 {
-    uint16_t magic_number;	// "VT"
-
-    uint16_t reserved;
-    // 0:System type, 1:Homer type (0:3)
-    // if version 1: VFRT size is 12 row(voltage) X 11 column(freq) of size uint8_t
-    // (4:7)
-    // if version 2: VFRT size is 24 row(Voltage) X 5 column (Freq) of size uint8_t
-    uint8_t  type_version;
-    //Identifies the Vdn assumptions tht went in this VFRT (0:7)
-    uint8_t res_vdnId;
-    //Identifies the Vdd assumptions tht went in this VFRT (0:7)
-    uint8_t VddId_QAId;
-    //Identifies the Quad Active assumptions tht went in this VFRT (5:7)
-    uint8_t rsvd_QAId;
+	uint16_t magic_number;	// VFRT_HDR_MAGIC
+	uint16_t reserved;
+	// bits 4-7 are type: 0 -- "System", 1 -- "Homer"
+	// bits 0-3 are version: 1 -- 12 row(voltage) X 11 column(freq)
+	//                       2 -- 24 row(Voltage) X 5 column (Freq)
+	uint8_t  type_version;
+	uint8_t res_vdnId;	// Vdn assumptions
+	uint8_t vddId_QAId;	// Vdd assumptions
+	uint8_t rsvd_QAId;	// bits 0-2: Quad Active assumptions
 } __attribute__((packed));
 
-// Data is provided in 1/24ths granularity with adjustments for integer
-// representation 
+/* Data is provided in 1/24ths granularity with adjustments for integer representation  */
 #define VFRT_VRATIO_SIZE 24
-
-// 5 steps down from 100% is Fratio_step sizes 
+/* 5 steps down from 100% is Fratio_step sizes */
 #define VFRT_FRATIO_SIZE 5
 
+/* Form of VFRT data as stored in HOMER */
 struct homer_vfrt_entry
 {
 	struct vfrt_hdr vfrt_hdr;
@@ -511,8 +449,8 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 {
 	const struct region_device *wof_device = wof_device_ro();
 
-	const uint16_t socket_power_w = poundV_bucket->sort_power_normal;
-	const uint16_t sort_power_freq_mhz = poundV_bucket->nominal.freq;
+	const uint16_t socket_power_w = be16toh(poundV_bucket->sort_power_normal);
+	const uint16_t sort_power_freq_mhz = be16toh(poundV_bucket->nominal.freq);
 
 	int32_t i = 0;
 
@@ -525,7 +463,7 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 				sizeof(tbl_hdr_buf)) != sizeof(tbl_hdr_buf))
 			die("Failed to read a WOF tables header!\n");
 
-		if (tbl_hdr->magic_number != WOF_TABLES_MAGIC_VALUE)
+		if (be32toh(tbl_hdr->magic_number) != WOF_TABLES_MAGIC_VALUE)
 			die("Incorrect magic value of WOF table header!\n");
 
 		if (tbl_hdr->version == 0 || tbl_hdr->version > WOF_TABLES_MAX_VERSION)
@@ -537,9 +475,9 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 		    tbl_hdr->mode != WOF_MODE_NOMINAL)
 			continue;
 
-		if (tbl_hdr->core_count == core_count &&
-		    tbl_hdr->socket_power_w == socket_power_w &&
-		    tbl_hdr->sort_power_freq_mhz == sort_power_freq_mhz)
+		if (be16toh(tbl_hdr->core_count) == core_count &&
+		    be16toh(tbl_hdr->socket_power_w) == socket_power_w &&
+		    be16toh(tbl_hdr->sort_power_freq_mhz) == sort_power_freq_mhz)
 			/* Found a suitable WOF tables entry */
 			return i;
 	}
@@ -556,10 +494,12 @@ static void import_vfrt(const struct vfrt_hdr *src, struct homer_vfrt_entry *dst
 	uint16_t i = 0;
 	uint8_t *freq = NULL;
 
-	if (be16toh(src->magic_number) != VFRT_HDR_MAGIC) {
-		die("Invalid magic value of a VFRT header: %d!\n",
-		    src->magic_number);
-	}
+	if (be16toh(src->magic_number) != VFRT_HDR_MAGIC)
+		die("Invalid magic value of a VFRT header: %d!\n", src->magic_number);
+
+	if ((src->type_version & 0x0f) != VFRT_HDR_VERSION)
+		die("Expected VFRT header version %d, got %d!",
+		    VFRT_HDR_VERSION, (src->type_version & 0x0f));
 
 	dst->vfrt_hdr = *src;
 	/* Flip type from "System" to "Homer" */

@@ -506,10 +506,13 @@ static void import_vfrt(const struct vfrt_hdr *src, struct homer_vfrt_entry *dst
 	dst->vfrt_hdr.type_version |= 0x10;
 
 	freq = (uint8_t *)src + sizeof(*src);
-	for (i = 0; i < VFRT_FRATIO_SIZE * VFRT_VRATIO_SIZE; ++i)
-		/* Round towards higher values which correspond to lower (safer)
-		 * frequencies */
-		dst->pstate[i] = (ref_freq - freq[i] + freq_step - 1) / freq_step;
+	for (i = 0; i < VFRT_FRATIO_SIZE * VFRT_VRATIO_SIZE; ++i) {
+		const uint32_t freq_khz = freq[i]*freq_step + 1000000;
+
+		/* Round towards zero */
+		dst->pstate[i] = (ref_freq - freq_khz) / freq_step;
+		printk(BIOS_EMERG, " freq_khz = %d -> pstate = %d \n", freq_khz, dst->pstate[i]);
+	}
 }
 
 static void wof_extract(uint8_t *buf, struct wof_image_entry entry,
@@ -635,8 +638,7 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 	oppb->wof.tdp_rdp_factor = 0; 	// ATTR_TDP_RDP_CURRENT_FACTOR 0 from talos.xml
 	oppb->nest_leakage_percent = 60; // ATTR_NEST_LEAKAGE_PERCENT from hb_temp_defaults.xml
 
-	/* FIXME: uncomment after WOF_DATA is prepared */
-	//oppb->wof.wof_enabled = 1;		// Assuming wof_init() succeeds
+	oppb->wof.wof_enabled = 1;		// Assuming wof_init() succeeds
 	oppb->wof.tdp_rdp_factor = 0;		// ATTR_TDP_RDP_CURRENT_FACTOR from talos.xml
 	oppb->nest_leakage_percent = 60;	// ATTR_NEST_LEAKAGE_PERCENT from hb_temp_defaults.xml
 	/*

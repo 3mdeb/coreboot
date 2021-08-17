@@ -288,12 +288,12 @@ typedef struct __attribute__((packed)) VFRTHeaderLayout
     uint8_t rsvd_QAId;
 } VFRTHeaderLayout_t;// WOF Tables Header
 
-typedef enum
-{
-    WOF_MODE_UNKNOWN = 0,
-    WOF_MODE_NOMINAL = 1,
-    WOF_MODE_TURBO   = 2
-} WOF_MODE;
+/* typedef enum */
+/* { */
+/*     WOF_MODE_UNKNOWN = 0, */
+/*     WOF_MODE_NOMINAL = 1, */
+/*     WOF_MODE_TURBO   = 2 */
+/* } WOF_MODE; */
 
 typedef struct __attribute__((packed, aligned(128))) WofTablesHeader
 {

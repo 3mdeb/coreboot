@@ -13,6 +13,11 @@
 #define MAX_UT_PSTATES       64     // Oversized
 #define FREQ_STEP_KHZ        16666
 
+// TODO: move this and similar defines in tor.c into some header
+#define ACTIVE_QUADS 6
+
+#define SYSTEM_VFRT_SIZE 128
+
 #include "pstates_include/p9_pstates_occ.h"
 #include "pstates_include/p9_pstates_pgpe.h"
 
@@ -51,25 +56,25 @@ static ResonantClockingSetup resclk =
 	580		// L3 voltage threshold
 };
 
+#define WOF_IMAGE_MAGIC_VALUE (uint32_t)0x57544948 // "WTIH"
+#define WOF_IMAGE_VERSION     (uint32_t)1
+
+#define WOF_TABLES_MAGIC_VALUE (uint32_t)0x57465448 // "WFTH"
+#define WOF_TABLES_VERSION     (uint32_t)2
+#define WOF_TABLES_MAX_VERSION WOF_TABLES_VERSION 
+
 /*
  * WOF image:
  *  - header (struct wof_image_hdr)
  *  - section table
- *  - array of WOF tables
- *
- *  Section table:
- *   - 
+ *  - array of WOF tables with wof_tables_hdr for headers
  */
-
-#define WOF_IMAGE_MAGIC_VALUE (uint32_t)0x57544948 // "WTIH"
-#define WOF_IMAGE_VERSION     (uint32_t)1
-
 
     
 struct wof_image_hdr
 {
-	uint32_t magic_number;
-	uint8_t  version;
+	uint32_t magic_number;	// WOF_IMAGE_MAGIC_VALUE
+	uint8_t  version;	// WOF_IMAGE_VERSION
 	uint8_t  entry_count;	// Number of entries in section table
 	uint32_t offset;	// BE offset to section table from image start
 } __attribute__((__packed__));
@@ -81,26 +86,24 @@ struct wof_image_entry
 	uint32_t size;		// BE size of the section
 } __attribute__((__packed__));
 
+/* The values of wof_tables_hdr::mode */
+enum {
+	WOF_MODE_UNKNOWN = 0,
+	WOF_MODE_NOMINAL = 1,
+	WOF_MODE_TURBO   = 2
+};
+
     
 struct wof_tables_hdr
 {
-    /// Magic Number
-    ///   Set to ASCII  "WFTH___x" where x is the version of the VFRT structure
-    uint32_t magic_number;
+	uint32_t magic_number;	// WOF_TABLES_MAGIC_VALUE
 
-    /// Reserved version
-    /// version 1 - mode is reserved (0)
-    /// version 2 - mode is SET to 1 or 2
-    union
-    {
-        uint32_t reserved_version;
-        struct
-        {
-            unsigned reserved_bits: 20;
-            unsigned mode: 4;  /// new to version 2 (1 = Nominal, 2 = Turbo)
-            uint8_t  version;
-        } __attribute__((__packed__));
-    };
+	struct
+	{
+		unsigned reserved_bits: 20;
+		unsigned mode: 4;		// version 1: 0; version 2: 1 or 2; WOF_MODE_*
+		uint8_t  version;
+	} __attribute__((__packed__));
 
     /// VFRT Block Size
     ///    Length, in bytes, of a VFRT
@@ -192,6 +195,39 @@ struct wof_tables_hdr
     /// Up to 16 ASCII characters as a Package designator
     char package_name[16];
 } __attribute__((packed, aligned(128)));
+
+#define VFRT_HDR_MAGIC 0x5654 // "VT"
+
+struct vfrt_hdr
+{
+    uint16_t magic_number;	// "VT"
+
+    uint16_t reserved;
+    // 0:System type, 1:Homer type (0:3)
+    // if version 1: VFRT size is 12 row(voltage) X 11 column(freq) of size uint8_t
+    // (4:7)
+    // if version 2: VFRT size is 24 row(Voltage) X 5 column (Freq) of size uint8_t
+    uint8_t  type_version;
+    //Identifies the Vdn assumptions tht went in this VFRT (0:7)
+    uint8_t res_vdnId;
+    //Identifies the Vdd assumptions tht went in this VFRT (0:7)
+    uint8_t VddId_QAId;
+    //Identifies the Quad Active assumptions tht went in this VFRT (5:7)
+    uint8_t rsvd_QAId;
+} __attribute__((packed));
+
+// Data is provided in 1/24ths granularity with adjustments for integer
+// representation 
+#define VFRT_VRATIO_SIZE 24
+
+// 5 steps down from 100% is Fratio_step sizes 
+#define VFRT_FRATIO_SIZE 5
+
+struct homer_vfrt_entry
+{
+	struct vfrt_hdr vfrt_hdr;
+	uint8_t pstate[VFRT_FRATIO_SIZE * VFRT_VRATIO_SIZE];
+} __attribute__((packed, aligned(256)));
 
 static void copy_poundW_v2_to_v3(PoundW_data_per_quad *v3, PoundW_data *v2)
 {
@@ -469,15 +505,119 @@ static void update_resclk(int ref_freq_khz)
 	}
 }
 
-static void wof_init(uint8_t *buf)
+static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
+			uint32_t core_count,
+			const struct voltage_bucket_data *poundV_bucket)
+{
+	const struct region_device *wof_device = wof_device_ro();
+
+	const uint16_t socket_power_w = poundV_bucket->sort_power_normal;
+	const uint16_t sort_power_freq_mhz = poundV_bucket->nominal.freq;
+
+	int32_t i = 0;
+
+	for (i = 0; i < entry_count; ++i) {
+		uint8_t tbl_hdr_buf[sizeof(struct wof_tables_hdr)];
+		struct wof_tables_hdr *tbl_hdr = (void *)tbl_hdr_buf;
+
+		if (rdev_readat(wof_device, tbl_hdr_buf,
+				be32toh(entries[i].offset),
+				sizeof(tbl_hdr_buf)) != sizeof(tbl_hdr_buf))
+			die("Failed to read a WOF tables header!\n");
+
+		if (tbl_hdr->magic_number != WOF_TABLES_MAGIC_VALUE)
+			die("Incorrect magic value of WOF table header!\n");
+
+		if (tbl_hdr->version == 0 || tbl_hdr->version > WOF_TABLES_MAX_VERSION)
+			die("Unsupported version of WOF table header: %d!\n",
+			    tbl_hdr->version);
+
+		if (tbl_hdr->version >= WOF_TABLES_VERSION &&
+		    tbl_hdr->mode != WOF_MODE_UNKNOWN &&
+		    tbl_hdr->mode != WOF_MODE_NOMINAL)
+			continue;
+
+		if (tbl_hdr->core_count == core_count &&
+		    tbl_hdr->socket_power_w == socket_power_w &&
+		    tbl_hdr->sort_power_freq_mhz == sort_power_freq_mhz)
+			/* Found a suitable WOF tables entry */
+			return i;
+	}
+
+	return -1;
+}
+
+static void import_vfrt(const struct vfrt_hdr *src, struct homer_vfrt_entry *dst,
+			const OCCPstateParmBlock *oppb)
+{
+	const uint32_t ref_freq = oppb->frequency_max_khz;
+	const uint32_t freq_step = oppb->frequency_step_khz;
+
+	uint16_t i = 0;
+	uint8_t *freq = NULL;
+
+	if (be16toh(src->magic_number) != VFRT_HDR_MAGIC) {
+		die("Invalid magic value of a VFRT header: %d!\n",
+		    src->magic_number);
+	}
+
+	dst->vfrt_hdr = *src;
+	/* Flip type from "System" to "Homer" */
+	dst->vfrt_hdr.type_version |= 0x10;
+
+	freq = (uint8_t *)src + sizeof(*src);
+	for (i = 0; i < VFRT_FRATIO_SIZE * VFRT_VRATIO_SIZE; ++i)
+		/* Round towards higher values which correspond to lower (safer)
+		 * frequencies */
+		dst->pstate[i] = (ref_freq - freq[i] + freq_step - 1) / freq_step;
+}
+
+static void wof_extract(uint8_t *buf, struct wof_image_entry entry,
+			const OCCPstateParmBlock *oppb)
+{
+	const struct region_device *wof_device = wof_device_ro();
+
+	struct wof_tables_hdr *tbl_hdr = NULL;;
+
+	uint32_t i;
+
+	uint8_t *table_data = NULL;
+	uint8_t *wof_vfrt_entry = NULL;
+	struct homer_vfrt_entry *homer_vfrt_entry = NULL;
+
+	table_data = rdev_mmap(wof_device, be32toh(entry.offset), entry.size);
+	if (!table_data)
+		die("Failed to map WOF section!\n");
+
+	tbl_hdr = (void *)table_data;
+	memcpy(buf, tbl_hdr, sizeof(*tbl_hdr));
+
+	wof_vfrt_entry = table_data + sizeof(*tbl_hdr);
+	homer_vfrt_entry = (struct homer_vfrt_entry *)(buf + sizeof(*tbl_hdr));
+
+	for (i = 0; i < tbl_hdr->vdn_size * tbl_hdr->vdd_size * ACTIVE_QUADS; ++i) {
+		import_vfrt((const struct vfrt_hdr *)wof_vfrt_entry, homer_vfrt_entry,
+			    oppb);
+
+		wof_vfrt_entry += SYSTEM_VFRT_SIZE;
+		++homer_vfrt_entry;
+	}
+
+	if (rdev_munmap(wof_device, table_data))
+		die("Failed to unmap WOF section!\n");
+}
+
+static void wof_init(uint8_t *buf, uint32_t core_count,
+		     const OCCPstateParmBlock *oppb,
+		     const struct voltage_bucket_data *poundV_bucket)
 {
 	const struct region_device *wof_device = NULL;
 
 	uint8_t hdr_buf[sizeof(struct wof_image_hdr)];
 	struct wof_image_hdr *hdr = (void *)hdr_buf;
 
-	uint32_t i = 0;
 	struct wof_image_entry *entries = NULL;
+	int32_t entry_idx = 0;
 
 	wof_device_init();
 	wof_device = wof_device_ro();
@@ -486,22 +626,22 @@ static void wof_init(uint8_t *buf)
 		die("Failed to read WOF header!\n");
 
 	if (be32toh(hdr->magic_number) != WOF_IMAGE_MAGIC_VALUE)
-		die("Incorrect magic value in WOF header!\n");
+		die("Incorrect magic value of WOF header!\n");
 
 	if (hdr->version != WOF_IMAGE_VERSION)
 		die("Expected WOF header version %d, got %d!",
 		    WOF_IMAGE_VERSION, hdr->version);
 
-	entries = rdev_mmap(wof_device, hdr->offset,
+	entries = rdev_mmap(wof_device, be32toh(hdr->offset),
 			    hdr->entry_count*sizeof(entries));
 	if (!entries)
 		die("Failed to map section table of WOF!\n");
 
-	for (i = 0; i < hdr->entry_count; ++i) {
-		struct wof_tables_hdr *tables = rdev_mmap(wof_device,
-							  entries[i].offset,
-							  entries[i].size);
-	}
+	entry_idx = wof_find(entries, hdr->entry_count, core_count, poundV_bucket);
+	if (entry_idx == -1)
+		die("Failed to find a matching WOF tables section!\n");
+
+	wof_extract(buf, entries[entry_idx], oppb);
 
 	if (rdev_munmap(wof_device, entries))
 		die("Failed to unmap section table of WOF!\n");
@@ -947,46 +1087,10 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 	((GPPBOptionsPadUse *)&gppb->options.pad)->fields.good_cores_in_sort =
 	       oppb->iddq.good_normal_cores_per_sort;
 
-	/* TODO: WOF */
-
-	wof_init(homer->ppmr.wof_tables);
-
-	//~ // ----------------
-	//~ // WOF initialization
-	//~ // ----------------
-	//~ wof_init(o_buf = &homer->ppmr.wof_tables):
-		//~ - Search for proper data in WOFDATA PNOR partition
-		//~ - XXX WOFDATA is 3M, make sure CBFS_CACHE is big enough
-		//~ - search until match is found:
-		  //~ - core count
-		  //~ - socket power (nominal, as read from #V)
-		  //~ - frequency (nominal, as read from #V)
-		  //~ - if version >= WOF_TABLE_VERSION_POWERMODE (2):
-			//~ - mode matches current mode (WOF_MODE_NOMINAL = 1) or wildcard (WOF_MODE_UNKNOWN = 0)
-		//~ - structures used:
-		  //~ - wofImageHeader_t from plat_wof_access.C
-			//~ - check magic and version
-		  //~ - wofSectionTableEntry_t from plat_wof_access.C
-		  //~ - WofTablesHeader_t from p9_pstates_common.h
-		//~ memcpy(o_buf, &WofTablesHeader_t /* for found entry */, wofSectionTableEntry_t[found_entry_idx].size)
-
-		//~ // Just the header, rest needs parsing
-		//~ memcpy(homer->ppmr.wof_tables, o_buf, sizeof(WofTablesHeader_t))
-
-		//~ for vfrt_index in 0..((WofTablesHeader_t*)o_buf->vdn_size * (WofTablesHeader_t*)o_buf->vdd_size * ACTIVE_QUADS) -1:
-			//~ src = o_buf                  + sizeof(WofTablesHeader_t) + vfrt_index * 128 /* vRTF size */
-			//~ dst = homer->ppmr.wof_tables + sizeof(WofTablesHeader_t) + vfrt_index * sizeof(HomerVFRTLayout_t) /* 256B */
-			//~ update_vfrt (src, dst):
-				//~ - Assumption: no bias, makes this function so much easier
-				//~ // Data in src has 8B header followed by 5*24 bytes of frequency information, such that freq = value*step_size + 1GHz.
-				//~ // Data in dst has (almost) the same header followed by 5*24 bytes of Pstates.
-				//~ // Copy header
-				//~ memcpy(dst, src, 8)
-				//~ // Flip type from System to Homer
-				//~ dst.type_version |= 0x10
-				//~ assert(dst.magic = "VT")
-				//~ for idx in 0..5*24 -1:
-					//~ dst[8+idx] = freq_to_pstate(src[8+idx])		// rounded properly
+	wof_init(homer->ppmr.wof_tables,
+		 __builtin_popcount((uint32_t)functional_cores) +
+		 __builtin_popcount(functional_cores >> 32),
+		 oppb, &poundV_bucket);
 
 	/* Copy LPPB to functional CMEs */
 	for (int cme = 1; cme < MAX_CMES_PER_CHIP; cme++) {

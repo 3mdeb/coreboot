@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <endian.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "rs4.h"
@@ -360,7 +361,7 @@ static void get_section_properties(uint32_t tor_magic,
 
 /* Either reads ring into the buffer (on GET_RING_DATA) or treats it as an
  * instance of ring_put_info (on GET_RING_PUT_INFO) */
-static void ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
+static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 			uint8_t instance_id, void *data_buf,
 			uint32_t *data_buf_size, enum ring_operation operation)
 {
@@ -440,15 +441,17 @@ static void ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 					put_info->ring_slot_offset = (uint8_t*)&tor_slots[tor_slot_idx]
 								   - (uint8_t*)ring_section;
 				}
-				return;
+				return true;
 			}
 		}
 	}
+
+	return false;
 }
 
 /* A wrapper around ring_access() that does safety checks and tor traversal if
  * necessary*/
-void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
+bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 		     enum ppe_type ppe_type, uint8_t instance_id,
 		     void *data_buf, uint32_t *data_buf_size,
 		     enum ring_operation operation)
@@ -467,9 +470,11 @@ void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 			section = (void *)&ring_section->data[section_offset];
 		}
 
-		ring_access(section, ring_id, instance_id, data_buf,
-			    data_buf_size, operation);
-	} else if (operation == GET_PPE_LEVEL_RINGS) {
+		return ring_access(section, ring_id, instance_id, data_buf,
+				   data_buf_size, operation);
+	}
+
+	if (operation == GET_PPE_LEVEL_RINGS) {
 		uint32_t section_size = 0;
 		uint32_t section_offset = 0;
 		struct tor_ppe_block *tor_ppe_block = (void *)ring_section->data;
@@ -486,9 +491,10 @@ void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 			       section_size);
 
 		*data_buf_size = section_size;
-	} else {
-		die("Unhandled TOR ring access operation!");
+		return true;
 	}
+
+	die("Unhandled TOR ring access operation!");
 }
 
 /* Retrieves an overlay ring in both compressed and uncompressed forms */
@@ -498,8 +504,9 @@ static void get_overlays_ring(struct tor_hdr *overlays_section,
 	uint32_t uncompressed_bit_size = 0;
 	uint32_t rs4_buf_size = 0xFFFFFFFF;
 
-	tor_access_ring(overlays_section, ring_id, UNDEFINED_PPE_TYPE, 0,
-			rs4_buf, &rs4_buf_size, GET_RING_DATA);
+	if (!tor_access_ring(overlays_section, ring_id, UNDEFINED_PPE_TYPE, 0,
+			     rs4_buf, &rs4_buf_size, GET_RING_DATA))
+		die("Failed to find ring in overlay!");
 
 	rs4_decompress(raw_buf, raw_buf + MAX_RING_BUF_SIZE/2,
 		       MAX_RING_BUF_SIZE/2, &uncompressed_bit_size,
@@ -563,8 +570,9 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	struct ring_put_info put_info;
 	uint32_t put_info_size = sizeof(put_info);
 
-	tor_access_ring(ring_section, ring_id, ppe_type, instance_id, &put_info,
-			&put_info_size, GET_RING_PUT_INFO);
+	if (!tor_access_ring(ring_section, ring_id, ppe_type, instance_id,
+			     &put_info, &put_info_size, GET_RING_PUT_INFO))
+		die("Failed to find where to put a ring!");
 
 	if (*ring_section_size - put_info.chiplet_offset > MAX_TOR_RING_OFFSET)
 		die("TOR section has reached its maximum size!");

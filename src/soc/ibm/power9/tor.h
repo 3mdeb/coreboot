@@ -3,6 +3,7 @@
 #ifndef __SOC_IBM_POWER9_TOR_H
 #define __SOC_IBM_POWER9_TOR_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define UNDEFINED_RING_ID     (uint16_t)0xffff
@@ -419,7 +420,7 @@ struct tor_hdr {
 
 /* Either reads ring into the buffer (on GET_RING_DATA) or treats it as an
  * instance of ring_put_info (on GET_RING_PUT_INFO) */
-void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
+bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 		     enum ppe_type ppe_type, uint8_t instance_id,
 		     void *data_buf, uint32_t *data_buf_size,
 		     enum ring_operation operation);

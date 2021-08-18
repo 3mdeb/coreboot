@@ -5,6 +5,9 @@
 
 #include <stdint.h>
 
+#define UNDEFINED_RING_ID     (uint16_t)0xffff
+#define UNDEFINED_INSTANCE_ID (uint8_t)0xff
+
 #define MAX_RING_BUF_SIZE   (uint32_t)60000
 #define MAX_TOR_RING_OFFSET (uint16_t)0xffff
 
@@ -431,7 +434,6 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 				    uint32_t max_ring_section_size,
 				    struct tor_hdr *overlays_section,
 				    enum ppe_type ppe_type,
-				    uint8_t chiplet_id,
 				    uint8_t *buf1,
 				    uint8_t *buf2,
 				    uint8_t *buf3);

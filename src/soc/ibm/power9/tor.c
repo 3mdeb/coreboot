@@ -474,6 +474,8 @@ void tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 		uint32_t section_offset = 0;
 		struct tor_ppe_block *tor_ppe_block = (void *)ring_section->data;
 
+		assert(ring_id == UNDEFINED_RING_ID);
+		assert(instance_id == UNDEFINED_INSTANCE_ID);
 		assert(be32toh(ring_section->magic) == TOR_MAGIC_HW);
 
 		section_size = be32toh(tor_ppe_block[ppe_type].size);
@@ -644,7 +646,6 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 				    uint32_t max_ring_section_size,
 				    struct tor_hdr *overlays_section,
 				    enum ppe_type ppe_type,
-				    uint8_t chiplet_id,
 				    uint8_t *buf1, uint8_t *buf2, uint8_t *buf3)
 {
 	const size_t pdg_query_count =

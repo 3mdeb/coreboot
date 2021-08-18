@@ -17,6 +17,17 @@
 
 #include <lib.h>
 
+struct ring_data {
+	void *rings_buf;
+	void *work_buf1;
+	void *work_buf2;
+	void *work_buf3;
+	uint32_t rings_buf_size;
+	uint32_t work_buf1_size;
+	uint32_t work_buf2_size;
+	uint32_t work_buf3_size;
+};
+
 extern void mount_part_from_pnor(const char *part_name,
 				 struct mmap_helper_region_device *mdev);
 
@@ -887,15 +898,10 @@ static void istep_16_1(int this_core)
 	//     p9_stop_save_scom() and others
 }
 
-static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd)
+static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd, enum ppe_type ppe,
+			    struct ring_data *ring_data)
 {
-	static uint8_t ppe[16 * KiB];
-
-	static uint8_t buf1[MAX_RING_BUF_SIZE];
-	static uint8_t buf2[MAX_RING_BUF_SIZE];
-	static uint8_t buf3[MAX_RING_BUF_SIZE];
-
-	uint32_t ppe_size = sizeof(ppe);
+	const uint32_t max_rings_buf_size = ring_data->rings_buf_size;
 
 	struct tor_hdr *rings;
 	struct tor_hdr *overlays;
@@ -908,15 +914,24 @@ static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd)
 	copy_section(&rings, &hw->rings, hw, dd, FIND);
 	copy_section(&overlays, &hw->overlays, hw, dd, FIND);
 
-	tor_access_ring(rings, EC_TIME, PT_CME, 0, ppe, &ppe_size, GET_PPE_LEVEL_RINGS);
+	tor_access_ring(rings, UNDEFINED_RING_ID, ppe, UNDEFINED_INSTANCE_ID,
+			ring_data->rings_buf, &ring_data->rings_buf_size,
+			GET_PPE_LEVEL_RINGS);
 
-	printk(BIOS_EMERG, "original ppe_size = 0x%08x\n", ppe_size);
+	printk(BIOS_EMERG, "original ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
 
-	tor_fetch_and_insert_vpd_rings((struct tor_hdr *)ppe, &ppe_size,
-				       sizeof(ppe), overlays,
-				       PT_CME, 32, buf1, buf2, buf3);
+	assert(ring_data->work_buf1_size == MAX_RING_BUF_SIZE);
+	assert(ring_data->work_buf2_size == MAX_RING_BUF_SIZE);
+	assert(ring_data->work_buf3_size == MAX_RING_BUF_SIZE);
 
-	printk(BIOS_EMERG, "new ppe_size = 0x%08x\n", ppe_size);
+	tor_fetch_and_insert_vpd_rings((struct tor_hdr *)ring_data->rings_buf,
+				       &ring_data->rings_buf_size, max_rings_buf_size,
+				       overlays, ppe,
+				       ring_data->work_buf1,
+				       ring_data->work_buf2,
+				       ring_data->work_buf3);
+
+	printk(BIOS_EMERG, "new ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
 }
 
 /*
@@ -981,8 +996,26 @@ void build_homer_image(void *homer_bar)
 	build_pgpe(homer, (struct xip_pgpe_header *)(homer_bar + hw->pgpe.offset),
 	           dd);
 
-	// "test" of tor_fetch_and_insert_vpd_rings()
-	getPpeScanRings(hw, dd);
+	static uint8_t rings_buf[300 * KiB];
+
+	static uint8_t work_buf1[MAX_RING_BUF_SIZE];
+	static uint8_t work_buf2[MAX_RING_BUF_SIZE];
+	static uint8_t work_buf3[MAX_RING_BUF_SIZE];
+
+	struct ring_data ring_data = {
+		.rings_buf = rings_buf, .rings_buf_size = sizeof(rings_buf),
+		.work_buf1 = work_buf1, .work_buf1_size = sizeof(work_buf1),
+		.work_buf2 = work_buf2, .work_buf2_size = sizeof(work_buf2),
+		.work_buf3 = work_buf3, .work_buf3_size = sizeof(work_buf3),
+	};
+	getPpeScanRings(hw, dd, PT_CME, &ring_data);
+
+	/* Reset buffer sizes to maximum values before reusing the structure */
+	ring_data.rings_buf_size = sizeof(rings_buf);
+	ring_data.work_buf1_size = sizeof(work_buf1);
+	ring_data.work_buf2_size = sizeof(work_buf2);
+	ring_data.work_buf3_size = sizeof(work_buf3);
+	getPpeScanRings(hw, dd, PT_SGPE, &ring_data);
 
 	// TBD
 	// getPpeScanRings() for CME

@@ -17,6 +17,24 @@
 
 #include <lib.h>
 
+#define CORE0_CHIPLET_ID 0x20
+
+#define CMN_RING_LIST_SIZE 2048
+
+// Ring variants supported.
+// - This enum also reflects the order with which they appear in various images' .rings section.
+// - Do  NOT  make changes to the values or order of this enum.
+enum RingVariant {
+    RV_BASE     = 0x00,
+    RV_CC       = 0x01,
+    RV_RL       = 0x02,  // Kernel and user protection
+    RV_RL2      = 0x03,  // Kernel only protection
+    RV_RL3      = 0x04,  // Rugby v4
+    RV_RL4      = 0x05,  // Java performance
+    RV_RL5      = 0x06,  // Spare
+    NUM_RING_VARIANTS = 0x07,
+};
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -26,6 +44,11 @@ struct ring_data {
 	uint32_t work_buf1_size;
 	uint32_t work_buf2_size;
 	uint32_t work_buf3_size;
+};
+
+struct cmd_ring_list {
+	uint16_t ring[8]; // In order: EC_FUNC, EC_GPTR, EC_TIME, EC_MODE, EC_ABST, 3 reserved
+	uint8_t payload[];
 };
 
 extern void mount_part_from_pnor(const char *part_name,
@@ -898,8 +921,8 @@ static void istep_16_1(int this_core)
 	//     p9_stop_save_scom() and others
 }
 
-static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd, enum ppe_type ppe,
-			    struct ring_data *ring_data)
+static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
+			       enum ppe_type ppe, struct ring_data *ring_data)
 {
 	const uint32_t max_rings_buf_size = ring_data->rings_buf_size;
 
@@ -914,9 +937,10 @@ static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd, enum ppe_type 
 	copy_section(&rings, &hw->rings, hw, dd, FIND);
 	copy_section(&overlays, &hw->overlays, hw, dd, FIND);
 
-	tor_access_ring(rings, UNDEFINED_RING_ID, ppe, UNDEFINED_INSTANCE_ID,
-			ring_data->rings_buf, &ring_data->rings_buf_size,
-			GET_PPE_LEVEL_RINGS);
+	if (!tor_access_ring(rings, UNDEFINED_RING_ID, ppe, UNDEFINED_INSTANCE_ID,
+			     ring_data->rings_buf, &ring_data->rings_buf_size,
+			     GET_PPE_LEVEL_RINGS))
+		die("Failed to access PPE level rings!");
 
 	printk(BIOS_EMERG, "original ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
 
@@ -932,6 +956,69 @@ static void getPpeScanRings(struct xip_hw_header *hw, uint8_t dd, enum ppe_type 
 				       ring_data->work_buf3);
 
 	printk(BIOS_EMERG, "new ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
+}
+
+static void layout_common_rings_for_cme(struct homer_st *homer,
+					struct ring_data *ring_data,
+					uint32_t ring_variant,
+					uint32_t *ring_len)
+{
+	struct cmd_ring_list *tmp =
+		(void *)&homer->cpmr.cme_sram_region[*ring_len];
+	uint8_t *start = (void *)tmp;
+	uint8_t *payload = tmp->payload;
+
+	uint32_t i = 0;
+	enum ring_id ring_ids[] = { EC_FUNC, EC_GPTR, EC_TIME, EC_MODE };
+
+	for (i = 0; i < sizeof(ring_ids)/sizeof(ring_ids[0]); ++i) {
+		enum ring_id id = ring_ids[0];
+
+		uint32_t this_ring_variant;
+		uint32_t ring_size;
+
+		this_ring_variant = ring_variant;
+		if (id == EC_GPTR || id == EC_TIME)
+			this_ring_variant = RV_BASE;
+		/* XXX: possibly use this_ring_variant */
+
+		ring_size = ring_data->work_buf1_size;
+
+		if (!tor_access_ring(ring_data->rings_buf, id, PT_CME,
+				     /*this_ring_variant, */CORE0_CHIPLET_ID,
+				     ring_data->work_buf1, &ring_size,
+				     GET_RING_DATA))
+			continue;
+
+		ring_size = ALIGN_UP(ring_size, 8);
+		/* Not aligning payload because it follows 16B of data */
+		assert(sizeof(struct cmd_ring_list) % 8 == 0);
+
+		memcpy(payload, ring_data->work_buf1, ring_size);
+		tmp->ring[i] = payload - start;
+
+		payload += ring_size;
+	}
+
+	if (payload - start > CMN_RING_LIST_SIZE)
+		*ring_len += payload - start;
+
+	*ring_len = ALIGN_UP(*ring_len, 8);
+}
+
+static void layout_rings_for_cme(struct homer_st *homer,
+				 struct ring_data *ring_data,
+				 uint32_t risk_level)
+{
+	struct cpmr_header *cpmr_hdr = &homer->cpmr.header;
+	struct cme_img_header *cme_hdr =
+		(void *)&homer->cpmr.cme_sram_region[CME_INT_VECTOR_SIZE];
+
+	uint32_t ring_len = cme_hdr->hcode_offset + cme_hdr->hcode_len;
+
+	assert(be64toh(cpmr_hdr->magic) == CPMR_VDM_PER_QUAD);
+
+	layout_common_rings_for_cme(homer, ring_data, risk_level, &ring_len);
 }
 
 /*
@@ -1008,14 +1095,17 @@ void build_homer_image(void *homer_bar)
 		.work_buf2 = work_buf2, .work_buf2_size = sizeof(work_buf2),
 		.work_buf3 = work_buf3, .work_buf3_size = sizeof(work_buf3),
 	};
-	getPpeScanRings(hw, dd, PT_CME, &ring_data);
+	get_ppe_scan_rings(hw, dd, PT_CME, &ring_data);
+
+	const uint32_t risk_level = (dd < 23 ? 0 : 4);
+	layout_rings_for_cme(homer, &ring_data, risk_level);
 
 	/* Reset buffer sizes to maximum values before reusing the structure */
 	ring_data.rings_buf_size = sizeof(rings_buf);
 	ring_data.work_buf1_size = sizeof(work_buf1);
 	ring_data.work_buf2_size = sizeof(work_buf2);
 	ring_data.work_buf3_size = sizeof(work_buf3);
-	getPpeScanRings(hw, dd, PT_SGPE, &ring_data);
+	get_ppe_scan_rings(hw, dd, PT_SGPE, &ring_data);
 
 	// TBD
 	// getPpeScanRings() for CME

@@ -128,6 +128,9 @@ check_member(qpmr_st, aux, 512 * KiB);
 
 /* =================== CPMR =================== */
 
+#define CME_INT_VECTOR_SIZE 384
+#define CPMR_VDM_PER_QUAD   0x43504d525f322e30ull
+
 struct cpmr_header {
 	uint32_t attn_opcodes[2];
 	uint64_t magic;		/* "CPMR_2.0" */

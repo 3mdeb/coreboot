@@ -13,9 +13,6 @@
 #define MAX_UT_PSTATES       64     // Oversized
 #define FREQ_STEP_KHZ        16666
 
-// TODO: move this and similar defines in tor.c into some header
-#define ACTIVE_QUADS 6
-
 #define SYSTEM_VFRT_SIZE 128
 
 #include "pstates_include/p9_pstates_occ.h"
@@ -537,7 +534,7 @@ static void wof_extract(uint8_t *buf, struct wof_image_entry entry,
 	wof_vfrt_entry = table_data + sizeof(*tbl_hdr);
 	homer_vfrt_entry = (struct homer_vfrt_entry *)(buf + sizeof(*tbl_hdr));
 
-	for (i = 0; i < tbl_hdr->vdn_size * tbl_hdr->vdd_size * ACTIVE_QUADS; ++i) {
+	for (i = 0; i < tbl_hdr->vdn_size * tbl_hdr->vdd_size * MAX_QUADS_PER_CHIP; ++i) {
 		import_vfrt((const struct vfrt_hdr *)wof_vfrt_entry, homer_vfrt_entry,
 			    oppb);
 

@@ -46,8 +46,13 @@ struct ring_data {
 	uint32_t work_buf3_size;
 };
 
-struct cmd_ring_list {
+struct cmn_ring_list {
 	uint16_t ring[8]; // In order: EC_FUNC, EC_GPTR, EC_TIME, EC_MODE, EC_ABST, 3 reserved
+	uint8_t payload[];
+};
+
+struct inst_ring_list {
+	uint16_t ring[4]; // In order: EC_REPR0, EC_REPR1, 2 reserved
 	uint8_t payload[];
 };
 
@@ -958,12 +963,11 @@ static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
 	printk(BIOS_EMERG, "new ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
 }
 
-static void layout_common_rings_for_cme(struct homer_st *homer,
-					struct ring_data *ring_data,
-					uint32_t ring_variant,
-					uint32_t *ring_len)
+static void layout_cmn_rings_for_cme(struct homer_st *homer,
+				     struct ring_data *ring_data,
+				     uint32_t ring_variant, uint32_t *ring_len)
 {
-	struct cmd_ring_list *tmp =
+	struct cmn_ring_list *tmp =
 		(void *)&homer->cpmr.cme_sram_region[*ring_len];
 	uint8_t *start = (void *)tmp;
 	uint8_t *payload = tmp->payload;
@@ -992,7 +996,7 @@ static void layout_common_rings_for_cme(struct homer_st *homer,
 
 		ring_size = ALIGN_UP(ring_size, 8);
 		/* Not aligning payload because it follows 16B of data */
-		assert(sizeof(struct cmd_ring_list) % 8 == 0);
+		assert(sizeof(struct cmn_ring_list) % 8 == 0);
 
 		memcpy(payload, ring_data->work_buf1, ring_size);
 		tmp->ring[i] = payload - start;
@@ -1006,9 +1010,45 @@ static void layout_common_rings_for_cme(struct homer_st *homer,
 	*ring_len = ALIGN_UP(*ring_len, 8);
 }
 
+static void layout_inst_rings_for_cme(struct homer_st *homer,
+				      struct ring_data *ring_data,
+				      uint64_t cores,
+				      uint32_t ring_variant, uint32_t *ring_len)
+{
+	uint32_t max_ex_len = 0;
+
+	uint32_t ex = 0;
+
+	for (ex = 0; ex < MAX_CMES_PER_CHIP; ++ex) {
+		uint32_t i = 0;
+		uint32_t ex_len = 0;
+
+		for (i = 0; i < MAX_CORES_PER_EX; ++i) {
+			uint32_t core = ex*MAX_CORES_PER_EX + i;
+			uint32_t len;
+
+			if (!IS_EC_FUNCTIONAL(core, cores))
+				continue;
+
+			len = ring_data->work_buf1_size;
+			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
+						 PT_CME, /*RV_BASE,*/
+						 CORE0_CHIPLET_ID + core,
+						 ring_data->work_buf1,
+						 &len, GET_RING_DATA))
+			    continue;
+			
+			ex_len += ALIGN_UP(len, 8);
+		}
+
+		if (ex_len > max_ex_len)
+			max_ex_len = ex_len;
+	}
+}
+
 static void layout_rings_for_cme(struct homer_st *homer,
 				 struct ring_data *ring_data,
-				 uint32_t risk_level)
+				 uint64_t cores, uint32_t risk_level)
 {
 	struct cpmr_header *cpmr_hdr = &homer->cpmr.header;
 	struct cme_img_header *cme_hdr =
@@ -1018,7 +1058,22 @@ static void layout_rings_for_cme(struct homer_st *homer,
 
 	assert(be64toh(cpmr_hdr->magic) == CPMR_VDM_PER_QUAD);
 
-	layout_common_rings_for_cme(homer, ring_data, risk_level, &ring_len);
+	layout_cmn_rings_for_cme(homer, ring_data, risk_level, &ring_len);
+
+	cme_hdr->common_ring_len = ring_len - (cme_hdr->hcode_offset + cme_hdr->hcode_len);
+
+	// if common ring, force offset to be 0
+	if (cme_hdr->common_ring_len == 0)
+		cme_hdr->common_ring_offset = 0;
+
+	ring_len = ALIGN_UP(ring_len, 32);
+
+	layout_inst_rings_for_cme(homer, ring_data, cores, RV_BASE, &ring_len);
+
+	if (ring_len != 0) {
+		cme_hdr->max_spec_ring_len = ALIGN_UP(ring_len, 32) / 32;
+		cme_hdr->core_spec_ring_offset = cpmr_hdr->cme_common_ring_offset + cpmr_hdr->cme_common_ring_len;
+	}
 }
 
 /*
@@ -1098,7 +1153,7 @@ void build_homer_image(void *homer_bar)
 	get_ppe_scan_rings(hw, dd, PT_CME, &ring_data);
 
 	const uint32_t risk_level = (dd < 23 ? 0 : 4);
-	layout_rings_for_cme(homer, &ring_data, risk_level);
+	layout_rings_for_cme(homer, &ring_data, cores, risk_level);
 
 	/* Reset buffer sizes to maximum values before reusing the structure */
 	ring_data.rings_buf_size = sizeof(rings_buf);

@@ -99,12 +99,9 @@ struct wof_tables_hdr
 {
 	uint32_t magic_number;	// WOF_TABLES_MAGIC_VALUE
 
-	struct
-	{
-		unsigned reserved: 20;
-		unsigned mode: 4;	// version 1: 0; version 2: 1 or 2; WOF_MODE_*
-		uint8_t  version;
-	} __attribute__((__packed__));
+	uint16_t reserved;
+	uint8_t mode;		// bits 0-3: version 1 = 0; version 2 = 1 or 2; WOF_MODE_*
+	uint8_t version;
 
 	uint16_t vfrt_block_size;
 	uint16_t vfrt_block_header_size;
@@ -454,6 +451,7 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 	for (i = 0; i < entry_count; ++i) {
 		uint8_t tbl_hdr_buf[sizeof(struct wof_tables_hdr)];
 		struct wof_tables_hdr *tbl_hdr = (void *)tbl_hdr_buf;
+		uint8_t mode = 0;
 
 		if (rdev_readat(wof_device, tbl_hdr_buf,
 				be32toh(entries[i].offset),
@@ -467,9 +465,10 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 			die("Unsupported version of WOF table header: %d!\n",
 			    tbl_hdr->version);
 
+		mode = (tbl_hdr->mode & 0x0f);
 		if (tbl_hdr->version >= WOF_TABLES_VERSION &&
-		    tbl_hdr->mode != WOF_MODE_UNKNOWN &&
-		    tbl_hdr->mode != WOF_MODE_TURBO)
+		    mode != WOF_MODE_UNKNOWN &&
+		    mode != WOF_MODE_TURBO)
 			continue;
 
 		if (be16toh(tbl_hdr->core_count) == core_count &&

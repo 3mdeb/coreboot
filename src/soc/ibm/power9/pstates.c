@@ -446,8 +446,8 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 {
 	const struct region_device *wof_device = wof_device_ro();
 
-	const uint16_t socket_power_w = be16toh(poundV_bucket->sort_power_normal);
-	const uint16_t sort_power_freq_mhz = be16toh(poundV_bucket->nominal.freq);
+	const uint16_t socket_power_w = be16toh(poundV_bucket->sort_power_turbo);
+	const uint16_t sort_power_freq_mhz = be16toh(poundV_bucket->turbo.freq);
 
 	int32_t i = 0;
 
@@ -469,7 +469,7 @@ static int32_t wof_find(struct wof_image_entry *entries, uint8_t entry_count,
 
 		if (tbl_hdr->version >= WOF_TABLES_VERSION &&
 		    tbl_hdr->mode != WOF_MODE_UNKNOWN &&
-		    tbl_hdr->mode != WOF_MODE_NOMINAL)
+		    tbl_hdr->mode != WOF_MODE_TURBO)
 			continue;
 
 		if (be16toh(tbl_hdr->core_count) == core_count &&

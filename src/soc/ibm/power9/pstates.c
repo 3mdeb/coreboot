@@ -100,7 +100,7 @@ struct wof_tables_hdr
 	uint32_t magic_number;	// WOF_TABLES_MAGIC_VALUE
 
 	uint16_t reserved;
-	uint8_t mode;		// bits 0-3: version 1 = 0; version 2 = 1 or 2; WOF_MODE_*
+	uint8_t mode;		// version 1 = 0; version 2 = 1 or 2; WOF_MODE_*
 	uint8_t version;
 
 	uint16_t vfrt_block_size;

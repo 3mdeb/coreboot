@@ -5,6 +5,7 @@
 #include <commonlib/region.h>
 #include <console/console.h>
 #include <cpu/power/mvpd.h>
+#include <cpu/power/powerbus.h>
 #include <cpu/power/scom.h>
 #include <cpu/power/spr.h>
 #include <string.h>		// memset, memcpy
@@ -17,7 +18,8 @@
 
 #include <lib.h>
 
-#define CORE0_CHIPLET_ID 0x20
+#define CACHE0_CHIPLET_ID 0x10
+#define CORE0_CHIPLET_ID  0x20
 
 #define CMN_RING_LIST_SIZE 2048
 
@@ -46,13 +48,18 @@ struct ring_data {
 	uint32_t work_buf3_size;
 };
 
-struct cmn_ring_list {
+struct cme_cmn_ring_list {
 	uint16_t ring[8]; // In order: EC_FUNC, EC_GPTR, EC_TIME, EC_MODE, EC_ABST, 3 reserved
 	uint8_t payload[];
 };
 
-struct inst_ring_list {
+struct cme_inst_ring_list {
 	uint16_t ring[4]; // In order: EC_REPR0, EC_REPR1, 2 reserved
+	uint8_t payload[];
+};
+
+struct sgpe_cmn_ring_list {
+	uint16_t ring[64]; // See the list in layout_cmn_rings_for_sgpe() skipping EQ_ANA_BNDY, 3 reserved
 	uint8_t payload[];
 };
 
@@ -1210,40 +1217,35 @@ static void layout_cmn_rings_for_cme(struct homer_st *homer,
 				     struct ring_data *ring_data,
 				     uint32_t ring_variant, uint32_t *ring_len)
 {
-	struct cmn_ring_list *tmp =
+	struct cme_cmn_ring_list *tmp =
 		(void *)&homer->cpmr.cme_sram_region[*ring_len];
 	uint8_t *start = (void *)tmp;
 	uint8_t *payload = tmp->payload;
 
 	uint32_t i = 0;
-	enum ring_id ring_ids[] = { EC_FUNC, EC_GPTR, EC_TIME, EC_MODE };
+	const enum ring_id ring_ids[] = { EC_FUNC, EC_GPTR, EC_TIME, EC_MODE };
 
 	for (i = 0; i < sizeof(ring_ids)/sizeof(ring_ids[0]); ++i) {
-		enum ring_id id = ring_ids[0];
+		const enum ring_id id = ring_ids[0];
 
 		uint32_t this_ring_variant;
-		uint32_t ring_size;
+		uint32_t ring_size = MAX_RING_BUF_SIZE;
 
 		this_ring_variant = ring_variant;
 		if (id == EC_GPTR || id == EC_TIME)
 			this_ring_variant = RV_BASE;
-		/* XXX: possibly use this_ring_variant */
+		/* XXX: use this_ring_variant */
 
-		ring_size = MAX_RING_BUF_SIZE;
+		if ((payload - start) % 8 != 0)
+			payload = start + ALIGN_UP(payload - start, 8);
 
 		if (!tor_access_ring(ring_data->rings_buf, id, PT_CME,
 				     /*this_ring_variant, */CORE0_CHIPLET_ID,
 				     payload, &ring_size, GET_RING_DATA))
 			continue;
 
-		ring_size = ALIGN_UP(ring_size, 8);
-		/* Not aligning payload because it follows 16B of data and is
-		 * incremented by a multiple of 8 */
-		assert(sizeof(*tmp) % 8 == 0);
-
 		tmp->ring[i] = payload - start;
-
-		payload += ring_size;
+		payload += ALIGN_UP(ring_size, 8);
 	}
 
 	if (payload - start > CMN_RING_LIST_SIZE)
@@ -1292,7 +1294,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 		const uint32_t ex_offset = ex * (max_ex_len + ALIGN_UP(sizeof(struct local_pstate_params), 32));
 
 		uint8_t *start = &homer->cpmr.cme_sram_region[*ring_len + ex_offset];
-		struct inst_ring_list *tmp = (void *)start;
+		struct cme_inst_ring_list *tmp = (void *)start;
 		uint8_t *payload = tmp->payload;
 
 		uint32_t i = 0;
@@ -1305,6 +1307,9 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 			if (!IS_EC_FUNCTIONAL(core, cores))
 				continue;
 
+			if ((payload - start) % 8 != 0)
+				payload = start + ALIGN_UP(payload - start, 8);
+
 			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
 						 PT_CME, /*RV_BASE,*/
 						 CORE0_CHIPLET_ID + core,
@@ -1312,14 +1317,9 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 						 &ring_size, GET_RING_DATA))
 			    continue;
 
-			ring_size += ALIGN_UP(ring_size, 8);
-			/* Not aligning payload because it follows 8B of data
-			 * and is incremented by a multiple of 8 */
-			assert(sizeof(*tmp) % 8 == 0);
-
 			tmp->ring[i] = payload - start;
 
-			payload += ring_size;
+			payload += ALIGN_UP(ring_size, 8);
 		}
 	}
 
@@ -1354,6 +1354,106 @@ static void layout_rings_for_cme(struct homer_st *homer,
 		cme_hdr->max_spec_ring_len = ALIGN_UP(ring_len, 32) / 32;
 		cme_hdr->core_spec_ring_offset = cpmr_hdr->cme_common_ring_offset + cpmr_hdr->cme_common_ring_len;
 	}
+}
+
+static enum ring_id resolve_eq_inex_bucket(void)
+{
+	switch (powerbus_cfg()->core_floor_ratio) {
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_8_8:
+			return EQ_INEX_BUCKET_4;
+
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_7_8:
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_6_8:
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_5_8:
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_4_8:
+			return EQ_INEX_BUCKET_3;
+
+		case FABRIC_CORE_FLOOR_RATIO_RATIO_2_8:
+			return EQ_INEX_BUCKET_2;
+	}
+
+	die("Failed to resolve EQ_INEX_BUCKET_*!\n");
+}
+
+static void layout_cmn_rings_for_sgpe(struct homer_st *homer,
+				      struct ring_data *ring_data,
+				      uint32_t ring_variant)
+{
+	const enum ring_id ring_ids[] = {
+		EQ_FURE, EQ_GPTR, EQ_TIME, EQ_INEX, EX_L3_FURE, EX_L3_GPTR, EX_L3_TIME,
+		EX_L2_MODE, EX_L2_FURE, EX_L2_GPTR, EX_L2_TIME, EX_L3_REFR_FURE,
+		EX_L3_REFR_GPTR, EQ_ANA_FUNC, EQ_ANA_GPTR, EQ_DPLL_FUNC, EQ_DPLL_GPTR,
+		EQ_DPLL_MODE, EQ_ANA_BNDY_BUCKET_0, EQ_ANA_BNDY_BUCKET_1,
+		EQ_ANA_BNDY_BUCKET_2, EQ_ANA_BNDY_BUCKET_3, EQ_ANA_BNDY_BUCKET_4,
+		EQ_ANA_BNDY_BUCKET_5, EQ_ANA_BNDY_BUCKET_6, EQ_ANA_BNDY_BUCKET_7,
+		EQ_ANA_BNDY_BUCKET_8, EQ_ANA_BNDY_BUCKET_9, EQ_ANA_BNDY_BUCKET_10,
+		EQ_ANA_BNDY_BUCKET_11, EQ_ANA_BNDY_BUCKET_12, EQ_ANA_BNDY_BUCKET_13,
+		EQ_ANA_BNDY_BUCKET_14, EQ_ANA_BNDY_BUCKET_15, EQ_ANA_BNDY_BUCKET_16,
+		EQ_ANA_BNDY_BUCKET_17, EQ_ANA_BNDY_BUCKET_18, EQ_ANA_BNDY_BUCKET_19,
+		EQ_ANA_BNDY_BUCKET_20, EQ_ANA_BNDY_BUCKET_21, EQ_ANA_BNDY_BUCKET_22,
+		EQ_ANA_BNDY_BUCKET_23, EQ_ANA_BNDY_BUCKET_24, EQ_ANA_BNDY_BUCKET_25,
+		EQ_ANA_BNDY_BUCKET_L3DCC, EQ_ANA_MODE, EQ_ANA_BNDY_BUCKET_26,
+		EQ_ANA_BNDY_BUCKET_27, EQ_ANA_BNDY_BUCKET_28, EQ_ANA_BNDY_BUCKET_29,
+		EQ_ANA_BNDY_BUCKET_30, EQ_ANA_BNDY_BUCKET_31, EQ_ANA_BNDY_BUCKET_32,
+		EQ_ANA_BNDY_BUCKET_33, EQ_ANA_BNDY_BUCKET_34, EQ_ANA_BNDY_BUCKET_35,
+		EQ_ANA_BNDY_BUCKET_36, EQ_ANA_BNDY_BUCKET_37, EQ_ANA_BNDY_BUCKET_38,
+		EQ_ANA_BNDY_BUCKET_39, EQ_ANA_BNDY_BUCKET_40, EQ_ANA_BNDY_BUCKET_41
+	};
+
+	const enum ring_id eq_index_bucket_id = resolve_eq_inex_bucket();
+
+	struct qpmr_header *qpmr_hdr = &homer->qpmr.sgpe.header;
+	struct sgpe_cmn_ring_list *tmp =
+		(void *)&homer->qpmr.sgpe.sram_image[qpmr_hdr->img_len];
+	uint8_t *start = (void *)tmp;
+	uint8_t *payload = tmp->payload;
+
+	uint32_t i = 0;
+
+	for (i = 0; i < sizeof(ring_ids)/sizeof(ring_ids[0]); ++i) {
+		uint32_t this_ring_variant;
+		uint32_t ring_size = MAX_RING_BUF_SIZE;
+
+		enum ring_id id = ring_ids[0];
+		if (id == EQ_INEX)
+			id = eq_index_bucket_id;
+
+		this_ring_variant = ring_variant;
+		if (id == EQ_GPTR         || // EQ GPTR
+		    id == EQ_ANA_GPTR     ||
+		    id == EQ_DPLL_GPTR    ||
+		    id == EX_L3_GPTR      || // EX GPTR
+		    id == EX_L2_GPTR      ||
+		    id == EX_L3_REFR_GPTR ||
+		    id == EQ_TIME         || // EQ TIME
+		    id == EX_L3_TIME      || // EX TIME
+		    id == EX_L2_TIME)
+			this_ring_variant = RV_BASE;
+		/* XXX: use this_ring_variant */
+
+		if ((payload - start) % 8 != 0)
+			payload = start + ALIGN_UP(payload - start, 8);
+
+		if (!tor_access_ring(ring_data->rings_buf, id, PT_SGPE,
+				     /*this_ring_variant, */CACHE0_CHIPLET_ID,
+				     payload, &ring_size, GET_RING_DATA))
+			continue;
+
+		tmp->ring[i] = payload - start;
+		payload += ALIGN_UP(ring_size, 8);
+	}
+
+	qpmr_hdr->common_ring_len = payload - start;
+	qpmr_hdr->common_ring_offset =
+		offsetof(struct homer_st, qpmr.sgpe.sram_image) + qpmr_hdr->img_len;
+}
+
+static void layout_rings_for_sgpe(struct homer_st *homer,
+				  struct ring_data *ring_data,
+				  struct xip_sgpe_header *sgpe,
+				  uint64_t cores, uint32_t risk_level)
+{
+	layout_cmn_rings_for_sgpe(homer, ring_data, risk_level);
 }
 
 /*
@@ -1432,7 +1532,7 @@ void build_homer_image(void *homer_bar)
 	};
 	get_ppe_scan_rings(hw, dd, PT_CME, &ring_data);
 
-	const uint32_t risk_level = (dd < 23 ? 0 : 4);
+	const uint32_t risk_level = (dd < 23 ? 0 : 5);
 	layout_rings_for_cme(homer, &ring_data, cores, risk_level);
 
 	/* Reset buffer sizes to maximum values before reusing the structure */
@@ -1441,6 +1541,10 @@ void build_homer_image(void *homer_bar)
 	ring_data.work_buf2_size = sizeof(work_buf2);
 	ring_data.work_buf3_size = sizeof(work_buf3);
 	get_ppe_scan_rings(hw, dd, PT_SGPE, &ring_data);
+
+	layout_rings_for_sgpe(homer, &ring_data,
+			      (struct xip_sgpe_header *)(homer_bar + hw->sgpe.offset),
+			      cores, risk_level);
 
 	// TBD
 	// getPpeScanRings() for CME

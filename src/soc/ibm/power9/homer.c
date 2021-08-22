@@ -1194,7 +1194,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 					     ring_data->work_buf1,
 					     &ring_size, GET_RING_DATA))
 			    continue;
-			
+
 			ex_len += ALIGN_UP(ring_size, 8);
 		}
 
@@ -1243,7 +1243,7 @@ static void layout_rings_for_cme(struct homer_st *homer,
 {
 	struct cpmr_header *cpmr_hdr = &homer->cpmr.header;
 	struct cme_img_header *cme_hdr =
-		(void *)&homer->cpmr.cme_sram_region[CME_INT_VECTOR_SIZE];
+		(void *)&homer->cpmr.cme_sram_region[INT_VECTOR_SIZE];
 
 	uint32_t ring_len = cme_hdr->hcode_offset + cme_hdr->hcode_len;
 
@@ -1253,7 +1253,7 @@ static void layout_rings_for_cme(struct homer_st *homer,
 
 	cme_hdr->common_ring_len = ring_len - (cme_hdr->hcode_offset + cme_hdr->hcode_len);
 
-	// if common ring, force offset to be 0
+	// if common ring is empty, force offset to be 0
 	if (cme_hdr->common_ring_len == 0)
 		cme_hdr->common_ring_offset = 0;
 
@@ -1424,7 +1424,7 @@ static void layout_rings_for_sgpe(struct homer_st *homer,
 	layout_inst_rings_for_sgpe(homer, ring_data, cores, ring_variant);
 
 	if (qpmr_hdr->common_ring_len == 0)
-		/* If quad common rings don't exist ensure its offset in image
+		/* If quad common rings don't exist, ensure it's offset in image
 		 * header is zero */
 		sgpe_img_hdr->cmn_ring_occ_offset = 0;
 

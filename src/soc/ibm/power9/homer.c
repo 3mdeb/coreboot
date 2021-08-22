@@ -193,7 +193,7 @@ struct local_pstate_params {
 	struct vpd_bias int_biases[NUM_OP_POINTS];
 
 	/* IVRM Data */
-	ivrm_params ivrm;
+	struct ivrm_params ivrm;
 
 	/* Resonant Clock Grid Management Setup */
 	struct resonant_clocking resclk;
@@ -1114,8 +1114,6 @@ static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
 			     &ring_data->rings_buf_size, GET_PPE_LEVEL_RINGS))
 		die("Failed to access PPE level rings!");
 
-	printk(BIOS_EMERG, "original ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
-
 	assert(ring_data->work_buf1_size == MAX_RING_BUF_SIZE);
 	assert(ring_data->work_buf2_size == MAX_RING_BUF_SIZE);
 	assert(ring_data->work_buf3_size == MAX_RING_BUF_SIZE);
@@ -1126,8 +1124,6 @@ static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
 				       ring_data->work_buf1,
 				       ring_data->work_buf2,
 				       ring_data->work_buf3);
-
-	printk(BIOS_EMERG, "new ring_data->rings_buf_size = 0x%08x\n", ring_data->rings_buf_size);
 }
 
 static void layout_cmn_rings_for_cme(struct homer_st *homer,
@@ -1234,7 +1230,6 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 			    continue;
 
 			tmp->ring[i] = payload - start;
-
 			payload += ALIGN_UP(ring_size, 8);
 		}
 	}
@@ -1387,7 +1382,7 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 		uint8_t i;
 
 		/* Skip non-functional quads */
-		if (!(cores & (0xfu << (quad*4))))
+		if (!IS_EQ_FUNCTIONAL(quad, cores))
 		    continue;
 
 		for (i = 0; i < sizeof(ring_ids) / sizeof(ring_ids[0]); ++i) {
@@ -1396,15 +1391,15 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 			uint32_t ring_size = MAX_RING_BUF_SIZE;
 
 			uint8_t chiplet_id = CACHE0_CHIPLET_ID + quad*2;
-			if (i != 0 && i % 2 == 0)
+			if (i != 0 && (i - 1) % 2 == 1)
 				++chiplet_id;
 
 			if ((payload - start) % 8 != 0)
 				payload = start + ALIGN_UP(payload - start, 8);
 
 			if (!tor_access_ring(ring_data->rings_buf, id, PT_SGPE,
-					     ring_variant, chiplet_id,
-					     payload, &ring_size, GET_RING_DATA))
+					     ring_variant, chiplet_id, payload,
+					     &ring_size, GET_RING_DATA))
 				continue;
 
 			tmp->ring[quad][i] = payload - start;
@@ -1444,6 +1439,20 @@ static void layout_rings_for_sgpe(struct homer_st *homer,
  */
 void build_homer_image(void *homer_bar)
 {
+	static uint8_t rings_buf[300 * KiB];
+
+	static uint8_t work_buf1[MAX_RING_BUF_SIZE];
+	static uint8_t work_buf2[MAX_RING_BUF_SIZE];
+	static uint8_t work_buf3[MAX_RING_BUF_SIZE];
+
+	struct ring_data ring_data = {
+		.rings_buf = rings_buf, .rings_buf_size = sizeof(rings_buf),
+		.work_buf1 = work_buf1, .work_buf1_size = sizeof(work_buf1),
+		.work_buf2 = work_buf2, .work_buf2_size = sizeof(work_buf2),
+		.work_buf3 = work_buf3, .work_buf3_size = sizeof(work_buf3),
+	};
+	uint8_t ring_variant;
+
 	struct mmap_helper_region_device mdev = {0};
 	struct homer_st *homer = homer_bar;
 	struct xip_hw_header *hw = homer_bar;
@@ -1501,21 +1510,9 @@ void build_homer_image(void *homer_bar)
 	build_pgpe(homer, (struct xip_pgpe_header *)(homer_bar + hw->pgpe.offset),
 	           dd);
 
-	static uint8_t rings_buf[300 * KiB];
+	ring_variant = (dd < 23 ? RV_BASE : RV_RL4);
 
-	static uint8_t work_buf1[MAX_RING_BUF_SIZE];
-	static uint8_t work_buf2[MAX_RING_BUF_SIZE];
-	static uint8_t work_buf3[MAX_RING_BUF_SIZE];
-
-	struct ring_data ring_data = {
-		.rings_buf = rings_buf, .rings_buf_size = sizeof(rings_buf),
-		.work_buf1 = work_buf1, .work_buf1_size = sizeof(work_buf1),
-		.work_buf2 = work_buf2, .work_buf2_size = sizeof(work_buf2),
-		.work_buf3 = work_buf3, .work_buf3_size = sizeof(work_buf3),
-	};
 	get_ppe_scan_rings(hw, dd, PT_CME, &ring_data);
-
-	const uint8_t ring_variant = (dd < 23 ? RV_BASE : RV_RL4);
 	layout_rings_for_cme(homer, &ring_data, cores, ring_variant);
 
 	/* Reset buffer sizes to maximum values before reusing the structure */
@@ -1524,7 +1521,6 @@ void build_homer_image(void *homer_bar)
 	ring_data.work_buf2_size = sizeof(work_buf2);
 	ring_data.work_buf3_size = sizeof(work_buf3);
 	get_ppe_scan_rings(hw, dd, PT_SGPE, &ring_data);
-
 	layout_rings_for_sgpe(homer, &ring_data,
 			      (struct xip_sgpe_header *)(homer_bar + hw->sgpe.offset),
 			      cores, ring_variant);

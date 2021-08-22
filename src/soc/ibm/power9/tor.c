@@ -431,15 +431,11 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 
 				uint32_t ring_size = be16toh(ring->size);
 				if (operation == GET_RING_DATA) {
-					assert(slot_value != 0);
-
 					if (*data_buf_size != 0 && *data_buf_size >= ring_size)
 						memcpy(data_buf, ring, ring_size);
 					*data_buf_size = ring_size;
 				} else if (operation == GET_RING_PUT_INFO) {
 					struct ring_put_info *put_info = data_buf;
-
-					assert(slot_value == 0);
 
 					if (*data_buf_size != sizeof(struct ring_put_info))
 						die("Invalid parameters for GET_RING_PUT_INFO!");
@@ -513,7 +509,8 @@ static void get_overlays_ring(struct tor_hdr *overlays_section,
 	uint32_t uncompressed_bit_size = 0;
 	uint32_t rs4_buf_size = 0xFFFFFFFF;
 
-	if (!tor_access_ring(overlays_section, ring_id, UNDEFINED_PPE_TYPE, 0,
+	if (!tor_access_ring(overlays_section, ring_id, UNDEFINED_PPE_TYPE,
+			     UNDEFINED_RING_VARIANT, UNDEFINED_INSTANCE_ID,
 			     rs4_buf, &rs4_buf_size, GET_RING_DATA))
 		die("Failed to find ring in overlay!");
 
@@ -579,8 +576,9 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	struct ring_put_info put_info;
 	uint32_t put_info_size = sizeof(put_info);
 
-	if (!tor_access_ring(ring_section, ring_id, ppe_type, instance_id,
-			     &put_info, &put_info_size, GET_RING_PUT_INFO))
+	if (!tor_access_ring(ring_section, ring_id, ppe_type,
+			     UNDEFINED_RING_VARIANT, instance_id, &put_info,
+			     &put_info_size, GET_RING_PUT_INFO))
 		die("Failed to find where to put a ring!");
 
 	if (*ring_section_size - put_info.chiplet_offset > MAX_TOR_RING_OFFSET)

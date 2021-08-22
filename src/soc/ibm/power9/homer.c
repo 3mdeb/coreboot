@@ -1287,10 +1287,10 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 
 			ring_size = ring_data->work_buf1_size;
 			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
-						 PT_CME, /*RV_BASE,*/
-						 CORE0_CHIPLET_ID + core,
-						 ring_data->work_buf1,
-						 &ring_size, GET_RING_DATA))
+					     PT_CME, /*RV_BASE,*/
+					     CORE0_CHIPLET_ID + core,
+					     ring_data->work_buf1,
+					     &ring_size, GET_RING_DATA))
 			    continue;
 			
 			ex_len += ALIGN_UP(ring_size, 8);
@@ -1321,10 +1321,10 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 				payload = start + ALIGN_UP(payload - start, 8);
 
 			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
-						 PT_CME, /*RV_BASE,*/
-						 CORE0_CHIPLET_ID + core,
-						 payload,
-						 &ring_size, GET_RING_DATA))
+					     PT_CME, /*RV_BASE,*/
+					     CORE0_CHIPLET_ID + core,
+					     payload,
+					     &ring_size, GET_RING_DATA))
 			    continue;
 
 			tmp->ring[i] = payload - start;
@@ -1623,12 +1623,6 @@ void build_homer_image(void *homer_bar)
 	layout_rings_for_sgpe(homer, &ring_data,
 			      (struct xip_sgpe_header *)(homer_bar + hw->sgpe.offset),
 			      cores, risk_level);
-
-	// TBD
-	// getPpeScanRings() for CME
-	// layoutRingsForCME()
-	// getPpeScanRings for SGPE
-	// layoutRingsForSGPE()
 
 	// buildParameterBlock();
 	// updateCpmrCmeRegion();

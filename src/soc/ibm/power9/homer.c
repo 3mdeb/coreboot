@@ -59,246 +59,167 @@ struct sgpe_inst_ring_list {
 	uint8_t payload[];
 };
 
-#define NUM_OP_POINTS              4
-#define NUM_JUMP_VALUES 4
-#define NUM_THRESHOLD_POINTS 4
-#define VPD_NUM_SLOPES_REGION       3
+#define NUM_OP_POINTS         4
+#define NUM_JUMP_VALUES       4
+#define NUM_THRESHOLD_POINTS  4
+#define VPD_NUM_SLOPES_REGION 3
 
-/// A VPD operating point
-///
-/// VPD operating points are stored without load-line correction.  Frequencies
-/// are in MHz, voltages are specified in units of 1mV, and characterization
-/// currents are specified in units of 100mA.
-///
-struct VpdOperatingPoint
-{
-    uint32_t vdd_mv;
-    uint32_t vcs_mv;
-    uint32_t idd_100ma;
-    uint32_t ics_100ma;
-    uint32_t frequency_mhz;
-    uint8_t  pstate;        // Pstate of this VpdOperating
-    uint8_t  pad[3];        // Alignment padding
+struct vpd_operating_point {
+	uint32_t vdd_mv;
+	uint32_t vcs_mv;
+	uint32_t idd_100ma;
+	uint32_t ics_100ma;
+	uint32_t frequency_mhz;
+	uint8_t  pstate;
+	uint8_t  pad[3];
 };
 
-/// System Power Distribution Paramenters
-///
-/// Parameters set by system design that influence the power distribution
-/// for a rail to the processor module.  This values are typically set in the
-/// system machine readable workbook and are used in the generation of the
-/// Global Pstate Table.  This values are carried in the Pstate SuperStructure
-/// for use and/or reference by OCC firmware (eg the WOF algorithm)
+struct sys_power_dist {
+	/* Impedance of the load line from a processor VDD VRM to the Processor Module pins. */
+	uint32_t loadline_uohm;
 
-struct SysPowerDistParms
-{
+	/* Impedance of the VDD distribution loss sense point to the circuit. */
+	uint32_t distloss_uohm;
 
-    /// Loadline
-    ///   Impedance (binary microOhms) of the load line from a processor VDD VRM
-    ///   to the Processor Module pins.
-    uint32_t loadline_uohm;
-
-    /// Distribution Loss
-    ///   Impedance (binary in microOhms) of the VDD distribution loss sense point
-    ///   to the circuit.
-    uint32_t distloss_uohm;
-
-    /// Distribution Offset
-    ///   Offset voltage (binary in microvolts) to apply to the rail VRM
-    ///   distribution to the processor module.
-    uint32_t distoffset_uv;
-
+	/* Offset voltage to apply to the rail VRM distribution to the processor module. */
+	uint32_t distoffset_uv;
 };
 
-/// VPD Biases.
-///
-/// Percent bias applied to VPD operating points prior to interolation
-///
-/// All values on in .5 percent (half percent -> hp)
-typedef struct
-{
-
-    int8_t vdd_ext_hp;
-    int8_t vdd_int_hp;
-    int8_t vdn_ext_hp;
-    int8_t vcs_ext_hp;
-    int8_t frequency_hp;
-
-} VpdBias;
+/* Percent bias applied to VPD operating points prior to interolation in 0.5 percent (hp). */
+struct vpd_bias {
+	int8_t vdd_ext_hp;
+	int8_t vdd_int_hp;
+	int8_t vdn_ext_hp;
+	int8_t vcs_ext_hp;
+	int8_t frequency_hp;
+};
 
 #define IVRM_ARRAY_SIZE 64
-typedef struct iVRMInfo
-{
 
-    /// Pwidth from 0.03125 to 1.96875 in 1/32 increments at Vin=Vin_Max
-    uint8_t strength_lookup[IVRM_ARRAY_SIZE];   // Each entry is a six bit value, right justified
+struct ivrm_params {
+	/* Pwidth from 0.03125 to 1.96875 in 1/32 increments at Vin=Vin_Max */
+	uint8_t strength_lookup[IVRM_ARRAY_SIZE];
 
-    /// Scaling factor for the Vin_Adder calculation.
-    uint8_t vin_multiplier[IVRM_ARRAY_SIZE];     // Each entry is from 0 to 255.
+	/* Scaling factor for the Vin_Adder calculation */
+	uint8_t vin_multiplier[IVRM_ARRAY_SIZE];
 
-    /// Vin_Max used in Vin_Adder calculation (in millivolts)
-    uint16_t    vin_max_mv;
+	/* Vin_Max used in Vin_Adder calculation (in millivolts) */
+	uint16_t vin_max_mv;
 
-    /// Delay between steps (in nanoseconds)
-    /// Maximum delay: 65.536us
-    uint16_t    step_delay_ns;
+	/* Delay between steps. Maximum: 65.536us. */
+	uint16_t step_delay_ns;
 
-    /// Stabilization delay once target voltage has been reached (in nanoseconds)
-    /// Maximum delay: 65.536us
-    uint16_t    stablization_delay_ns;
+	/* Stabilization delay once target voltage has been reached. Maximum: 65.536us. */
+	uint16_t stablization_delay_ns;
 
-    /// Deadzone (in millivolts)
-    /// Maximum: 255mV.  If this value is 0, 50mV is assumed.
-    uint8_t    deadzone_mv;
+	/* Deadzone. Maximum: 255mV. Value of 0 is interpreted as 50mV. */
+	uint8_t deadzone_mv;
 
-    /// Pad to 8B
-    uint8_t    pad;
-
-} IvrmParmBlock;
+	/* Pad to 8B */
+	uint8_t pad;
+};
 
 #define RESCLK_FREQ_REGIONS 8
 #define RESCLK_STEPS        64
 #define RESCLK_L3_STEPS     4
 
-typedef struct ResonantClockControl
-{
-    uint8_t resclk_freq[RESCLK_FREQ_REGIONS];    // Lower frequency of Resclk Regions
+struct resonant_clocking {
+	/* Lower frequency of Resclk Regions */
+	uint8_t resclk_freq[RESCLK_FREQ_REGIONS];
 
-    uint8_t resclk_index[RESCLK_FREQ_REGIONS];   // Index into value array for the
-    // respective Resclk Region
+	/* Index into value array for the respective Resclk Region */
+	uint8_t resclk_index[RESCLK_FREQ_REGIONS];
 
-    /// Array containing the transition steps
-    uint16_t steparray[RESCLK_STEPS];
+	/* Array containing the transition steps */
+	uint16_t steparray[RESCLK_STEPS];
 
-    /// Delay between steps (in nanoseconds)
-    /// Maximum delay: 65.536us
-    uint16_t    step_delay_ns;
+	/* Delay between steps. Maximum: 65.536us. */
+	uint16_t step_delay_ns;
 
-    /// L3 Clock Stepping Array
-    uint8_t     l3_steparray[RESCLK_L3_STEPS];
+	/* L3 Clock Stepping Array */
+	uint8_t l3_steparray[RESCLK_L3_STEPS];
 
-    /// Resonant Clock Voltage Threshold (in millivolts)
-    /// This value is used to choose the appropriate L3 clock region setting.
-    uint16_t l3_threshold_mv;
+	/* Resonant Clock Voltage Threshold. This value is used to choose the
+	 * appropriate L3 clock region setting. */
+	uint16_t l3_threshold_mv;
+};
 
-} ResonantClockingSetup;
+/* #W data points (version 2) */
+struct poundw_entry {
+	uint16_t ivdd_tdp_ac_current_10ma;
+	uint16_t ivdd_tdp_dc_current_10ma;
+	uint8_t  vdm_overvolt_small_thresholds;
+	uint8_t  vdm_large_extreme_thresholds;
+	uint8_t  vdm_normal_freq_drop;		// N_S and N_L Drop
+	uint8_t  vdm_normal_freq_return;	// L_S and S_N Return
+	uint8_t  vdm_vid_compare_ivid;
+	uint8_t  vdm_spare;
+};
 
-// #W data points (version 2)
-typedef struct
-{
-    uint16_t ivdd_tdp_ac_current_10ma;
-    uint16_t ivdd_tdp_dc_current_10ma;
-    uint8_t  vdm_overvolt_small_thresholds;
-    uint8_t  vdm_large_extreme_thresholds;
-    uint8_t  vdm_normal_freq_drop;   // N_S and N_L Drop
-    uint8_t  vdm_normal_freq_return; // L_S and S_N Return
-    uint8_t  vdm_vid_compare_ivid;
-    uint8_t  vdm_spare;
-} poundw_entry_t;
+struct resistance_entry {
+	uint16_t r_package_common;
+	uint16_t r_quad;
+	uint16_t r_core;
+	uint16_t r_quad_header;
+	uint16_t r_core_header;
+};
 
-typedef struct
-{
-    uint16_t r_package_common;
-    uint16_t r_quad;
-    uint16_t r_core;
-    uint16_t r_quad_header;
-    uint16_t r_core_header;
-} resistance_entry_t;
-
-typedef struct __attribute__((packed))
-{
-    uint16_t r_package_common;
-    uint16_t r_quad;
-    uint16_t r_core;
-    uint16_t r_quad_header;
-    uint16_t r_core_header;
-    uint8_t  r_vdm_cal_version;
-    uint8_t  r_avg_min_scale_fact;
-    uint16_t r_undervolt_vmin_floor_limit;
-    uint8_t  r_min_bin_protect_pc_adder;
-    uint8_t  r_min_bin_protect_bin_adder;
-    uint8_t  r_undervolt_allowed;
-    uint8_t  reserve[10];
-}
-resistance_entry_per_quad_t;
-
-typedef struct
-{
-    poundw_entry_t poundw[NUM_OP_POINTS];
-    resistance_entry_t resistance_data;
-    uint8_t undervolt_tested;
-    uint8_t reserved;
-    uint64_t reserved1;
-    uint8_t reserved2; //This field was added to keep the size of struct same when undervolt_tested field was added
-} PoundW_data;
-
-/// VDM/Droop Parameter Block
-///
-typedef struct
-{
-    PoundW_data vpd_w_data;
-} LP_VDMParmBlock;
+struct PoundW_data {
+	struct poundw_entry poundw[NUM_OP_POINTS];
+	struct resistance_entry resistance_data;
+	uint8_t undervolt_tested;
+	uint8_t reserved;
+	uint64_t reserved1;
+	uint8_t reserved2;
+};
 
 struct local_pstate_params {
-	/// Magic Number
-	uint64_t magic;     // the last byte of this number is the structure's version.
+	/* Magic Number (the last byte of this number is the structure's version) */
+	uint64_t magic;
 
-	// QM Flags
+	/* QM Flags */
 	uint16_t qmflags;
 
-	/// Operating points
-	///
-	/// VPD operating points are stored without load-line correction.  Frequencies
-	/// are in MHz, voltages are specified in units of 5mV, and currents are
-	/// in units of 500mA.
-	struct VpdOperatingPoint operating_points[NUM_OP_POINTS];
+	/* Operating points */
+	struct vpd_operating_point operating_points[NUM_OP_POINTS];
 
-	/// Loadlines and Distribution values for the VDD rail
-	struct SysPowerDistParms vdd_sysparm;
+	/* Loadlines and Distribution values for the VDD rail */
+	struct sys_power_dist vdd_sysparm;
 
-	/// External Biases
-	///
-	/// Biases applied to the VPD operating points prior to load-line correction
-	/// in setting the external voltages.  This is used to recompute the Vin voltage
-	/// based on the Global Actual Pstate .
-	/// Values in 0.5%
-	VpdBias ext_biases[NUM_OP_POINTS];
+	/* External Biases */
+	struct vpd_bias ext_biases[NUM_OP_POINTS];
 
-	/// Internal Biases
-	///
-	/// Biases applied to the VPD operating points that are used for interpolation
-	/// in setting the internal voltages (eg Vout to the iVRMs) as part of the
-	/// Local Actual Pstate.
-	/// Values in 0.5%
-	VpdBias int_biases[NUM_OP_POINTS];
+	/* Internal Biases */
+	struct vpd_bias int_biases[NUM_OP_POINTS];
 
-	/// IVRM Data
-	IvrmParmBlock ivrm;
+	/* IVRM Data */
+	ivrm_params ivrm;
 
-	/// Resonant Clock Grid Management Setup
-	ResonantClockingSetup resclk;
+	/* Resonant Clock Grid Management Setup */
+	struct resonant_clocking resclk;
 
-	/// VDM Data
-	LP_VDMParmBlock vdm;
+	/* VDM Data */
+	struct PoundW_data vpd_w_data;
 
-	/// DPLL pstate 0 value
+	/* DPLL pstate 0 value */
 	uint32_t dpll_pstate0_value;
 
-	// Biased Compare VID operating points
+	/* Biased Compare VID operating points */
 	uint8_t vid_point_set[NUM_OP_POINTS];
 
-	// Biased Threshold operation points
+	/* Biased Threshold operation points */
 	uint8_t threshold_set[NUM_OP_POINTS][NUM_THRESHOLD_POINTS];
 
-	//pstate-volt compare slopes
+	/* pstate-volt compare slopes */
 	int16_t PsVIDCompSlopes[VPD_NUM_SLOPES_REGION];
 
-	//pstate-volt threshold slopes
+	/* pstate-volt threshold slopes */
 	int16_t PsVDMThreshSlopes[VPD_NUM_SLOPES_REGION][NUM_THRESHOLD_POINTS];
 
-	//Jump value operating points
+	/* Jump-value operating points */
 	uint8_t jump_value_set[NUM_OP_POINTS][NUM_JUMP_VALUES];
 
-	//Jump-value slopes
+	/* Jump-value slopes */
 	int16_t PsVDMJumpSlopes[VPD_NUM_SLOPES_REGION][NUM_JUMP_VALUES];
 };
 

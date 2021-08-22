@@ -1448,12 +1448,33 @@ static void layout_cmn_rings_for_sgpe(struct homer_st *homer,
 		offsetof(struct homer_st, qpmr.sgpe.sram_image) + qpmr_hdr->img_len;
 }
 
+static void layout_inst_rings_for_sgpe(struct homer_st *homer,
+				       struct ring_data *ring_data,
+				       uint32_t ring_variant)
+{
+}
+
 static void layout_rings_for_sgpe(struct homer_st *homer,
 				  struct ring_data *ring_data,
 				  struct xip_sgpe_header *sgpe,
 				  uint64_t cores, uint32_t risk_level)
 {
+	struct qpmr_header *qpmr_hdr = &homer->qpmr.sgpe.header;
+	struct sgpe_img_header *sgpe_img_hdr =
+		(void *)&homer->qpmr.sgpe.sram_image[INT_VECTOR_SIZE];
+
 	layout_cmn_rings_for_sgpe(homer, ring_data, risk_level);
+	layout_inst_rings_for_sgpe(homer, ring_data, risk_level);
+
+	if (qpmr_hdr->common_ring_len == 0)
+		/* If quad common rings don't exist ensure its offset in image
+		 * header is zero */
+		sgpe_img_hdr->cmn_ring_occ_offset = 0;
+
+	if (qpmr_hdr->spec_ring_len > 0) {
+		sgpe_img_hdr->spec_ring_occ_offset = qpmr_hdr->img_len + qpmr_hdr->common_ring_len;
+		sgpe_img_hdr->scom_offset = sgpe_img_hdr->spec_ring_occ_offset + qpmr_hdr->spec_ring_len;
+	}
 }
 
 /*

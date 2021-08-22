@@ -6,8 +6,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define UNDEFINED_RING_ID     (uint16_t)0xffff
-#define UNDEFINED_INSTANCE_ID (uint8_t)0xff
+#define UNDEFINED_RING_ID      (uint16_t)0xffff
+#define UNDEFINED_RING_VARIANT (uint8_t)0xff
+#define UNDEFINED_INSTANCE_ID  (uint8_t)0xff
 
 #define MAX_RING_BUF_SIZE   (uint32_t)60000
 #define MAX_TOR_RING_OFFSET (uint16_t)0xffff
@@ -356,6 +357,18 @@ enum ring_id {
 	NUM_RING_IDS = 267
 };
 
+/* Supported ring variants. Values match order in ring sections. */
+enum ring_variant {
+	RV_BASE,
+	RV_CC,
+	RV_RL,		// Kernel and user protection
+	RV_RL2,		// Kernel only protection
+	RV_RL3,		// Rugby v4
+	RV_RL4,		// Java performance
+	RV_RL5,		// Spare
+	NUM_RING_VARIANTS
+};
+
 /* List of groups of rings */
 enum ring_class {
 	RING_CLASS_NEST,       	// Common NEST rings except GPTR #G rings
@@ -421,9 +434,9 @@ struct tor_hdr {
 /* Either reads ring into the buffer (on GET_RING_DATA) or treats it as an
  * instance of ring_put_info (on GET_RING_PUT_INFO) */
 bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
-		     enum ppe_type ppe_type, uint8_t instance_id,
-		     void *data_buf, uint32_t *data_buf_size,
-		     enum ring_operation operation);
+		     enum ppe_type ppe_type, uint8_t ring_variant,
+		     uint8_t instance_id, void *data_buf,
+		     uint32_t *data_buf_size, enum ring_operation operation);
 
 /*
  * Extracts rings from CP00 record of MVPD and appends them to the ring section

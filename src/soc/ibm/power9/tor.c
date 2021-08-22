@@ -362,8 +362,9 @@ static void get_section_properties(uint32_t tor_magic,
 /* Either reads ring into the buffer (on GET_RING_DATA) or treats it as an
  * instance of ring_put_info (on GET_RING_PUT_INFO) */
 static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
-			uint8_t instance_id, void *data_buf,
-			uint32_t *data_buf_size, enum ring_operation operation)
+			uint8_t ring_variant, uint8_t instance_id,
+			void *data_buf, uint32_t *data_buf_size,
+			enum ring_operation operation)
 {
 	uint8_t i = 0;
 	uint8_t chiplet_count = (be32toh(ring_section->magic) == TOR_MAGIC_OVLY)
@@ -383,6 +384,7 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 		uint8_t ring_count;
 		struct tor_chiplet_block *blocks;
 		uint32_t chiplet_offset;
+		uint8_t variant_count;
 
 		const struct chiplet_info *chiplet_info;
 		const struct ring_info *common_ring_info;
@@ -391,9 +393,8 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 		get_section_properties(be32toh(ring_section->magic),
 				       chiplet_idx, &chiplet_info,
 				       &common_ring_info, &instance_ring_info);
-		if (chiplet_info == NULL) {
+		if (chiplet_info == NULL)
 			continue;
-		}
 
 		ring_info = instance_rings ? instance_ring_info : common_ring_info;
 
@@ -404,12 +405,19 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 		chiplet_offset = instance_rings
 			       ? be32toh(blocks[chiplet_idx].instance_offset)
 			       : be32toh(blocks[chiplet_idx].common_offset);
+		/* Instance rings have only BASE variant and both EC and EQ have
+		 * all of them and their order matches enumeration values */
+		variant_count = (instance_rings ? 1 : NUM_RING_VARIANTS);
 
 		for (instance = ring_info->min_instance_id;
 		     instance <= ring_info->max_instance_id;
 		     ++instance) {
 			uint8_t ringIndex;
 			for (ringIndex = 0; ringIndex < ring_count; ++ringIndex) {
+				if (variant_count > 1)
+					/* Skip to the slot with the variant */
+					tor_slot_idx += ring_variant;
+
 				if (ring_info[ringIndex].ring_id != ring_id ||
 				    (instance_rings && instance != instance_id)) {
 					++tor_slot_idx;
@@ -452,9 +460,9 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 /* A wrapper around ring_access() that does safety checks and tor traversal if
  * necessary*/
 bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
-		     enum ppe_type ppe_type, uint8_t instance_id,
-		     void *data_buf, uint32_t *data_buf_size,
-		     enum ring_operation operation)
+		     enum ppe_type ppe_type, uint8_t ring_variant,
+		     uint8_t instance_id, void *data_buf,
+		     uint32_t *data_buf_size, enum ring_operation operation)
 {
 	if (be32toh(ring_section->magic) >> 8 != TOR_MAGIC ||
 	    ring_section->version == 0 ||
@@ -470,8 +478,8 @@ bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 			section = (void *)&ring_section->data[section_offset];
 		}
 
-		return ring_access(section, ring_id, instance_id, data_buf,
-				   data_buf_size, operation);
+		return ring_access(section, ring_id, ring_variant, instance_id,
+				   data_buf, data_buf_size, operation);
 	}
 
 	if (operation == GET_PPE_LEVEL_RINGS) {
@@ -480,6 +488,7 @@ bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 		struct tor_ppe_block *tor_ppe_block = (void *)ring_section->data;
 
 		assert(ring_id == UNDEFINED_RING_ID);
+		assert(ring_variant == UNDEFINED_RING_VARIANT);
 		assert(instance_id == UNDEFINED_INSTANCE_ID);
 		assert(be32toh(ring_section->magic) == TOR_MAGIC_HW);
 

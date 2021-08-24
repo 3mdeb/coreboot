@@ -18,8 +18,6 @@
 
 #include <lib.h>
 
-#define CMN_RING_LIST_SIZE 2048
-
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -1136,28 +1134,25 @@ static void layout_cmn_rings_for_cme(struct homer_st *homer,
 	const enum ring_id ring_ids[] = { EC_FUNC, EC_GPTR, EC_TIME, EC_MODE };
 
 	for (i = 0; i < sizeof(ring_ids) / sizeof(ring_ids[0]); ++i) {
-		const enum ring_id id = ring_ids[0];
+		const enum ring_id id = ring_ids[i];
 
-		uint8_t this_ring_variant;
 		uint32_t ring_size = MAX_RING_BUF_SIZE;
+		uint8_t *ring_dst = start + ALIGN_UP(payload - start, 8);
 
-		this_ring_variant = ring_variant;
+		uint8_t this_ring_variant = ring_variant;
 		if (id == EC_GPTR || id == EC_TIME)
 			this_ring_variant = RV_BASE;
 
-		if ((payload - start) % 8 != 0)
-			payload = start + ALIGN_UP(payload - start, 8);
-
 		if (!tor_access_ring(ring_data->rings_buf, id, PT_CME,
 				     this_ring_variant, EC00_CHIPLET_ID,
-				     payload, &ring_size, GET_RING_DATA))
+				     ring_dst, &ring_size, GET_RING_DATA))
 			continue;
 
-		tmp->ring[i] = payload - start;
-		payload += ALIGN_UP(ring_size, 8);
+		tmp->ring[i] = ring_dst - start;
+		payload = ring_dst + ALIGN_UP(ring_size, 8);
 	}
 
-	if (payload - start > CMN_RING_LIST_SIZE)
+	if (payload != tmp->payload)
 		*ring_len += payload - start;
 
 	*ring_len = ALIGN_UP(*ring_len, 8);
@@ -1177,7 +1172,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 		uint32_t ex_len = 0;
 
 		for (i = 0; i < MAX_CORES_PER_EX; ++i) {
-			const uint32_t core = ex*MAX_CORES_PER_EX + i;
+			const uint32_t core = ex * MAX_CORES_PER_EX + i;
 
 			uint32_t ring_size = 0;
 
@@ -1199,8 +1194,14 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 			max_ex_len = ex_len;
 	}
 
+	if (max_ex_len > 0) {
+		max_ex_len += sizeof(struct cme_inst_ring_list);
+		max_ex_len = ALIGN_UP(max_ex_len, 32);
+	}
+
 	for (ex = 0; ex < MAX_CMES_PER_CHIP; ++ex) {
-		const uint32_t ex_offset = ex * (max_ex_len + ALIGN_UP(sizeof(struct local_pstate_params), 32));
+		const uint32_t ex_offset =
+			ex * (max_ex_len + ALIGN_UP(sizeof(struct local_pstate_params), 32));
 
 		uint8_t *start = &homer->cpmr.cme_sram_region[*ring_len + ex_offset];
 		struct cme_inst_ring_list *tmp = (void *)start;
@@ -1209,7 +1210,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 		uint32_t i = 0;
 
 		for (i = 0; i < MAX_CORES_PER_EX; ++i) {
-			const uint32_t core = ex*MAX_CORES_PER_EX + i;
+			const uint32_t core = ex * MAX_CORES_PER_EX + i;
 
 			uint32_t ring_size = MAX_RING_BUF_SIZE;
 
@@ -1322,7 +1323,7 @@ static void layout_cmn_rings_for_sgpe(struct homer_st *homer,
 		uint8_t this_ring_variant;
 		uint32_t ring_size = MAX_RING_BUF_SIZE;
 
-		enum ring_id id = ring_ids[0];
+		enum ring_id id = ring_ids[i];
 		if (id == EQ_INEX)
 			id = eq_index_bucket_id;
 
@@ -1383,7 +1384,7 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 		    continue;
 
 		for (i = 0; i < sizeof(ring_ids) / sizeof(ring_ids[0]); ++i) {
-			const enum ring_id id = ring_ids[0];
+			const enum ring_id id = ring_ids[i];
 
 			uint32_t ring_size = MAX_RING_BUF_SIZE;
 

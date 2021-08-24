@@ -1509,7 +1509,7 @@ void build_homer_image(void *homer_bar)
 	build_pgpe(homer, (struct xip_pgpe_header *)(homer_bar + hw->pgpe.offset),
 	           dd);
 
-	ring_variant = (dd < 23 ? RV_BASE : RV_RL4);
+	ring_variant = (dd < 0x23 ? RV_BASE : RV_RL4);
 
 	get_ppe_scan_rings(hw, dd, PT_CME, &ring_data);
 	layout_rings_for_cme(homer, &ring_data, cores, ring_variant);

@@ -18,9 +18,6 @@
 
 #include <lib.h>
 
-#define CACHE0_CHIPLET_ID 0x10
-#define CORE0_CHIPLET_ID  0x20
-
 #define CMN_RING_LIST_SIZE 2048
 
 struct ring_data {
@@ -1152,7 +1149,7 @@ static void layout_cmn_rings_for_cme(struct homer_st *homer,
 			payload = start + ALIGN_UP(payload - start, 8);
 
 		if (!tor_access_ring(ring_data->rings_buf, id, PT_CME,
-				     this_ring_variant, CORE0_CHIPLET_ID,
+				     this_ring_variant, EC00_CHIPLET_ID,
 				     payload, &ring_size, GET_RING_DATA))
 			continue;
 
@@ -1190,7 +1187,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 			ring_size = ring_data->work_buf1_size;
 			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
 					     PT_CME, RV_BASE,
-					     CORE0_CHIPLET_ID + core,
+					     EC00_CHIPLET_ID + core,
 					     ring_data->work_buf1,
 					     &ring_size, GET_RING_DATA))
 			    continue;
@@ -1224,7 +1221,7 @@ static void layout_inst_rings_for_cme(struct homer_st *homer,
 
 			if (!tor_access_ring(ring_data->rings_buf, EC_REPR,
 					     PT_CME, RV_BASE,
-					     CORE0_CHIPLET_ID + core,
+					     EC00_CHIPLET_ID + core,
 					     payload,
 					     &ring_size, GET_RING_DATA))
 			    continue;
@@ -1345,7 +1342,7 @@ static void layout_cmn_rings_for_sgpe(struct homer_st *homer,
 			payload = start + ALIGN_UP(payload - start, 8);
 
 		if (!tor_access_ring(ring_data->rings_buf, id, PT_SGPE,
-				     this_ring_variant, CACHE0_CHIPLET_ID,
+				     this_ring_variant, EP00_CHIPLET_ID,
 				     payload, &ring_size, GET_RING_DATA))
 			continue;
 
@@ -1390,7 +1387,7 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 
 			uint32_t ring_size = MAX_RING_BUF_SIZE;
 
-			uint8_t chiplet_id = CACHE0_CHIPLET_ID + quad*2;
+			uint8_t chiplet_id = EP00_CHIPLET_ID + quad*2;
 			if (i != 0 && (i - 1) % 2 == 1)
 				++chiplet_id;
 

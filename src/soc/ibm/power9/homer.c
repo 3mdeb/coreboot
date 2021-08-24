@@ -1387,15 +1387,17 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 
 			uint32_t ring_size = MAX_RING_BUF_SIZE;
 
-			uint8_t chiplet_id = EP00_CHIPLET_ID + quad*2;
-			if (i != 0 && (i - 1) % 2 == 1)
-				++chiplet_id;
+			/* Despite the constant, this is not an SCOM chiplet ID,
+			 * it's just used as a base value */
+			uint8_t instance_id = EP00_CHIPLET_ID + quad*2;
+			if (i != 0 && i % 2 == 0)
+				++instance_id;
 
 			if ((payload - start) % 8 != 0)
 				payload = start + ALIGN_UP(payload - start, 8);
 
 			if (!tor_access_ring(ring_data->rings_buf, id, PT_SGPE,
-					     ring_variant, chiplet_id, payload,
+					     ring_variant, instance_id, payload,
 					     &ring_size, GET_RING_DATA))
 				continue;
 

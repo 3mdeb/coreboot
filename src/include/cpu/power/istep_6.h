@@ -93,6 +93,35 @@
 #define OCC_405_SRAM_ADDRESS (0xFFF40000)
 #define OCC_OFFSET_MAIN_EP (0x6C)
 
+#define OCB_OITR0 (0xc0060040)
+#define OCB_OIEPR0 (0xc0060060)
+
+#define OCC_BRANCH_INSTR (0x4B00000200000000)
+#define BRANCH_ADDR_MASK (0x00FFFFFC)
+
+#define OCC_OFFSET_LENGTH (0x48)
+#define OCC_OFFSET_FREQ (0x94)
+#define OCC_OFFSET_IPL_FLAG (0x92)
+#define OCC_OFFSET_GPE0_LENGTH (0x64)
+#define OCC_OFFSET_GPE1_LENGTH (0x68)
+#define OCC_MODIFIED_SECTION_SIZE = ((OCC_OFFSET_LENGTH) + (OCC_OFFSET_FREQ))
+#define OCC_LENGTH (0x120000)
+
+#define NUMBER_OF_EX_CHIPLETS (6)
+
+extern void mount_part_from_pnor(const char *part_name,
+				 struct mmap_helper_region_device *mdev);
+
+const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
+{
+    EP00_CHIPLET_ID,
+	EP01_CHIPLET_ID,
+	EP02_CHIPLET_ID,
+	EP03_CHIPLET_ID,
+	EP04_CHIPLET_ID,
+	EP05_CHIPLET_ID,
+}
+
 const uint64_t OCBCSRn_OR[4] =
 {
     PU_OCB_PIB_OCBCSR0_OR,

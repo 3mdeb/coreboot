@@ -2,6 +2,8 @@
 
 #include <console/console.h>
 #include <cpu/power/istep_6.h>
+#include <cpu/power/spr.h>
+#include <cpu/power/occ.h>
 #include <string.h>
 #include <timer.h>
 
@@ -231,65 +233,9 @@ static void clear_occ_special_wakeups(void)
     }
 }
 
-static uint64_t makeStart405Instruction(void)
-{
-    uint64_t l_epAddr;
-    readSRAM(
-        OCC_405_SRAM_ADDRESS + OCC_OFFSET_MAIN_EP,
-        &l_epAddr,
-        8);
-
-    // The branch instruction is of the form 0x4BXXXXX200000000, where X
-    // is the address of the 405 main's entry point (alligned as shown).
-    // Example: If 405 main's EP is FFF5B570, then the branch instruction
-    // will be 0x4bf5b57200000000. The last two bits of the first byte of
-    // the branch instruction must be '2' according to the OCC instruction
-    // set manual.
-
-    // OCC_BRANCH_INSTR = 0x4B00000200000000
-    // BRANCH_ADDR_MASK = 0x00FFFFFC
-    return OCC_BRANCH_INSTR | (((uint64_t)(BRANCH_ADDR_MASK & l_epAddr)) << 32);
-}
-
-inline uint64_t getMSR(void)
-{
-    uint64_t msr;
-    asm volatile("mfmsr %0" : "=r" (msr));
-    return msr;
-}
-
-inline void setMSR(uint64_t msr)
-{
-    asm volatile("mtmsr %0; isync" :: "r" (msr));
-}
-
 void setCheckstopData(void)
 {
-    setMSR(getMSR(void) | 0x1000);
-}
-
-static void writeSRAM(
-    const uint32_t i_addr,
-    uint64_t * i_dataBuf,
-    size_t i_dataLen)
-{
-    pm_ocb_setup(i_addr);
-    put_ocb_indirect(
-        i_dataLen / 8,
-        i_addr,
-        i_dataBuf);
-}
-
-static void readSRAM(
-    const uint32_t i_addr,
-    uint64_t * io_dataBuf,
-    size_t i_dataLen)
-{
-    pm_ocb_setup(i_addr);
-    get_ocb_indirect(
-        i_dataLen / 8,
-        i_addr,
-        io_dataBuf);
+    write_msr(read_msr(void) | 0x1000);
 }
 
 static void pm_occ_fir_reset(void)

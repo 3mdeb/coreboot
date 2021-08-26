@@ -4,9 +4,8 @@ ifeq ($(CONFIG_CPU_IBM_POWER9),y)
 
 bootblock-y += bootblock.c
 bootblock-y += rom_media.c
-romstage-y += rom_media.c
-romstage-y += romstage.c
-romstage-y += vpd.c
+romstage-y += ccs.c
+romstage-y += i2c.c
 romstage-y += istep_6_11.c
 romstage-y += istep_13_2.c
 romstage-y += istep_13_3.c
@@ -21,9 +20,11 @@ romstage-y += istep_14_1.c
 romstage-y += istep_14_2.c
 romstage-y += istep_14_3.c
 romstage-y += istep_14_5.c
-romstage-y += i2c.c
-romstage-y += ccs.c
+romstage-y += occ.c
+romstage-y += rom_media.c
+romstage-y += romstage.c
 romstage-y += timer.c
+romstage-y += vpd.c
 ramstage-y += chip.c
 ramstage-y += homer.c
 ramstage-y += rom_media.c

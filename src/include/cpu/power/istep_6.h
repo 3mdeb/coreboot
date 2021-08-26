@@ -8,6 +8,8 @@ void istep_6_11(void);
 
 #define FREQ_PB_MHZ (1866)
 
+#define MASTER_PROC (1)
+
 #define OCC_FW0                     (0)
 #define OCC_FW1                     (1)
 #define CME_ERR_NOTIFY              (2)
@@ -111,28 +113,26 @@ void istep_6_11(void);
 #define OCC_MODIFIED_SECTION_SIZE ((OCC_OFFSET_LENGTH) + (OCC_OFFSET_FREQ))
 #define OCC_LENGTH (0x120000)
 
-#define NUMBER_OF_EX_CHIPLETS (6)
+#define OCC_GPE0_SRAM_ADDRESS (0xFFF01000)
+#define OCC_GPE1_SRAM_ADDRESS (0xFFF10000)
+
+#define PU_SRAM_SRBV3_SCOM (0x0006A007)
+
+#define PU_SPIMPSS_ADC_CTRL_REG0 (0x00070000)
+#define PU_SPIPSS_ADC_CTRL_REG1 (0x00070001)
+#define PU_SPIPSS_ADC_CTRL_REG2 (0x00070002)
+#define PU_SPIPSS_ADC_WDATA_REG (0x00070010)
+
+#define PU_SPIPSS_P2S_CTRL_REG0 (0x00070040)
+#define PU_SPIPSS_P2S_CTRL_REG1 (0x00070041)
+#define PU_SPIPSS_P2S_CTRL_REG2 (0x00070042)
+#define PU_SPIPSS_P2S_WDATA_REG (0x00070050)
+
+#define PU_SPIPSS_100NS_REG (0x00070028)
+
 
 extern void mount_part_from_pnor(const char *part_name,
 				 struct mmap_helper_region_device *mdev);
-
-const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
-{
-    EP00_CHIPLET_ID,
-	EP01_CHIPLET_ID,
-	EP02_CHIPLET_ID,
-	EP03_CHIPLET_ID,
-	EP04_CHIPLET_ID,
-	EP05_CHIPLET_ID
-};
-
-const uint64_t OCBCSRn_OR[4] =
-{
-    PU_OCB_PIB_OCBCSR0_OR,
-    PU_OCB_PIB_OCBCSR1_OR,
-    PU_OCB_PIB_OCBCSR2_OR,
-    PU_OCB_PIB_OCBCSR3_OR
-};
 
 const uint64_t PBA_BARs[4] =
 {

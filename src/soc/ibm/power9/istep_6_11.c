@@ -137,47 +137,6 @@ static void loadOCCImageDuringIpl(void* occ_bootloader)
         gpe_1_length);
 }
 
-static void startOCCFromSRAM(TARGETING::Target* i_proc)
-{
-    // executed only for master processor!!!
-    if(master_proc)
-    {
-        pm_pss_init();
-    }
-
-    pm_occ_fir_init();
-    // executed only for master processor!!!
-    if(master_proc)
-    {
-        clear_occ_special_wakeups();
-    }
-
-    write_scom(PU_OCB_OCI_OIRR0A_SCOM, 0x218780f800000000);
-    write_scom(PU_OCB_OCI_OIRR1A_SCOM, 0x0003d03c00000000);
-    write_scom(PU_OCB_OCI_OIRR0B_SCOM, 0x2181801800000000);
-    write_scom(PU_OCB_OCI_OIRR1B_SCOM, 0x0003d00c00000000);
-    write_scom(PU_OCB_OCI_OIRR0C_SCOM, 0x010280ac00000000);
-    write_scom(PU_OCB_OCI_OIRR1C_SCOM, 0x0001901400000000);
-
-    // executed only for master processor!!!
-    if(master_proc)
-    {
-        p9_pm_occ_control(
-            makeStart405Instruction());
-    }
-
-    write_scom(OCB_OITR0, 0xffffffffffffffff);
-    write_scom(OCB_OIEPR0, 0xffffffffffffffff);
-}
-
-static void p9_pm_occ_control(const uint64_t i_ppc405_jump_to_main_instr)
-{
-    write_scom(PU_SRAM_SRBV3_SCOM, i_ppc405_jump_to_main_instr);
-    write_scom(PU_JTG_PIB_OJCFG_AND, ~PPC_BIT(JTG_PIB_OJCFG_DBG_HALT_BIT));
-    write_scom(PU_OCB_PIB_OCR_OR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
-    write_scom(PU_OCB_PIB_OCR_CLEAR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
-}
-
 static void pm_pss_init(void)
 {
     write_scom(
@@ -203,8 +162,8 @@ static void pm_pss_init(void)
       | PPC_BIT(2));
     write_scom(
         PU_SPIPSS_P2S_CTRL_REG1,
-        read_scom(PU_SPIPSS_P2S_CTRL_REG1)
-      & ~PPC_BITMASK(1, 3)
+        (read_scom(PU_SPIPSS_P2S_CTRL_REG1)
+      & ~PPC_BITMASK(1, 3))
       | PPC_BIT(0)  | PPC_BIT(10)
       | PPC_BIT(12) | PPC_BIT(17));
     write_scom(
@@ -216,7 +175,117 @@ static void pm_pss_init(void)
     write_scom(
         PU_SPIPSS_100NS_REG,
         (read_scom(PU_SPIPSS_100NS_REG) & 0xFFFFFFFF)
-      | (FREQ_PB_MHZ / 40) << 32);
+      | (uint64_t)(FREQ_PB_MHZ / 40) << 32);
+}
+
+static void pm_occ_fir_init(void)
+{
+    uint64_t iv_mask = read_scom(iv_mask_address);
+
+    write_scom(iv_proc, iv_fir_address, 0);
+    write_scom(iv_proc, iv_action0_address, C405_ECC_UE);
+    write_scom(
+        iv_proc,
+        iv_action1_address,
+        C405_ECC_CE               | C405_OCI_MC_CHK
+      | C405DCU_M_TIMEOUT         | GPE0_ERR
+      | GPE0_OCISLV_ERR           | GPE1_ERR
+      | GPE1_OCISLV_ERR           | GPE2_OCISLV_ERR
+      | GPE3_OCISLV_ERR           | JTAGACC_ERR
+      | OCB_DB_OCI_RDATA_PARITY   | OCB_DB_OCI_SLVERR
+      | OCB_DB_OCI_TIMEOUT        | OCB_DB_PIB_DATA_PARITY_ERR
+      | OCB_IDC0_ERR              | OCB_IDC1_ERR
+      | OCB_IDC2_ERR              | OCB_IDC3_ERR
+      | OCB_PIB_ADDR_PARITY_ERR   | OCC_CMPLX_FAULT
+      | OCC_CMPLX_NOTIFY          | SRAM_CE
+      | SRAM_DATAOUT_PERR         | SRAM_OCI_ADDR_PARITY_ERR
+      | SRAM_OCI_BE_PARITY_ERR    | SRAM_OCI_WDATA_PARITY
+      | SRAM_READ_ERR             | SRAM_SPARE_DIRERR0
+      | SRAM_SPARE_DIRERR1        | SRAM_SPARE_DIRERR2
+      | SRAM_SPARE_DIRERR3        | SRAM_UE
+      | SRAM_WRITE_ERR            | SRT_FSM_ERR
+      | STOP_RCV_NOTIFY_PRD);
+    write_scom(
+        iv_proc,
+        iv_fir_address + MASK_WOR_INCR,
+        iv_mask             | C405ICU_M_TIMEOUT
+      | CME_ERR_NOTIFY      | EXT_TRAP
+      | FIR_PARITY_ERR_DUP  | FIR_PARITY_ERR
+      | GPE0_HALTED         | GPE0_WD_TIMEOUT
+      | GPE1_HALTED         | GPE1_WD_TIMEOUT
+      | GPE2_ERR            | GPE2_HALTED
+      | GPE2_WD_TIMEOUT     | GPE3_ERR
+      | GPE3_HALTED         | GPE3_WD_TIMEOUT
+      | OCB_ERR             | OCC_FW0
+      | OCC_FW1             | OCC_HB_NOTIFY
+      | PPC405_CHIP_RESET   | PPC405_CORE_RESET
+      | PPC405_DBGSTOPACK   | PPC405_SYS_RESET
+      | PPC405_WAIT_STATE   | SPARE_59
+      | SPARE_60            | SPARE_61
+      | SPARE_ERR_38);
+    write_scom(
+        iv_proc,
+        iv_fir_address + MASK_WAND_INCR,
+        iv_mask                 & ~C405_ECC_CE
+     & ~C405_ECC_UE             & ~C405_OCI_MC_CHK
+     & ~C405DCU_M_TIMEOUT       & ~GPE0_ERR
+     & ~GPE0_OCISLV_ERR         & ~GPE1_ERR
+     & ~GPE1_OCISLV_ERR         & ~GPE2_OCISLV_ERR
+     & ~GPE3_OCISLV_ERR         & ~JTAGACC_ERR
+     & ~OCB_DB_OCI_RDATA_PARITY & ~OCB_DB_OCI_SLVERR
+     & ~OCB_DB_OCI_TIMEOUT      & ~OCB_DB_PIB_DATA_PARITY_ERR
+     & ~OCB_IDC0_ERR            & ~OCB_IDC1_ERR
+     & ~OCB_IDC2_ERR            & ~OCB_IDC3_ERR
+     & ~OCB_PIB_ADDR_PARITY_ERR & ~OCC_CMPLX_FAULT
+     & ~OCC_CMPLX_NOTIFY        & ~SRAM_CE
+     & ~SRAM_DATAOUT_PERR       & ~SRAM_OCI_ADDR_PARITY_ERR
+     & ~SRAM_OCI_BE_PARITY_ERR  & ~SRAM_OCI_WDATA_PARITY
+     & ~SRAM_READ_ERR           & ~SRAM_SPARE_DIRERR0
+     & ~SRAM_SPARE_DIRERR1      & ~SRAM_SPARE_DIRERR2
+     & ~SRAM_SPARE_DIRERR3      & ~SRAM_UE
+     & ~SRAM_WRITE_ERR          & ~SRT_FSM_ERR
+     & ~STOP_RCV_NOTIFY_PRD);
+}
+
+static void startOCCFromSRAM(void)
+{
+    // executed only for master processor!!!
+    if(MASTER_PROC)
+    {
+        pm_pss_init();
+    }
+
+    pm_occ_fir_init();
+    // executed only for master processor!!!
+    if(MASTER_PROC)
+    {
+        clear_occ_special_wakeups();
+    }
+
+    write_scom(PU_OCB_OCI_OIRR0A_SCOM, 0x218780f800000000);
+    write_scom(PU_OCB_OCI_OIRR1A_SCOM, 0x0003d03c00000000);
+    write_scom(PU_OCB_OCI_OIRR0B_SCOM, 0x2181801800000000);
+    write_scom(PU_OCB_OCI_OIRR1B_SCOM, 0x0003d00c00000000);
+    write_scom(PU_OCB_OCI_OIRR0C_SCOM, 0x010280ac00000000);
+    write_scom(PU_OCB_OCI_OIRR1C_SCOM, 0x0001901400000000);
+
+    // executed only for master processor!!!
+    if(MASTER_PROC)
+    {
+        p9_pm_occ_control(
+            makeStart405Instruction());
+    }
+
+    write_scom(OCB_OITR0, 0xffffffffffffffff);
+    write_scom(OCB_OIEPR0, 0xffffffffffffffff);
+}
+
+static void p9_pm_occ_control(const uint64_t i_ppc405_jump_to_main_instr)
+{
+    write_scom(PU_SRAM_SRBV3_SCOM, i_ppc405_jump_to_main_instr);
+    write_scom(PU_JTG_PIB_OJCFG_AND, ~PPC_BIT(JTG_PIB_OJCFG_DBG_HALT_BIT));
+    write_scom(PU_OCB_PIB_OCR_OR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
+    write_scom(PU_OCB_PIB_OCR_CLEAR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
 }
 
 static void clear_occ_special_wakeups(void)
@@ -341,75 +410,6 @@ static void p9_pm_ocb_indir_access(
             io_ocb_buffer[l_loopCount] = read_scom(PU_OCB_PIB_OCBDR0);
         }
     }
-}
-
-static void pm_occ_fir_init(void)
-{
-    iv_mask = read_scom(iv_mask_address);
-
-    write_scom(iv_proc, iv_fir_address, 0);
-    write_scom(iv_proc, iv_action0_address, C405_ECC_UE);
-    write_scom(
-        iv_proc,
-        iv_action1_address,
-        C405_ECC_CE               | C405_OCI_MC_CHK
-      | C405DCU_M_TIMEOUT         | GPE0_ERR
-      | GPE0_OCISLV_ERR           | GPE1_ERR
-      | GPE1_OCISLV_ERR           | GPE2_OCISLV_ERR
-      | GPE3_OCISLV_ERR           | JTAGACC_ERR
-      | OCB_DB_OCI_RDATA_PARITY   | OCB_DB_OCI_SLVERR
-      | OCB_DB_OCI_TIMEOUT        | OCB_DB_PIB_DATA_PARITY_ERR
-      | OCB_IDC0_ERR              | OCB_IDC1_ERR
-      | OCB_IDC2_ERR              | OCB_IDC3_ERR
-      | OCB_PIB_ADDR_PARITY_ERR   | OCC_CMPLX_FAULT
-      | OCC_CMPLX_NOTIFY          | SRAM_CE
-      | SRAM_DATAOUT_PERR         | SRAM_OCI_ADDR_PARITY_ERR
-      | SRAM_OCI_BE_PARITY_ERR    | SRAM_OCI_WDATA_PARITY
-      | SRAM_READ_ERR             | SRAM_SPARE_DIRERR0
-      | SRAM_SPARE_DIRERR1        | SRAM_SPARE_DIRERR2
-      | SRAM_SPARE_DIRERR3        | SRAM_UE
-      | SRAM_WRITE_ERR            | SRT_FSM_ERR
-      | STOP_RCV_NOTIFY_PRD);
-    write_scom(
-        iv_proc,
-        iv_fir_address + MASK_WOR_INCR,
-        iv_mask             | C405ICU_M_TIMEOUT
-      | CME_ERR_NOTIFY      | EXT_TRAP
-      | FIR_PARITY_ERR_DUP  | FIR_PARITY_ERR
-      | GPE0_HALTED         | GPE0_WD_TIMEOUT
-      | GPE1_HALTED         | GPE1_WD_TIMEOUT
-      | GPE2_ERR            | GPE2_HALTED
-      | GPE2_WD_TIMEOUT     | GPE3_ERR
-      | GPE3_HALTED         | GPE3_WD_TIMEOUT
-      | OCB_ERR             | OCC_FW0
-      | OCC_FW1             | OCC_HB_NOTIFY
-      | PPC405_CHIP_RESET   | PPC405_CORE_RESET
-      | PPC405_DBGSTOPACK   | PPC405_SYS_RESET
-      | PPC405_WAIT_STATE   | SPARE_59
-      | SPARE_60            | SPARE_61
-      | SPARE_ERR_38);
-    write_scom(
-        iv_proc,
-        iv_fir_address + MASK_WAND_INCR,
-        iv_mask                 & ~C405_ECC_CE
-     & ~C405_ECC_UE             & ~C405_OCI_MC_CHK
-     & ~C405DCU_M_TIMEOUT       & ~GPE0_ERR
-     & ~GPE0_OCISLV_ERR         & ~GPE1_ERR
-     & ~GPE1_OCISLV_ERR         & ~GPE2_OCISLV_ERR
-     & ~GPE3_OCISLV_ERR         & ~JTAGACC_ERR
-     & ~OCB_DB_OCI_RDATA_PARITY & ~OCB_DB_OCI_SLVERR
-     & ~OCB_DB_OCI_TIMEOUT      & ~OCB_DB_PIB_DATA_PARITY_ERR
-     & ~OCB_IDC0_ERR            & ~OCB_IDC1_ERR
-     & ~OCB_IDC2_ERR            & ~OCB_IDC3_ERR
-     & ~OCB_PIB_ADDR_PARITY_ERR & ~OCC_CMPLX_FAULT
-     & ~OCC_CMPLX_NOTIFY        & ~SRAM_CE
-     & ~SRAM_DATAOUT_PERR       & ~SRAM_OCI_ADDR_PARITY_ERR
-     & ~SRAM_OCI_BE_PARITY_ERR  & ~SRAM_OCI_WDATA_PARITY
-     & ~SRAM_READ_ERR           & ~SRAM_SPARE_DIRERR0
-     & ~SRAM_SPARE_DIRERR1      & ~SRAM_SPARE_DIRERR2
-     & ~SRAM_SPARE_DIRERR3      & ~SRAM_UE
-     & ~SRAM_WRITE_ERR          & ~SRT_FSM_ERR
-     & ~STOP_RCV_NOTIFY_PRD);
 }
 
 static void p9_pm_pba_bar_config(

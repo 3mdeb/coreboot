@@ -3,6 +3,8 @@
 #ifndef CPU_PPC64_MSR_H
 #define CPU_PPC64_MSR_H
 
+#include <types.h>
+
 static inline uint64_t getMSR(void)
 {
     uint64_t msr;

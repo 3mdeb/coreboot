@@ -343,6 +343,7 @@ void main(void)
 	vpd_pnor_main();
 	prepare_dimm_data();
 
+	istep_6_11();
 	report_istep(13,1);	// no-op
 	istep_13_2();
 	istep_13_3();

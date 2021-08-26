@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
+#include <commonlib/region.h>
+#include <cpu/power/scom.h>
 #include <types.h>
+
+void istep_6_11(void);
 
 #define FREQ_PB_MHZ (1866)
 
@@ -104,7 +108,7 @@
 #define OCC_OFFSET_IPL_FLAG (0x92)
 #define OCC_OFFSET_GPE0_LENGTH (0x64)
 #define OCC_OFFSET_GPE1_LENGTH (0x68)
-#define OCC_MODIFIED_SECTION_SIZE = ((OCC_OFFSET_LENGTH) + (OCC_OFFSET_FREQ))
+#define OCC_MODIFIED_SECTION_SIZE ((OCC_OFFSET_LENGTH) + (OCC_OFFSET_FREQ))
 #define OCC_LENGTH (0x120000)
 
 #define NUMBER_OF_EX_CHIPLETS (6)
@@ -119,8 +123,8 @@ const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
 	EP02_CHIPLET_ID,
 	EP03_CHIPLET_ID,
 	EP04_CHIPLET_ID,
-	EP05_CHIPLET_ID,
-}
+	EP05_CHIPLET_ID
+};
 
 const uint64_t OCBCSRn_OR[4] =
 {

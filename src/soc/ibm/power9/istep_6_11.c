@@ -1,113 +1,114 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#include <timer.h>
-#include <string.h>
+#include <console/console.h>
 #include <cpu/power/istep_6.h>
+#include <string.h>
+#include <timer.h>
 
-void istep_6_11()
+void istep_6_11(void)
 {
     printk(BIOS_EMERG, "starting istep 14.1\n");
     report_istep(6, 11);
     printk(BIOS_EMERG, "ending istep 14.1\n");
 }
 
-void* host_start_occ_xstop_handler( void *io_pArgs )
-{
-    // If we have nothing external (FSP or OCC) to handle checkstops we are
-    //  better off just crashing and having a chance to pull the HB
-    //  traces off the system live
+// static void* host_start_occ_xstop_handler(void *io_pArgs)
+// {
+//     // If we have nothing external (FSP or OCC) to handle checkstops we are
+//     //  better off just crashing and having a chance to pull the HB
+//     //  traces off the system live
 
-    TARGETING::Target * l_sys = nullptr;
-    TARGETING::targetService().getTopLevelTarget( l_sys );
+//     TARGETING::Target * l_sys = nullptr;
+//     TARGETING::targetService().getTopLevelTarget( l_sys );
 
-#ifndef CONFIG_HANG_ON_MFG_SRC_TERM
-    //When in MNFG_FLAG_SRC_TERM mode enable reboots to allow HB
-    //to analyze now that the OCC is up and alive
-    auto l_mnfgFlags = l_sys->getAttr<TARGETING::ATTR_MNFG_FLAGS>();
+// #ifndef CONFIG_HANG_ON_MFG_SRC_TERM
+//     //When in MNFG_FLAG_SRC_TERM mode enable reboots to allow HB
+//     //to analyze now that the OCC is up and alive
+//     auto l_mnfgFlags = l_sys->getAttr<TARGETING::ATTR_MNFG_FLAGS>();
 
-    // Check to see if SRC_TERM bit is set in MNFG flags
-    if ((l_mnfgFlags & TARGETING::MNFG_FLAG_SRC_TERM) &&
-        !(l_mnfgFlags & TARGETING::MNFG_FLAG_IMMEDIATE_HALT))
-    {
-        //If HB_VOLATILE MFG_TERM_REBOOT_ENABLE flag is set at this point
-        //Create errorlog to terminate the boot.
-        Util::semiPersistData_t l_semiData;
-        Util::readSemiPersistData(l_semiData);
-        if (l_semiData.mfg_term_reboot == Util::MFG_TERM_REBOOT_ENABLE)
-        {
-            reboot();
-        }
+//     // Check to see if SRC_TERM bit is set in MNFG flags
+//     if ((l_mnfgFlags & TARGETING::MNFG_FLAG_SRC_TERM) &&
+//         !(l_mnfgFlags & TARGETING::MNFG_FLAG_IMMEDIATE_HALT))
+//     {
+//         //If HB_VOLATILE MFG_TERM_REBOOT_ENABLE flag is set at this point
+//         //Create errorlog to terminate the boot.
+//         Util::semiPersistData_t l_semiData;
+//         Util::readSemiPersistData(l_semiData);
+//         if (l_semiData.mfg_term_reboot == Util::MFG_TERM_REBOOT_ENABLE)
+//         {
+//             reboot();
+//         }
 
-        Util::semiPersistData_t l_newSemiData;
-        Util::readSemiPersistData(l_newSemiData);
-        l_newSemiData.mfg_term_reboot = Util::MFG_TERM_REBOOT_ENABLE;
-        Util::writeSemiPersistData(l_newSemiData);
+//         Util::semiPersistData_t l_newSemiData;
+//         Util::readSemiPersistData(l_newSemiData);
+//         l_newSemiData.mfg_term_reboot = Util::MFG_TERM_REBOOT_ENABLE;
+//         Util::writeSemiPersistData(l_newSemiData);
 
-        SENSOR::RebootControlSensor l_rbotCtl;
-        l_rbotCtl.setRebootControl(SENSOR::RebootControlSensor::autoRebootSetting::ENABLE_REBOOTS);
-    }
-#endif
+//         SENSOR::RebootControlSensor l_rbotCtl;
+//         l_rbotCtl.setRebootControl(SENSOR::RebootControlSensor::autoRebootSetting::ENABLE_REBOOTS);
+//     }
+// #endif
 
-    TARGETING::Target* masterproc = NULL;
-    TARGETING::targetService().masterProcChipTargetHandle(masterproc);
+//     TARGETING::Target* masterproc = NULL;
+//     TARGETING::targetService().masterProcChipTargetHandle(masterproc);
 
-#ifdef CONFIG_IPLTIME_CHECKSTOP_ANALYSIS
-    void* l_homerVirtAddrBase = VmmManager::INITIAL_MEM_SIZE;
-    uint64_t l_homerPhysAddrBase = mm_virt_to_phys(l_homerVirtAddrBase);
-    uint64_t l_commonPhysAddr = l_homerPhysAddrBase + VMM_HOMER_REGION_SIZE;
-    HBPM::loadPMComplex(masterproc, l_homerPhysAddrBase, l_commonPhysAddr);
-    HBOCC::startOCCFromSRAM(masterproc);
-#endif
-    Kernel::MachineCheck::setCheckstopData();
-}
+// #ifdef CONFIG_IPLTIME_CHECKSTOP_ANALYSIS
+//     void* l_homerVirtAddrBase = VmmManager::INITIAL_MEM_SIZE;
+//     uint64_t l_homerPhysAddrBase = mm_virt_to_phys(l_homerVirtAddrBase);
+//     uint64_t l_commonPhysAddr = l_homerPhysAddrBase + VMM_HOMER_REGION_SIZE;
+//     HBPM::loadPMComplex(masterproc, l_homerPhysAddrBase, l_commonPhysAddr);
+//     HBOCC::startOCCFromSRAM(masterproc);
+// #endif
+//     Kernel::MachineCheck::setCheckstopData();
+// }
 
-static void loadPMComplex(
-    TARGETING::Target * i_target,
-    uint64_t i_homerPhysAddr,
-    uint64_t i_commonPhysAddr)
-{
-    resetPMComplex(i_target);
-    void* l_homerVAddr = convertHomerPhysToVirt(i_target, i_homerPhysAddr);
-    if(nullptr == l_homerVAddr)
-    {
-        return;
-    }
-    uint64_t l_occImgPaddr = i_homerPhysAddr + HOMER_OFFSET_TO_OCC_IMG;
-    uint64_t occ_bootloader = l_homerVAddr + HOMER_OFFSET_TO_OCC_IMG;
-    loadOCCSetup(i_target, l_occImgPaddr, occ_bootloader, i_commonPhysAddr);
-    HBOCC::loadOCCImageDuringIpl(occ_bootloader); // analyzed
-#if !defined(__HOSTBOOT_RUNTIME)
-    HBOCC::loadHostDataToSRAM(i_target);
-#else
-    loadHostDataToHomer(i_target, occ_bootloader + HOMER_OFFSET_TO_OCC_HOST_DATA);
-    loadHcode(i_target, l_homerVAddr, HBPM::PM_LOAD);
-#endif
-}
+// static void loadPMComplex(
+//     TARGETING::Target * i_target,
+//     uint64_t i_homerPhysAddr,
+//     uint64_t i_commonPhysAddr)
+// {
+//     resetPMComplex(i_target);
+//     void* l_homerVAddr = convertHomerPhysToVirt(i_target, i_homerPhysAddr);
+//     if(nullptr == l_homerVAddr)
+//     {
+//         return;
+//     }
+//     uint64_t l_occImgPaddr = i_homerPhysAddr + HOMER_OFFSET_TO_OCC_IMG;
+//     uint64_t occ_bootloader = l_homerVAddr + HOMER_OFFSET_TO_OCC_IMG;
+//     loadOCCSetup(i_target, l_occImgPaddr, occ_bootloader, i_commonPhysAddr);
+//     HBOCC::loadOCCImageDuringIpl(occ_bootloader); // analyzed
+// #if !defined(__HOSTBOOT_RUNTIME)
+//     HBOCC::loadHostDataToSRAM(i_target);
+// #else
+//     loadHostDataToHomer(i_target, occ_bootloader + HOMER_OFFSET_TO_OCC_HOST_DATA);
+//     loadHcode(i_target, l_homerVAddr, HBPM::PM_LOAD);
+// #endif
+// }
 
 static void loadOCCImageDuringIpl(void* occ_bootloader)
 {
-    UtilLidMgr lidMgr(HBOCC::OCC_LIDID);
-    uint8_t* occ_partition = lidMgr.getLidVirtAddr(); // just get pointer to the OCC section
-
-    uint8_t occ_partition_image[OCC_LENGTH] = {};
+    uint8_t occ_partition[OCC_LENGTH] = {};
     struct mmap_helper_region_device mdev = {};
     mount_part_from_pnor("OCC", &mdev);
-    rdev_readat(&mdev.rdev, occ_partition_image, 0, OCC_LENGTH);
+    // maybe it could be faster and less memory hungry
+    // by loading only required part of OCC
+    // it would require loading in parts,
+    // because some offsets are in OCC itself.
+    rdev_readat(&mdev.rdev, occ_partition, 0, OCC_LENGTH);
 
     uint32_t bootloader_length = *(uint32_t*)(occ_partition + OCC_OFFSET_LENGTH);
-    uint32_t length = bootloader_length
 
     uint8_t* main_app = occ_partition + bootloader_length;
-    uint32_t main_app_length = (uint32_t*)(main_app + OCC_OFFSET_LENGTH);
+    uint32_t main_app_length = *(uint32_t*)(main_app + OCC_OFFSET_LENGTH);
 
     uint32_t gpe_0_length = *(uint32_t*)(main_app + OCC_OFFSET_GPE0_LENGTH);
     uint32_t gpe_1_length = *(uint32_t*)(main_app + OCC_OFFSET_GPE1_LENGTH);
 
     // GPE0 application is stored right after the 405 main in memory
-    uint8_t* gpe_0_app = main_app + *main_app_length;
-    uint8_t* gpe_1_app = main_app + *main_app_length + *gpe_0_length;
+    uint8_t* gpe_0_app = main_app + main_app_length;
+    uint8_t* gpe_1_app = main_app + main_app_length + gpe_0_length;
 
-    memcpy(i_occVirtAddr, occ_partition, bootloader_length);
+    memcpy(occ_bootloader, occ_partition, bootloader_length);
     uint8_t occ_modified_section[OCC_MODIFIED_SECTION_SIZE];
     memcpy(occ_modified_section, main_app, OCC_OFFSET_FREQ + sizeof(uint32_t));
 

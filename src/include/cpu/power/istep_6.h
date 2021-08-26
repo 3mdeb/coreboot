@@ -81,6 +81,8 @@ void istep_6_11(void);
 #define OCB_PIB_OCBCSR0_OCB_STREAM_MODE (4)
 #define OCB_PIB_OCBCSR0_OCB_STREAM_TYPE (5)
 
+#define MASK_WOR_INCR (5)
+
 #define PU_PBABAR0 (0x05012B00)
 #define PU_PBABAR1 (0x05012B01)
 #define PU_PBABAR2 (0x05012B02)

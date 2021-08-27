@@ -361,6 +361,7 @@ void main(void)
 	istep_14_2();
 	/* istep_14_3 doesn't work, probably due to missing SCOM init, skip for now. */
 	// istep_14_3();
+	report_istep(14,3);
 	report_istep(14,4);	// no-op
 	istep_14_5();
 

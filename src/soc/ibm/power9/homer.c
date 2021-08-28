@@ -1097,7 +1097,7 @@ static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
 	struct tor_hdr *overlays;
 
 	if (dd < 0x20)
-		die("DD must be at least 20!");
+		die("DD must be at least 0x20!");
 	if (!hw->overlays.dd_support)
 		die("Overlays must support DD!");
 
@@ -1377,7 +1377,7 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 	uint8_t quad = 0;
 
 	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
-		uint8_t i;
+		uint8_t i = 0;
 
 		/* Skip non-functional quads */
 		if (!IS_EQ_FUNCTIONAL(quad, cores))
@@ -1390,9 +1390,12 @@ static void layout_inst_rings_for_sgpe(struct homer_st *homer,
 
 			/* Despite the constant, this is not an SCOM chiplet ID,
 			 * it's just used as a base value */
-			uint8_t instance_id = EP00_CHIPLET_ID + quad*2;
-			if (i != 0 && i % 2 == 0)
-				++instance_id;
+			uint8_t instance_id = EP00_CHIPLET_ID + quad;
+			if (i != 0) {
+				instance_id += quad;
+				if (i % 2 == 0)
+					++instance_id;
+			}
 
 			if ((payload - start) % 8 != 0)
 				payload = start + ALIGN_UP(payload - start, 8);
@@ -1421,7 +1424,7 @@ static void layout_rings_for_sgpe(struct homer_st *homer,
 		(void *)&homer->qpmr.sgpe.sram_image[INT_VECTOR_SIZE];
 
 	layout_cmn_rings_for_sgpe(homer, ring_data, ring_variant);
-	layout_inst_rings_for_sgpe(homer, ring_data, cores, ring_variant);
+	layout_inst_rings_for_sgpe(homer, ring_data, cores, RV_BASE);
 
 	if (qpmr_hdr->common_ring_len == 0)
 		/* If quad common rings don't exist, ensure it's offset in image

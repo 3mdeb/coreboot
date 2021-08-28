@@ -39,7 +39,7 @@
  *  - uint32_t -- size in BE
  *
  * Ring section:
- *  - Array of chiplet blocks (we assume size of one)
+ *  - Array of chiplet blocks (we assume size of one for non-overlay rings)
  *    - Chiplet block
  *      - Array of TOR slots (value of 0 means "no such ring")
  *      - Array of rings pointed to by TOR slots
@@ -366,10 +366,10 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 			void *data_buf, uint32_t *data_buf_size,
 			enum ring_operation operation)
 {
+	const bool overlay = (be32toh(ring_section->magic) == TOR_MAGIC_OVLY);
 	uint8_t i = 0;
-	uint8_t chiplet_count = (be32toh(ring_section->magic) == TOR_MAGIC_OVLY)
-			      ? SBE_NOOF_CHIPLETS
-			      : 1;
+	uint8_t chiplet_count = (overlay ? SBE_NOOF_CHIPLETS : 1);
+	uint8_t max_variants = (overlay ? 1 : NUM_RING_VARIANTS);
 
 	assert(ring_section->version == TOR_VERSION);
 
@@ -407,35 +407,46 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 			       : be32toh(blocks[chiplet_idx].common_offset);
 		/* Instance rings have only BASE variant and both EC and EQ have
 		 * all of them and their order matches enumeration values */
-		variant_count = (instance_rings ? 1 : NUM_RING_VARIANTS);
+		variant_count = (instance_rings ? 1 : max_variants);
 
 		for (instance = ring_info->min_instance_id;
 		     instance <= ring_info->max_instance_id;
 		     ++instance) {
-			uint8_t ringIndex;
-			for (ringIndex = 0; ringIndex < ring_count; ++ringIndex) {
+			uint8_t ring_idx;
+			for (ring_idx = 0; ring_idx < ring_count; ++ring_idx) {
+				if (ring_info[ring_idx].ring_id != ring_id ||
+				    (instance_rings && instance != instance_id)) {
+					/* Jump over all variants of the ring */
+					tor_slot_idx += variant_count;
+					continue;
+				}
+
 				if (variant_count > 1)
 					/* Skip to the slot with the variant */
 					tor_slot_idx += ring_variant;
 
-				if (ring_info[ringIndex].ring_id != ring_id ||
-				    (instance_rings && instance != instance_id)) {
-					++tor_slot_idx;
-					continue;
-				}
-
 				uint16_t *tor_slots = (void *)&ring_section->data[chiplet_offset];
-				uint16_t slot_value = be16toh(tor_slots[tor_slot_idx]);
-				uint32_t ring_slot_offset = chiplet_offset + slot_value;
-				struct ring_hdr *ring = (void *)&ring_section->data[ring_slot_offset];
-
-				uint32_t ring_size = be16toh(ring->size);
 				if (operation == GET_RING_DATA) {
+					uint16_t slot_value = be16toh(tor_slots[tor_slot_idx]);
+					uint32_t ring_slot_offset = chiplet_offset + slot_value;
+					struct ring_hdr *ring = (void *)&ring_section->data[ring_slot_offset];
+					uint32_t ring_size = be16toh(ring->size);
+
+					if (slot_value == 0)
+						/* Didn't find the ring */
+						return false;
+
+					if (ring->magic != htobe16(RS4_MAGIC))
+						die("Got junk instead of a ring");
+
 					if (*data_buf_size != 0 && *data_buf_size >= ring_size)
 						memcpy(data_buf, ring, ring_size);
 					*data_buf_size = ring_size;
 				} else if (operation == GET_RING_PUT_INFO) {
 					struct ring_put_info *put_info = data_buf;
+
+					if (tor_slots[tor_slot_idx] != 0)
+						die("Slot isn't empty!");
 
 					if (*data_buf_size != sizeof(struct ring_put_info))
 						die("Invalid parameters for GET_RING_PUT_INFO!");
@@ -567,8 +578,8 @@ static void apply_overlays_to_gptr(struct tor_hdr *overlays_section,
 
 static void tor_append_ring(struct tor_hdr *ring_section,
 			    uint32_t *ring_section_size, uint16_t ring_id,
-			    enum ppe_type ppe_type, uint8_t instance_id,
-			    struct ring_hdr *ring)
+			    enum ppe_type ppe_type, uint8_t ring_variant,
+			    uint8_t instance_id, struct ring_hdr *ring)
 {
 	uint16_t ring_offset;
 	uint32_t ring_size;
@@ -577,7 +588,7 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	uint32_t put_info_size = sizeof(put_info);
 
 	if (!tor_access_ring(ring_section, ring_id, ppe_type,
-			     UNDEFINED_RING_VARIANT, instance_id, &put_info,
+			     ring_variant, instance_id, &put_info,
 			     &put_info_size, GET_RING_PUT_INFO))
 		die("Failed to find where to put a ring!");
 
@@ -651,7 +662,7 @@ static void tor_fetch_and_insert_vpd_ring(struct tor_hdr *ring_section,
 		instance_id += chiplet_id - query->min_instance_id;
 
 	tor_append_ring(ring_section, ring_section_size, query->ring_id,
-			ppe_type, instance_id, ring);
+			ppe_type, RV_BASE, instance_id, ring);
 
 	*ring_status = RING_FOUND;
 }

@@ -1096,7 +1096,7 @@ static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
 	struct tor_hdr *rings;
 	struct tor_hdr *overlays;
 
-	if (dd < 20)
+	if (dd < 0x20)
 		die("DD must be at least 20!");
 	if (!hw->overlays.dd_support)
 		die("Overlays must support DD!");

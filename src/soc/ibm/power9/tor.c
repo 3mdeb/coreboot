@@ -514,7 +514,7 @@ bool tor_access_ring(struct tor_hdr *ring_section, uint16_t ring_id,
 }
 
 /* Retrieves an overlay ring in both compressed and uncompressed forms */
-static void get_overlays_ring(struct tor_hdr *overlays_section,
+static bool get_overlays_ring(struct tor_hdr *overlays_section,
 			      uint16_t ring_id, void *rs4_buf, void *raw_buf)
 {
 	uint32_t uncompressed_bit_size = 0;
@@ -523,11 +523,12 @@ static void get_overlays_ring(struct tor_hdr *overlays_section,
 	if (!tor_access_ring(overlays_section, ring_id, UNDEFINED_PPE_TYPE,
 			     UNDEFINED_RING_VARIANT, UNDEFINED_INSTANCE_ID,
 			     rs4_buf, &rs4_buf_size, GET_RING_DATA))
-		die("Failed to find ring in overlay!");
+		return false;
 
 	rs4_decompress(raw_buf, raw_buf + MAX_RING_BUF_SIZE/2,
 		       MAX_RING_BUF_SIZE/2, &uncompressed_bit_size,
 		       (struct ring_hdr *)rs4_buf);
+	return true;
 }
 
 /* Decompress ring, modify it to leave only data allowed by overlay mask and
@@ -569,11 +570,11 @@ static void apply_overlays_to_gptr(struct tor_hdr *overlays_section,
 				   struct ring_hdr *ring, uint8_t *rs4_buf,
 				   uint8_t *raw_buf)
 {
-	get_overlays_ring(overlays_section, be16toh(ring->ring_id), rs4_buf,
-			  raw_buf);
-
-	/* raw_buf is passed from get_overlays_ring(), rs4_buf is just reused */
-	apply_overlays_ring(ring, rs4_buf, raw_buf);
+	if (get_overlays_ring(overlays_section, be16toh(ring->ring_id), rs4_buf,
+			      raw_buf)) {
+		/* raw_buf is passed from get_overlays_ring(), rs4_buf is just reused */
+		apply_overlays_ring(ring, rs4_buf, raw_buf);
+	}
 }
 
 static void tor_append_ring(struct tor_hdr *ring_section,

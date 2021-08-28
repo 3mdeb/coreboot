@@ -3,6 +3,7 @@
 #include "tor.h"
 
 #include <cpu/power/mvpd.h>
+#include <lib.h>
 
 #include <assert.h>
 #include <endian.h>
@@ -436,8 +437,17 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 						/* Didn't find the ring */
 						return false;
 
-					if (ring->magic != htobe16(RS4_MAGIC))
+					if (ring->magic != htobe16(RS4_MAGIC)) {
+						printk(BIOS_EMERG, "chiplet_offset = 0x%08x\n", chiplet_offset);
+						printk(BIOS_EMERG, "tor_slot_idx = 0x%08x\n", tor_slot_idx);
+						printk(BIOS_EMERG, "slot_value = 0x%08x\n", slot_value);
+						printk(BIOS_EMERG, "ring_slot_offset = 0x%08x\n", ring_slot_offset);
+						printk(BIOS_EMERG, "Full section:\n");
+						hexdump(ring_section, ring_section->size);
+						printk(BIOS_EMERG, "Ring:\n");
+						hexdump(ring, ring_size);
 						die("Got junk instead of a ring");
+					}
 
 					if (*data_buf_size != 0 && *data_buf_size >= ring_size)
 						memcpy(data_buf, ring, ring_size);
@@ -599,6 +609,8 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	ring_offset = htobe16(*ring_section_size - put_info.chiplet_offset);
 	ring_size = be16toh(ring->size);
 
+	printk(BIOS_EMERG, "ring_slot_offset = 0x%08x\n", put_info.ring_slot_offset);
+	printk(BIOS_EMERG, "ring_offset = 0x%04x\n", ring_offset);
 	memcpy((uint8_t *)ring_section + put_info.ring_slot_offset,
 	       &ring_offset, sizeof(ring_offset));
 	memcpy((uint8_t *)ring_section + *ring_section_size, ring, ring_size);
@@ -684,8 +696,11 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 	size_t i = 0;
 	uint8_t eq = 0;
 
-        const struct ring_query *eq_query = NULL;
-        const struct ring_query *ec_query = NULL;
+	const struct ring_query *eq_query = NULL;
+	const struct ring_query *ec_query = NULL;
+
+	const struct ring_query *ex_queries[4];
+	uint8_t ex_query_count = 0;
 
 	/* Add all common rings */
 	for (i = 0; i < ring_query_count; ++i) {
@@ -744,10 +759,14 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 	for (i = 0; i < pdr_query_count; ++i) {
 		const struct ring_query *query = &RING_QUERIES_PDR[i];
 		const enum ring_class class = query->ring_class;
-		if (class == RING_CLASS_EQ_INS && eq_query == NULL)
+		if (class == RING_CLASS_EQ_INS && eq_query == NULL) {
 			eq_query = query;
-		else if (class == RING_CLASS_EC_INS && ec_query == NULL)
+		} else if (class == RING_CLASS_EX_INS && ex_query_count < 4) {
+			ex_queries[ex_query_count] = query;
+			++ex_query_count;
+		} else if (class == RING_CLASS_EC_INS && ec_query == NULL) {
 			ec_query = query;
+		}
 	}
 
 	for (eq = 0; eq < NUM_OF_QUADS; ++eq) {
@@ -771,10 +790,37 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 				die("Failed to insert an EQ ring.");
 		}
 
+		/* EX instances */
+		if ((ppe_type == PT_SBE || ppe_type == PT_SGPE) && ex_query_count != 0) {
+			uint8_t ex = 0;
+			for (ex = 2 * eq; ex < 2 * (eq + 1); ++ex) {
+				for (i = 0; i < ex_query_count; ++i) {
+					const uint8_t instance = ex_queries[i]->min_instance_id + eq;
+
+					enum ring_status ring_status;
+
+					// TODO: add even_odd flag
+
+					tor_fetch_and_insert_vpd_ring(ring_section,
+								      ring_section_size,
+								      ex_queries[i],
+								      max_ring_section_size,
+								      overlays_section,
+								      ppe_type,
+								      instance,
+								      buf1, buf2, buf3,
+								      &ring_status);
+
+					if (ring_status == RING_NOT_FOUND)
+						die("Failed to insert an EC ring.");
+				}
+			}
+		}
+
+		/* EC instances */
 		if ((ppe_type == PT_SBE || ppe_type == PT_CME) && ec_query != NULL) {
 			uint8_t ec = 0;
 			for (ec = 4 * eq; ec < 4 * (eq + 1); ++ec) {
-				/* EC instances */
 				const uint8_t instance = ec_query->min_instance_id + ec;
 
 				enum ring_status ring_status;

@@ -437,17 +437,8 @@ static bool ring_access(struct tor_hdr *ring_section, uint16_t ring_id,
 						/* Didn't find the ring */
 						return false;
 
-					if (ring->magic != htobe16(RS4_MAGIC)) {
-						printk(BIOS_EMERG, "chiplet_offset = 0x%08x\n", chiplet_offset);
-						printk(BIOS_EMERG, "tor_slot_idx = 0x%08x\n", tor_slot_idx);
-						printk(BIOS_EMERG, "slot_value = 0x%08x\n", slot_value);
-						printk(BIOS_EMERG, "ring_slot_offset = 0x%08x\n", ring_slot_offset);
-						printk(BIOS_EMERG, "Full section:\n");
-						hexdump(ring_section, ring_section->size);
-						printk(BIOS_EMERG, "Ring:\n");
-						hexdump(ring, ring_size);
-						die("Got junk instead of a ring");
-					}
+					if (ring->magic != htobe16(RS4_MAGIC))
+						die("Got junk instead of a ring!");
 
 					if (*data_buf_size != 0 && *data_buf_size >= ring_size)
 						memcpy(data_buf, ring, ring_size);
@@ -609,8 +600,6 @@ static void tor_append_ring(struct tor_hdr *ring_section,
 	ring_offset = htobe16(*ring_section_size - put_info.chiplet_offset);
 	ring_size = be16toh(ring->size);
 
-	printk(BIOS_EMERG, "ring_slot_offset = 0x%08x\n", put_info.ring_slot_offset);
-	printk(BIOS_EMERG, "ring_offset = 0x%04x\n", ring_offset);
 	memcpy((uint8_t *)ring_section + put_info.ring_slot_offset,
 	       &ring_offset, sizeof(ring_offset));
 	memcpy((uint8_t *)ring_section + *ring_section_size, ring, ring_size);

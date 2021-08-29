@@ -631,6 +631,7 @@ static void tor_fetch_and_insert_vpd_ring(struct tor_hdr *ring_section,
 					  struct tor_hdr *overlays_section,
 					  enum ppe_type ppe_type,
 					  uint8_t chiplet_id,
+					  uint8_t even_odd,
 					  uint8_t *buf1,
 					  uint8_t *buf2,
 					  uint8_t *buf3,
@@ -641,7 +642,7 @@ static void tor_fetch_and_insert_vpd_ring(struct tor_hdr *ring_section,
 	uint8_t instance_id = 0;
 	struct ring_hdr *ring = NULL;
 
-	success = mvpd_extract_ring("CP00", query->kwd_name, chiplet_id,
+	success = mvpd_extract_ring("CP00", query->kwd_name, chiplet_id, even_odd,
 				    query->ring_id, buf1, MAX_RING_BUF_SIZE);
 	if (!success) {
 		*ring_status = RING_NOT_FOUND;
@@ -670,7 +671,7 @@ static void tor_fetch_and_insert_vpd_ring(struct tor_hdr *ring_section,
 		    *ring_section_size + be16toh(ring->size),
 		    max_ring_section_size);
 
-	instance_id = chiplet_id;
+	instance_id = chiplet_id + even_odd;
 	if (query->ring_class == RING_CLASS_EX_INS)
 		instance_id += chiplet_id - query->min_instance_id;
 
@@ -746,6 +747,7 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 						      overlays_section,
 						      ppe_type,
 						      instance,
+						      /*even_odd=*/0,
 						      buf1, buf2, buf3,
 						      &ring_status);
 
@@ -783,6 +785,7 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 						      overlays_section,
 						      ppe_type,
 						      instance,
+						      /*even_odd=*/0,
 						      buf1, buf2, buf3,
 						      &ring_status);
 
@@ -799,8 +802,6 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 
 					enum ring_status ring_status;
 
-					// TODO: add even_odd flag
-
 					tor_fetch_and_insert_vpd_ring(ring_section,
 								      ring_section_size,
 								      ex_queries[i],
@@ -808,6 +809,7 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 								      overlays_section,
 								      ppe_type,
 								      instance,
+								      ex % 2,
 								      buf1, buf2, buf3,
 								      &ring_status);
 
@@ -832,6 +834,7 @@ void tor_fetch_and_insert_vpd_rings(struct tor_hdr *ring_section,
 							      overlays_section,
 							      ppe_type,
 							      instance,
+							      /*even_odd=*/0,
 							      buf1, buf2, buf3,
 							      &ring_status);
 

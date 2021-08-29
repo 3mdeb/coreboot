@@ -55,7 +55,7 @@ static struct ring_hdr *find_ring_step(uint8_t chiplet_id, uint16_t ring_id,
 	*buf_left += be16toh(hdr->size);
 	*len_left -= be16toh(hdr->size);
 
-	switch (even_odd_mask) {
+	switch (ring_id) {
 		case EX_L3_REPR: even_odd_mask = 0x00001000; break;
 		case EX_L2_REPR: even_odd_mask = 0x00000400; break;
 		case EX_L3_REFR_TIME:

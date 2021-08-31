@@ -627,7 +627,7 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 	GlobalPstateParmBlock *gppb = (GlobalPstateParmBlock *)
 	           &homer->ppmr.pgpe_sram_img[homer->ppmr.header.hcode_len];
 	LocalPstateParmBlock *lppb = (LocalPstateParmBlock *)
-	           &homer->cpmr.cme_sram_region[cme_hdr->pstate_offset];
+	           &homer->cpmr.cme_sram_region[cme_hdr->pstate_offset * 32];
 
 	/* OPPB - constant fields */
 
@@ -1038,7 +1038,7 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 			continue;
 
 		memcpy(&homer->cpmr.cme_sram_region[cme * cme_hdr->custom_length * 32 +
-		                                    cme_hdr->pstate_offset],
+		                                    cme_hdr->pstate_offset * 32],
 		       lppb, sizeof(LocalPstateParmBlock));
 	}
 

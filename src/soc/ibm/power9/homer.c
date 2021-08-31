@@ -1386,7 +1386,7 @@ static void layout_cmn_rings_for_sgpe(struct homer_st *homer,
 
 	qpmr_hdr->common_ring_len = payload - start;
 	qpmr_hdr->common_ring_offset =
-		offsetof(struct homer_st, qpmr.sgpe.sram_image) + qpmr_hdr->img_len;
+		offsetof(struct qpmr_st, sgpe.sram_image) + qpmr_hdr->img_len;
 }
 
 static void layout_inst_rings_for_sgpe(struct homer_st *homer,

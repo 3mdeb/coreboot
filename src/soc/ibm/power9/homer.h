@@ -152,8 +152,8 @@ struct cpmr_header {
 	uint32_t cme_common_ring_len;
 	uint32_t cme_pstate_offset;
 	uint32_t cme_pstate_len;
-	uint32_t core_spec_ring_offset;
-	uint32_t core_spec_ring_len;
+	uint32_t core_spec_ring_offset;	// = real offset / 32
+	uint32_t core_spec_ring_len;	// = real length / 32
 	uint32_t core_scom_offset;
 	uint32_t core_scom_len;
 	uint32_t core_self_restore_offset;
@@ -179,9 +179,9 @@ struct cme_img_header {
 	uint32_t common_ring_len;
 	uint32_t pstate_region_offset;
 	uint32_t pstate_region_len;
-	uint32_t core_spec_ring_offset;
-	uint32_t max_spec_ring_len;
-	uint32_t scom_offset;
+	uint32_t core_spec_ring_offset;	// = real offset / 32
+	uint32_t max_spec_ring_len;	// = real length / 32
+	uint32_t scom_offset;		// = real offset / 32
 	uint32_t scom_len;
 	uint32_t mode_flags;
 	uint16_t location_id;
@@ -189,8 +189,8 @@ struct cme_img_header {
 	uint32_t timebase_hz;
 	uint64_t cpmr_phy_addr;
 	uint64_t unsec_cpmr_phy_addr;
-	uint32_t pstate_offset;
-	uint32_t custom_length;
+	uint32_t pstate_offset;		// = real offset / 32
+	uint32_t custom_length;		// = real length / 32
 };
 
 struct cpmr_st {

@@ -1506,6 +1506,9 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 		cpmr_hdr->core_spec_ring_len     = cme_hdr->max_spec_ring_len;
 	}
 
+	cme_hdr->custom_length =
+		ALIGN_UP(cme_hdr->max_spec_ring_len * 32 + sizeof(LocalPstateParmBlock), 32) / 32;
+
 	for (int cme = 0; cme < MAX_CORES_PER_CHIP/2; cme++) {
 		/*
 		 * CME index/position is the same as EX, however this means that Pstate

@@ -1130,7 +1130,8 @@ static void layout_rings_for_cme(struct homer_st *homer,
 
 	if (ring_len != 0) {
 		cme_hdr->max_spec_ring_len = ALIGN_UP(ring_len, 32) / 32;
-		cme_hdr->core_spec_ring_offset = cpmr_hdr->cme_common_ring_offset + cpmr_hdr->cme_common_ring_len;
+		cme_hdr->core_spec_ring_offset =
+			ALIGN_UP(cme_hdr->common_ring_offset + cme_hdr->common_ring_len, 32) / 32;
 	}
 }
 

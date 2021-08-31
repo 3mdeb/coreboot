@@ -604,8 +604,8 @@ void build_parameter_blocks(struct homer_st *homer, uint64_t functional_cores)
 	           &homer->cpmr.cme_sram_region[INT_VECTOR_SIZE];
 	cme_hdr->pstate_offset = cme_hdr->core_spec_ring_offset +
 	                         cme_hdr->max_spec_ring_len;
-	cme_hdr->custom_length = ALIGN_UP(sizeof(LocalPstateParmBlock), 32) / 32 +
-	                         cme_hdr->max_spec_ring_len;
+	cme_hdr->custom_length =
+		ALIGN_UP(cme_hdr->max_spec_ring_len * 32 + sizeof(LocalPstateParmBlock), 32) / 32;
 
 	/*
 	 * OCC Pstate Parameter Block and Global Pstate Parameter Block are filled

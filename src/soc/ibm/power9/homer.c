@@ -1365,11 +1365,11 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 
 	/* Updating CME Image header */
 	/* Assuming >= CPMR_2.0 */
-	cme_hdr->scom_offset   = cme_hdr->pstate_offset +
-	                         sizeof(LocalPstateParmBlock) / 32;
+	cme_hdr->scom_offset =
+		ALIGN_UP(cme_hdr->pstate_offset * 32 + sizeof(LocalPstateParmBlock), 32) / 32;
 
 	/* Adding to it instance ring length which is already a multiple of 32B */
-	cme_hdr->scom_len      = 512;
+	cme_hdr->scom_len = 512;
 
 	/* Timebase frequency */
 	/* FIXME: get PB frequency properly */

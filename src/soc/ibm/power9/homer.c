@@ -1539,6 +1539,9 @@ void build_homer_image(void *homer_bar)
 
 	// Update CME/SGPE Flags in respective image header.
 	// updateImageFlags( pChipHomer, i_procTgt );
+	// XXX: hard-coded values until updateImageFlags() is implemented
+	((struct sgpe_img_header *)&homer->qpmr.sgpe.sram_image[INT_VECTOR_SIZE])->reserve_flags = 0x04000000;
+	((struct cme_img_header *)&homer->cpmr.cme_sram_region[INT_VECTOR_SIZE])->qm_mode_flags = 0xf100;
 
 	// Set the Fabric IDs
 	// setFabricIds( pChipHomer, i_procTgt );

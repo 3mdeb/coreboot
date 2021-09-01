@@ -19,6 +19,31 @@
 
 #include <lib.h>
 
+#define L2_EPS_DIVIDER   1
+#define L3_EPS_DIVIDER   1
+
+#define EX_L2_RD_EPS_REG 0x10010810
+#define EX_L2_WR_EPS_REG 0x10010811
+#define EX_L3_RD_EPS_REG 0x10011829
+#define EX_L3_WR_EPS_REG 0x1001182A
+#define EX_DRAM_REF_REG  0x1001180F
+
+#define ODD_EVEN_EX_POS  0x00000400
+
+#define MAX_EQ_SCOM_ENTRIES 31
+#define MAX_L2_SCOM_ENTRIES 16
+#define MAX_L3_SCOM_ENTRIES 16
+
+#define QUAD_BIT_POS     24
+
+/* Subsections of STOP image that contain SCOM entries */
+enum scom_section {
+	STOP_SECTION_CORE_SCOM,
+	STOP_SECTION_EQ_SCOM,
+	STOP_SECTION_L2,
+	STOP_SECTION_L3,
+};
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -53,6 +78,18 @@ struct sgpe_inst_ring_list {
 	uint16_t ring[MAX_QUADS_PER_CHIP][12];
 
 	uint8_t payload[];
+};
+
+struct scom_entry_t {
+	uint32_t hdr;
+	uint32_t address;
+	uint64_t data;
+};
+
+struct stop_cache_section_t {
+	struct scom_entry_t non_cache_area[MAX_EQ_SCOM_ENTRIES];
+	struct scom_entry_t l2_cache_area[MAX_L2_SCOM_ENTRIES];
+	struct scom_entry_t l3_cache_area[MAX_L3_SCOM_ENTRIES];
 };
 
 extern void mount_part_from_pnor(const char *part_name,
@@ -1307,6 +1344,199 @@ static void layout_rings_for_sgpe(struct homer_st *homer,
 	}
 }
 
+static void stop_append_scom(struct homer_st *homer, uint32_t scom_address,
+			     uint64_t scom_data, enum scom_section section)
+{
+	enum {
+		ORI_OPCODE = 24,
+		BLR_INST = 0x4e800020,
+		ATTN_OPCODE = 0x00000200,
+
+		SCOM_ENTRY_START = 0xDEADDEAD,
+	};
+
+	uint8_t chiplet_id = (scom_address >> 24) & 0x3f;
+	uint32_t max_scom_restore_entries = 0;
+	struct stop_cache_section_t *stop_cache_scom = NULL;
+	struct scom_entry_t *scom_entry =  NULL;
+	struct scom_entry_t *nop_location =  NULL;
+	struct scom_entry_t *entry = NULL;
+	uint32_t nop_inst = 0;
+	uint32_t entry_limit = 0;
+
+	if (chiplet_id >= EC00_CHIPLET_ID) {
+		// XXX: need this case ?
+		max_scom_restore_entries = CORE_SCOM_RESTORE_ENTRIES;
+	} else {
+		uint32_t offset = (chiplet_id - EP00_CHIPLET_ID)*QUAD_SCOM_RESTORE_SIZE_PER_QUAD;
+		stop_cache_scom =
+			(struct stop_cache_section_t *)&homer->qpmr.cache_scom_region[offset];
+
+		max_scom_restore_entries = QUAD_SCOM_RESTORE_ENTRIES;
+	}
+
+	if (stop_cache_scom == NULL)
+		die("Failed to prepare for updating STOP SCOM\n");
+
+	switch (section) {
+		case STOP_SECTION_EQ_SCOM:
+			scom_entry = stop_cache_scom->non_cache_area;
+			entry_limit = MAX_EQ_SCOM_ENTRIES;
+			break;
+
+		default:
+			die("Unhandled STOP image section.\n");
+			break;
+	}
+
+	nop_inst = ORI_OPCODE << 26;
+
+	for (uint32_t i = 0; i < entry_limit; ++i) {
+		uint32_t entry_address = scom_entry[i].address;
+		uint32_t entry_hdr = scom_entry[i].hdr;
+
+		// XXX: append doesn't need this
+		/* if (swizzleAddr == entry_address && !pEntryLocation) */
+		/* 	pEntryLocation = &scom_entry[i]; */
+
+		if ((entry_address == nop_inst || entry_address == ATTN_OPCODE ||
+		     entry_address == BLR_INST) && nop_location == NULL)
+			nop_location = &scom_entry[i];
+
+		/* if entry is either 0xDEADDEAD or has SCOM entry limit in LSB of its header,
+		 * the place is already occupied */
+		if (entry_hdr == SCOM_ENTRY_START || (entry_hdr & 0x000000ff))
+			continue;
+
+		entry = &scom_entry[i];
+		break;
+	}
+
+	if (entry == NULL)
+		die("Failed to find SCOM entry in STOP image.\n");
+
+	if (nop_location)
+		entry = nop_location;
+
+	entry->hdr = SCOM_ENTRY_START;
+	entry->address = scom_address;
+	entry->data = scom_data;
+
+	// TODO: implement this if data won't match
+	// Update SCOM Restore entry with version and memory layout info
+	/* updateEntryHeader(entry, imageVer, max_scom_restore_entries); */
+}
+
+static void populate_epsilon_l2_scom_reg(struct homer_st *homer)
+{
+	const struct powerbus_cfg *pb_cfg = powerbus_cfg();
+
+	uint32_t eps_r_t0 = pb_cfg->eps_r[0] / 8 / L2_EPS_DIVIDER + 1;
+	uint32_t eps_r_t1 = pb_cfg->eps_r[1] / 8 / L2_EPS_DIVIDER + 1;
+	uint32_t eps_r_t2 = pb_cfg->eps_r[2] / 8 / L2_EPS_DIVIDER + 1;
+
+	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L2_EPS_DIVIDER + 1;
+	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L2_EPS_DIVIDER + 1;
+
+	uint64_t eps_r = PPC_SHIFT(eps_r_t0 & 0x3ff, 0)
+		       | PPC_SHIFT(eps_r_t1 & 0x3ff, 12)
+		       | PPC_SHIFT(eps_r_t2 & 0x3ff, 24);
+
+	uint64_t eps_w = PPC_SHIFT(eps_w_t0 & 0x3ff, 0)
+		       | PPC_SHIFT(eps_w_t1 & 0x3ff, 12)
+		       | PPC_SHIFT(L2_EPS_DIVIDER & 0xf, 24);
+
+	uint8_t quad = 0;
+
+	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
+		uint32_t scom_addr;
+
+		/* Create restore entry for epsilon L2 RD register */
+
+		scom_addr = (EX_L2_RD_EPS_REG | (quad << QUAD_BIT_POS));
+		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+
+		scom_addr |= ODD_EVEN_EX_POS;
+		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+
+		/* Create restore entry for epsilon L2 WR register */
+
+		scom_addr = (EX_L2_WR_EPS_REG | (quad << QUAD_BIT_POS));
+		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+
+		scom_addr |= ODD_EVEN_EX_POS;
+		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+	}
+}
+
+static void populate_epsilon_l3_scom_reg(struct homer_st *homer)
+{
+	const struct powerbus_cfg *pb_cfg = powerbus_cfg();
+
+	uint32_t eps_r_t0 = pb_cfg->eps_r[0] / 8 / L3_EPS_DIVIDER + 1;
+	uint32_t eps_r_t1 = pb_cfg->eps_r[1] / 8 / L3_EPS_DIVIDER + 1;
+	uint32_t eps_r_t2 = pb_cfg->eps_r[2] / 8 / L3_EPS_DIVIDER + 1;
+
+	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L3_EPS_DIVIDER + 1;
+	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L3_EPS_DIVIDER + 1;
+
+	uint64_t eps_r = PPC_SHIFT(eps_r_t0 & 0x3ff, 0)
+		       | PPC_SHIFT(eps_r_t1 & 0x3ff, 12)
+		       | PPC_SHIFT(eps_r_t2 & 0x3ff, 24);
+
+	uint64_t eps_w = PPC_SHIFT(eps_w_t0 & 0x3ff, 0)
+		       | PPC_SHIFT(eps_w_t1 & 0x3ff, 12)
+		       | PPC_SHIFT(L3_EPS_DIVIDER & 0xf, 30);
+
+	uint8_t quad = 0;
+
+	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
+		uint32_t scom_addr;
+
+		/* Create restore entry for epsilon L2 RD register */
+
+		scom_addr = (EX_L3_RD_EPS_REG | (quad << QUAD_BIT_POS));
+		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+
+		scom_addr |= ODD_EVEN_EX_POS;
+		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+
+		/* Create restore entry for epsilon L2 WR register */
+
+		scom_addr = (EX_L3_WR_EPS_REG | (quad << QUAD_BIT_POS));
+		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+
+		scom_addr |= ODD_EVEN_EX_POS;
+		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+	}
+}
+
+static void populate_l3_refresh_scom_reg(struct homer_st *homer)
+{
+	uint64_t refresh_val = 0x2000000000000000ULL;
+
+	uint8_t quad = 0;
+
+	/* Assuming that ATTR_CHIP_EC_FEATURE_HW408892 == 0 */
+	if (powerbus_cfg()->fabric_freq >= 2000)
+		refresh_val |= PPC_SHIFT(0x2, 8);
+
+	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
+		/* Create restore entry for L3 Refresh Timer Divider register */
+
+		uint32_t scom_addr = (EX_DRAM_REF_REG | (quad << QUAD_BIT_POS));
+		stop_append_scom(homer, scom_addr, refresh_val, STOP_SECTION_EQ_SCOM);
+
+		scom_addr |= ODD_EVEN_EX_POS;
+		stop_append_scom(homer, scom_addr, refresh_val, STOP_SECTION_EQ_SCOM);
+	}
+}
+
+static void populate_ncu_rng_bar_scom_reg(struct homer_st *homer)
+{
+
+}
+
 static void update_headers(struct homer_st *homer, uint64_t cores)
 {
 	/*
@@ -1326,7 +1556,7 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 	cpmr_hdr->img_len              = cme_hdr->hcode_len;
 	cpmr_hdr->core_scom_offset     = offsetof(struct cpmr_st, core_scom);
 	cpmr_hdr->core_scom_len        = CORE_SCOM_RESTORE_SIZE;			// 6k
-	cpmr_hdr->core_max_scom_entry  = 15;
+	cpmr_hdr->core_max_scom_entry  = CORE_SCOM_RESTORE_ENTRIES;
 
 	if (cme_hdr->common_ring_len) {
 		cpmr_hdr->cme_common_ring_offset = offsetof(struct cpmr_st, cme_sram_region) +
@@ -1525,17 +1755,14 @@ void build_homer_image(void *homer_bar)
 
 	update_headers(homer, cores);
 
-	// Update L2 Epsilon SCOM Registers
-	// populateEpsilonL2ScomReg( pChipHomer );
-
-	// Update L3 Epsilon SCOM Registers
-	// populateEpsilonL3ScomReg( pChipHomer );
+	populate_epsilon_l2_scom_reg(homer);
+	populate_epsilon_l3_scom_reg(homer);
 
 	// Update L3 Refresh Timer Control SCOM Registers
-	// populateL3RefreshScomReg( pChipHomer, i_procTgt);
+	populate_l3_refresh_scom_reg(homer);
 
 	// Populate HOMER with SCOM restore value of NCU RNG BAR SCOM Register
-	// populateNcuRngBarScomReg( pChipHomer, i_procTgt );
+	populate_ncu_rng_bar_scom_reg(homer);
 
 	// Update CME/SGPE Flags in respective image header.
 	// updateImageFlags( pChipHomer, i_procTgt );

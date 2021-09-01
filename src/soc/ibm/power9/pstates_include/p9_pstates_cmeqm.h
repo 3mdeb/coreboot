@@ -283,7 +283,7 @@ typedef uint8_t CompareVIDPoints;
 /// comsumption by the CME Quad Manager.  This data will reside in the Core
 /// Power Management Region (CPMR).
 ///
-typedef struct
+typedef struct LocalPstateParmBlock
 {
 
     /// Magic Number

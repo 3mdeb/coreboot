@@ -344,11 +344,11 @@ void main(void)
 	vpd_pnor_main();
 	prepare_dimm_data();
 
+	istep_8_9();
+	istep_8_10();
 	istep_8_11();
 	istep_8_12();
 	report_istep(13,1);	// no-op
-	istep_8_9();
-	istep_8_10();
 	istep_13_2();
 	istep_13_3();
 	istep_13_4();

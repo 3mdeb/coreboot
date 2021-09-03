@@ -2,9 +2,8 @@
 
 #include <arch/byteorder.h>
 #include <console/console.h>
-#include <cpu/power/istep_8_9.h>
+#include <cpu/power/istep_8.h>
 #include <cpu/power/scom.h>
-#include <cpu/power/scom_registers.h>
 
 void istep_8_9(void)
 {
@@ -30,20 +29,20 @@ void p9_fbc_ioe_dl_scom(void)
     // [12:15] CONFIG_PACKET_DELAY_LIMIT: This field indicates the number
     //         of cycles of delay of frame data that are required for the
     //         packet to be considered delayed or replayed. (0 is 16 cycles.)
-    // [27:27] CONFIG_AUTO_TDM_BW_DIFF: Bandwidth difference
-    //         for auto-entry TMD mode.
-    scom_and_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_CFG_REG, ~(PPC_BIT(0) | PPC_BIT(11)), PPC_BIT(2) | PPC_BIT(4) | PPC_BITMASK(12, 15) | PPC_BITMASK(24, 27));
+    // [28:31] CONFIG_AUTO_TDM_ERROR_RATE: This field contains the error rate
+    //         for the auto-entry TDM mode.
+    scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_CFG_REG, PPC_BIT(0) | PPC_BIT(2) | PPC_BIT(4) | PPC_BITMASK(12, 15) | PPC_BITMASK(28, 31));
     // PB_ELL_REPLAY_TRESHOLD_REG
     // [0:3] THRESH_REPLAY_TB_SEL: Replay threshold timebase select.
     // [4:7] THRESH_REPLAY_TAP_SEL: Replay threshold tap select.
     // [8:10] THRESH_REPLAY_ENABLE: Replay threshold error enable.
-    scom_and_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_REPLAY_TRESHOLD_REG, ~PPC_BITMASK(0, 3), PPC_BITMASK(1, 2) | PPC_BITMASK(4, 10));
+    scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_REPLAY_TRESHOLD_REG, PPC_BITMASK(1, 2) | PPC_BITMASK(4, 10));
     // PB_ELL_SL_ECC_TRESHOLD_REG
     // [0:3] THRESH_SL_ECC_TB_SEL: SL ECC threshold timebase select.
     // [4:7] THRESH_SL_ECC_TAP_SEL: SL ECC threshold tap select.
     // [8:9] THRESH_SL_ECC_ENABLE: SL ECC threshold error enable.
     // [10:25] THRESH_SL_ECC_UNUSED1: Spare bits.
-    scom_and_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_SL_ECC_TRESHOLD_REG, ~PPC_BIT(0), PPC_BITMASK(1, 7) | PPC_BITMASK(9, 11));
+    scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_SL_ECC_TRESHOLD_REG, PPC_BITMASK(1, 10));
 }
 
 void ioe_tl_fir(void)

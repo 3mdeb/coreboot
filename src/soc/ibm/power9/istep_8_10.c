@@ -2,9 +2,8 @@
 
 #include <arch/byteorder.h>
 #include <console/console.h>
-#include <cpu/power/istep_8_10.h>
+#include <cpu/power/istep_8.h>
 #include <cpu/power/scom.h>
-#include <cpu/power/scom_registers.h>
 #include <timer.h>
 #include <types.h>
 
@@ -12,8 +11,8 @@ void istep_8_10(void)
 {
     printk(BIOS_EMERG, "starting istep 8.10\n");
     report_istep(8, 10);
-    // p9_io_xbus_scominit(0);
-    // p9_io_xbus_scominit(1);
+    p9_io_xbus_scominit(0);
+    p9_io_xbus_scominit(1);
     printk(BIOS_EMERG, "ending istep 8.10\n");
     return;
 }
@@ -44,7 +43,7 @@ void p9_io_xbus_scominit(const uint8_t group)
 
 void p9_xbus_g0_scom()
 {
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DATA_DAC_SPARE_MODE_PL
         // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_5_OFF
@@ -56,7 +55,7 @@ void p9_xbus_g0_scom()
             ~PPC_BITMASK(53, 55));
     }
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL1_EO_PL
         // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_OFF
@@ -70,10 +69,10 @@ void p9_xbus_g0_scom()
     scom_or_for_chiplet(XB_CHIPLET_ID, 0x8000081106010C3F, PPC_BIT(54));
     scom_and_for_chiplet(
             XB_CHIPLET_ID,
-            0x8000080006010C3F | 0x11 << 32,
+            0x8000080006010C3F | 0x11ull << 32,
             PPC_BIT(54));
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL5_EO_PL
         scom_and_for_chiplet(
@@ -82,7 +81,7 @@ void p9_xbus_g0_scom()
             ~PPC_BITMASK(44, 56));
     }
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL6_EO_PL
         scom_and_or_for_chiplet(XB_CHIPLET_ID,
@@ -91,7 +90,7 @@ void p9_xbus_g0_scom()
         PPC_BITMASK(49, 50) | PPC_BITMASK(54, 56));
     }
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL9_E_PL
         scom_and_for_chiplet(
@@ -100,7 +99,7 @@ void p9_xbus_g0_scom()
             ~PPC_BITMASK(48, 60));
     }
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX0_RXPACKS[0:3]_SLICE[0:5]_RX_BIT_MODE1_EO_PL
         // IOF1_RX_RX0_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_OFF
@@ -349,7 +348,7 @@ void p9_xbus_g0_scom()
         PPC_BIT(49) | PPC_BIT(52));
 
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_TX0_TXPACKS[0:3]_SLICE[0:4]_TX_MODE1_PL
         // IOF1_TX_WRAP_TX0_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_LANE_PDWN_ENABLED
@@ -359,7 +358,7 @@ void p9_xbus_g0_scom()
             ~PPC_BIT(48));
     }
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // register P9A_XBUS_0_TX0_TXPACKS[0:3]_SLICE[0:4]_TX_MODE2_PL
         // IOF1_TX_WRAP_TX0_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_CAL_LANE_SEL_ON
@@ -818,7 +817,7 @@ void p9_xbus_g0_scom()
 
 void p9_xbus_g1_scom()
 {
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DATA_DAC_SPARE_MODE_PL
         // l_IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_PL_DATA_DAC_SPARE_MODE_5_OFF
@@ -830,7 +829,7 @@ void p9_xbus_g1_scom()
             ~PPC_BITMASK(53, 55));
     }
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL1_EO_PL
         // IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_OFF
@@ -843,10 +842,10 @@ void p9_xbus_g1_scom()
     // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RX_DAC_REGS_RX_DAC_REGS_RX_LANE_ANA_PDWN_ON
     scom_or_for_chiplet(
         XB_CHIPLET_ID,
-        0x8000083106010C3F | 0x11 << 32,
+        0x8000083106010C3F | 0x11ull << 32,
         PPC_BIT(54));
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL5_EO_PL
         scom_and_for_chiplet(
@@ -855,7 +854,7 @@ void p9_xbus_g1_scom()
             ~PPC_BITMASK(44, 56));
     }
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL6_EO_PL
         scom_and_or_for_chiplet(
@@ -864,7 +863,7 @@ void p9_xbus_g1_scom()
             ~PPC_BITMASK(52, 60), PPC_BITMASK(49, 50) | PPC_BITMASK(54, 56));
     }
 
-    for(unsigned int id = 0; id <= 0x11; ++id)
+    for(uint64_t id = 0; id <= 0x11; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_DAC_CNTL9_E_PL
         scom_and_for_chiplet(
@@ -873,7 +872,7 @@ void p9_xbus_g1_scom()
             ~PPC_BITMASK(48, 60));
     }
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // register P9A_XBUS_0_RX1_RXPACKS[0:3]_SLICE[0:5]_RX_BIT_MODE1_EO_PL
         // IOF1_RX_RX1_RXPACKS_[0:3]_RXPACK_RD_SLICE_[0:5]_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_OFF
@@ -884,7 +883,7 @@ void p9_xbus_g1_scom()
     }
     // register P9A_XBUS_0_RX1_RXPACKS2_SLICE3_RX_BIT_MODE1_EO_PL
     // IOF1_RX_RX1_RXPACKS_2_RXPACK_RD_SLICE_3_RD_RX_BIT_REGS_RX_LANE_DIG_PDWN_ON
-    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8002202006010C3F | 0x11 << 32, PPC_BIT(48));
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x8002202006010C3F | 0x11ull << 32, PPC_BIT(48));
 
 
     // register P9A_XBUS_0_RX1_RXPACKS0_SLICE2_RX_BIT_MODE1_E_PL
@@ -992,7 +991,7 @@ void p9_xbus_g1_scom()
     scom_and_or_for_chiplet(XB_CHIPLET_ID, 0x8002C83006010C3F, ~PPC_BITMASK(48, 54), PPC_BIT(49) | PPC_BIT(52));
 
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // register P9A_XBUS_0_TX1_TXPACKS[0:3]_SLICE[0:4]_TX_MODE1_PL
         // IOF1_TX_WRAP_TX1_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_LANE_PDWN_ENABLED
@@ -1002,7 +1001,7 @@ void p9_xbus_g1_scom()
             ~PPC_BIT(48));
     }
 
-    for(unsigned int id = 0; id <= 0x10; ++id)
+    for(uint64_t id = 0; id <= 0x10; ++id)
     {
         // register P9A_XBUS_0_TX1_TXPACKS[0:3]_SLICE[0:4]_TX_MODE2_PL
         // IOF1_TX_WRAP_TX1_TXPACKS_[0:3]_TXPACK_DD_SLICE_[0:4]_DD_TX_BIT_REGS_TX_CAL_LANE_SEL_ON

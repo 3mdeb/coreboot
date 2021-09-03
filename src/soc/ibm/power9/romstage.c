@@ -2,6 +2,7 @@
 
 #include <console/console.h>
 #include <cpu/power/vpd.h>
+#include <cpu/power/istep_8.h>
 #include <cpu/power/istep_13.h>
 #include <cpu/power/istep_14.h>
 #include <program_loading.h>
@@ -344,6 +345,8 @@ void main(void)
 	prepare_dimm_data();
 
 	report_istep(13,1);	// no-op
+	istep_8_9();
+	istep_8_10();
 	istep_13_2();
 	istep_13_3();
 	istep_13_4();

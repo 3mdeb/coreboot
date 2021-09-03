@@ -9,6 +9,7 @@
 [submodule "vboot"]
 	path = 3rdparty/vboot
 	url = https://review.coreboot.org/vboot.git
+	branch = main
 [submodule "arm-trusted-firmware"]
 	path = 3rdparty/arm-trusted-firmware
 	url = https://review.coreboot.org/arm-trusted-firmware.git
@@ -54,10 +55,10 @@
 [submodule "3rdparty/intel-sec-tools"]
 	path = 3rdparty/intel-sec-tools
 	url = https://github.com/coreboot/9esec-security-tooling.git
+[submodule "3rdparty/stm"]
+	path = 3rdparty/stm
+	url = https://review.coreboot.org/STM
+	branch = stmpe
 [submodule "3rdparty/sb-signing-utils"]
 	path = 3rdparty/sb-signing-utils
 	url = https://github.com/open-power/sb-signing-utils.git
-[submodule "3rdparty/stm"]
-	path = 3rdparty/stm
-	url = https://github.com/coreboot/STM
-	branch = stmpe

@@ -11,19 +11,29 @@ void istep_8_10(void)
 {
     printk(BIOS_EMERG, "starting istep 8.10\n");
     report_istep(8, 10);
+    printk(BIOS_EMERG, "starting p9_io_xbus_scominit(0);\n");
     p9_io_xbus_scominit(0);
+    printk(BIOS_EMERG, "ending p9_io_xbus_scominit(0);\n");
+    printk(BIOS_EMERG, "starting p9_io_xbus_scominit(1);\n");
     p9_io_xbus_scominit(1);
+    printk(BIOS_EMERG, "ending p9_io_xbus_scominit(1);\n");
     printk(BIOS_EMERG, "ending istep 8.10\n");
     return;
 }
 
 void p9_io_xbus_scominit(const uint8_t group)
 {
+    printk(BIOS_EMERG, "starting 1 0x8009F8000000003F\n");
     scom_or_for_chiplet(XB_CHIPLET_ID, 0x8009F8000000003F, PPC_BIT(52));
+    printk(BIOS_EMERG, "ending 1 0x8009F8000000003F\n");
     wait_us(50, false);
+    printk(BIOS_EMERG, "starting 2 0x800C9C000000003F\n");
     scom_or_for_chiplet(XB_CHIPLET_ID, 0x800C9C000000003F, PPC_BIT(48));
+    printk(BIOS_EMERG, "ending 2 0x800C9C000000003F\n");
     wait_us(50, false);
-
+    printk(BIOS_EMERG, "starting 3 0x800c14000000003f\n");
+    scom_or_for_chiplet(XB_CHIPLET_ID, 0x800c14000000003f, 0x20);
+    printk(BIOS_EMERG, "ending 3 0x800c14000000003f\n");
     if(0 == group)
     {
         p9_xbus_g0_scom();

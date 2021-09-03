@@ -8,6 +8,8 @@
 void istep_8_9(void)
 {
     printk(BIOS_EMERG, "starting istep 8.9\n");
+    printk(BIOS_EMERG, "starting istep 8.9\n");
+    printk(BIOS_EMERG, "starting istep 8.9\n");
     report_istep(8, 9);
     p9_fbc_no_hp_scom();
     p9_fbc_ioe_tl_scom();
@@ -31,18 +33,24 @@ void p9_fbc_ioe_dl_scom(void)
     //         packet to be considered delayed or replayed. (0 is 16 cycles.)
     // [28:31] CONFIG_AUTO_TDM_ERROR_RATE: This field contains the error rate
     //         for the auto-entry TDM mode.
+    printk(BIOS_EMERG, "1 starting\n");
     scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_CFG_REG, PPC_BIT(0) | PPC_BIT(2) | PPC_BIT(4) | PPC_BITMASK(12, 15) | PPC_BITMASK(28, 31));
+    printk(BIOS_EMERG, "1 ending\n");
     // PB_ELL_REPLAY_TRESHOLD_REG
     // [0:3] THRESH_REPLAY_TB_SEL: Replay threshold timebase select.
     // [4:7] THRESH_REPLAY_TAP_SEL: Replay threshold tap select.
     // [8:10] THRESH_REPLAY_ENABLE: Replay threshold error enable.
+    printk(BIOS_EMERG, "2 starting\n");
     scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_REPLAY_TRESHOLD_REG, PPC_BITMASK(1, 2) | PPC_BITMASK(4, 10));
+    printk(BIOS_EMERG, "2 ending\n");
     // PB_ELL_SL_ECC_TRESHOLD_REG
     // [0:3] THRESH_SL_ECC_TB_SEL: SL ECC threshold timebase select.
     // [4:7] THRESH_SL_ECC_TAP_SEL: SL ECC threshold tap select.
     // [8:9] THRESH_SL_ECC_ENABLE: SL ECC threshold error enable.
     // [10:25] THRESH_SL_ECC_UNUSED1: Spare bits.
+    printk(BIOS_EMERG, "3 starting\n");
     scom_or_for_chiplet(XB_CHIPLET_ID, PB_ELL_SL_ECC_TRESHOLD_REG, PPC_BITMASK(1, 10));
+    printk(BIOS_EMERG, "3 ending\n");
 }
 
 void ioe_tl_fir(void)

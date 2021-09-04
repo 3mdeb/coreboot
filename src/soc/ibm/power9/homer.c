@@ -49,6 +49,23 @@ enum scom_section {
 	STOP_SECTION_L3,
 };
 
+// TODO: check if istep_6.h will have these at the end
+#define PU_PBABAR0 (0x05012B00)
+#define PU_PBABAR1 (0x05012B01)
+#define PU_PBABAR2 (0x05012B02)
+#define PU_PBABAR3 (0x05012B03)
+#define PU_PBABARMSK0 (0x05012B04)
+#define PU_PBABARMSK1 (0x05012B05)
+#define PU_PBABARMSK2 (0x05012B06)
+#define PU_PBABARMSK3 (0x05012B07)
+
+#define PHYSICAL_ADDR_MASK 0x7FFFFFFFFFFFFFFFull
+
+#define INIT_CONFIG_VALUE    0x8000000C09800000ull
+#define QPMR_PROC_CONFIG_POS 0xBFC18
+
+#define USE_PSIHB_COMPLEX 0x00000001
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -100,6 +117,51 @@ struct stop_cache_section_t {
 enum scom_operation {
 	SCOM_APPEND,
 	SCOM_REPLACE
+};
+
+#define OCC_HOST_DATA_VERSION 0x00000090
+
+/* Host configuration information passed from host to OCC */
+struct occ_host_config
+{
+	uint32_t version;	// Version of this structure
+
+	uint32_t nest_freq;	// For computation of timebase frequency
+
+	/*
+	 * Interrupt type to the host:
+	 *  - 0x00000000 = FSI2HOST Mailbox
+	 *  - 0x00000001 = OCC interrupt line through PSIHB complex
+	 */
+	uint32_t interrupt_type;
+
+	uint32_t is_fir_master;	// If this OCC is the FIR master
+
+	/* FIR collection configuration data needed by FIR Master OCC in the
+	 * event of a checkstop */
+	uint8_t firdataConfig[3072];
+
+	uint32_t is_smf_mode;	// Whether SMF mode is enabled
+};
+
+/* Bit positions for various chiplets in host configuration vector */
+enum {
+	MCS_POS           = 1,
+	MBA_POS           = 9,
+	MEM_BUF_POS       = 17,
+	XBUS_POS          = 25,
+	PHB_POS           = 30,
+	CAPP_POS          = 37,
+	OBUS_POS          = 41,
+	ABUS_POS          = 41,
+	NVLINK_POS        = 45,
+
+	OBUS_BRICK_0_POS  = 0,
+	OBUS_BRICK_1_POS  = 1,
+	OBUS_BRICK_2_POS  = 2,
+	OBUS_BRICK_9_POS  = 9,
+	OBUS_BRICK_10_POS = 10,
+	OBUS_BRICK_11_POS = 11,
 };
 
 enum operation_type {
@@ -993,6 +1055,130 @@ static void istep_16_1(int this_core)
 	//     p9_core_checkstop_handler(___, true)
 	// core_checkstop_helper_homer()
 	//     p9_stop_save_scom() and others
+}
+
+static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
+{
+	// TODO: check if istep_6.h will have these at the end
+	static const uint64_t PBA_BARs[4] = {
+		PU_PBABAR0, PU_PBABAR1, PU_PBABAR2, PU_PBABAR3
+	};
+	static const uint64_t PBA_BARMSKs[4] = {
+		PU_PBABARMSK0, PU_PBABARMSK1, PU_PBABARMSK2, PU_PBABARMSK3
+	};
+
+	write_scom_direct(PBA_BARs[index], bar_addr & 0x1FFFFFFFFFFFFFFFull);
+	write_scom_direct(PBA_BARMSKs[index], 0x300000);
+}
+
+static void load_occ_setup(struct homer_st *homer, uint8_t *common_area)
+{
+	uint64_t occ_addr = (uint64_t)&homer->occ_host_area;
+	uint64_t common_addr = (uint64_t)common_area;
+
+	pm_pba_bar_config(0, occ_addr & PHYSICAL_ADDR_MASK);
+	pm_pba_bar_config(2, common_addr & PHYSICAL_ADDR_MASK);
+}
+
+/* Loads OCC Image from PNOR into HOMER */
+static void load_occ_image_to_homer(struct homer_st *homer)
+{
+	struct mmap_helper_region_device mdev = {0};
+
+	/*
+	 * This will work as long as we don't call mmap(). mmap() calls
+	 * mem_poll_alloc() which doesn't check if mdev->pool is valid or at least
+	 * not NULL.
+	 */
+	mount_part_from_pnor("OCC", &mdev);
+	/*
+	 * Common OCC area is located right after HOMER image. 0x120000 is the
+	 * size of OCC partition in PNOR, last 0x2000 bytes aren't important?
+	 */
+	rdev_readat(&mdev.rdev, &homer->occ_host_area, 0, 1 * MiB);
+}
+
+/* Writes information about the host to be read by OCC */
+static void load_host_data_to_homer(struct homer_st *homer)
+{
+	struct occ_host_config *config_data =
+		(void *)&homer->occ_host_area[HOMER_OFFSET_TO_OCC_HOST_DATA];
+
+	config_data->version = OCC_HOST_DATA_VERSION;
+	config_data->nest_freq = powerbus_cfg()->fabric_freq;
+	config_data->interrupt_type = USE_PSIHB_COMPLEX;
+	config_data->is_fir_master = false;
+	config_data->is_smf_mode = false;
+}
+
+static void load_pm_complex(struct homer_st *homer)
+{
+	/* Common OCC area is located right after HOMER image */
+	uint8_t *common_area = (uint8_t *)homer + sizeof(*homer);
+
+	// TODO resetPMComplex(); also used in istep_6_11.c
+	load_occ_setup(homer, common_area);
+	load_occ_image_to_homer(homer);
+	load_host_data_to_homer(homer);
+}
+
+/* Generates host configuration vector and updates the value in HOMER */
+static void check_proc_config(struct homer_st *homer)
+{
+	uint64_t vector_value = INIT_CONFIG_VALUE;
+	/* XXX: how come this points to padding area? */
+	uint64_t *conf_vector = (void *)((uint8_t *)&homer->qpmr + QPMR_PROC_CONFIG_POS);
+
+	// XXX: where to find these?
+	/* checkChiplet<fapi2::TARGET_TYPE_MCS >( i_procTgt, fapi2::TARGET_TYPE_MCS, vector_value, MCS_POS ); */
+	/* checkChiplet<fapi2::TARGET_TYPE_XBUS>( i_procTgt, fapi2::TARGET_TYPE_XBUS, vector_value, XBUS_POS ); */
+	/* checkChiplet<fapi2::TARGET_TYPE_PHB>( i_procTgt, fapi2::TARGET_TYPE_PHB, vector_value, PHB_POS ); */
+	/* checkChiplet<fapi2::TARGET_TYPE_CAPP>( i_procTgt, fapi2::TARGET_TYPE_CAPP, vector_value, CAPP_POS ); */
+
+	/* checkObusChipletHierarchy(i_procTgt, vector_value, OBUS_POS, NVLINK_POS); */
+
+	/* checkChiplet<fapi2::TARGET_TYPE_MCA>(i_procTgt, fapi2::TARGET_TYPE_MCA, vector_value, MBA_POS); */
+
+	*conf_vector = htobe64(vector_value);
+}
+
+/* Initializes power-management and starts OCC */
+static void start_pm_complex(struct homer_st *homer)
+{
+	/* pm_corequad_init(i_target); */
+	/* p9_pm_ocb_init( */
+	/*     i_target, */
+	/*     p9pm::PM_INIT,// Channel setup type */
+	/*     p9ocb::OCB_CHAN1,// Channel */
+	/*     p9ocb:: OCB_TYPE_NULL,// Channel type */
+	/*     0,// Channel base address */
+	/*     0,// Push/Pull queue length */
+	/*     p9ocb::OCB_Q_OUFLOW_NULL,// Channel flow control */
+	/*     p9ocb::OCB_Q_ITPTYPE_NULL);// Channel interrupt control */
+	/* p9_pm_pss_init(i_target, p9pm::PM_INIT); */
+	/* p9_pm_occ_firinit(i_target, p9pm::PM_INIT); */
+	/* p9_pm_firinit(i_target, p9pm::PM_INIT); */
+	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); */
+	/* p9_pm_pstate_gpe_init(i_target, p9pm::PM_INIT); */
+
+	check_proc_config(homer);
+	/* clear_occ_special_wakeups(i_target); */
+	/* special_wakeup_all(i_target, false); */
+	/* p9_pm_occ_control( */
+	/*     i_target, */
+	/*     p9occ_ctrl::PPC405_START,// Operation on PPC405 */
+	/*     p9occ_ctrl::PPC405_BOOT_MEM, // PPC405 boot location */
+	/*     0); //Jump to 405 main instruction - not used here */
+
+	/* fapi2::buffer<uint64_t> l_data64       = 0; */
+	/* l_data64.flush<0>().setBit<p9hcd::STOP_RECOVERY_TRIGGER_ENABLE>(); */
+	/* fapi2::putScom(i_target, PU_OCB_OCI_OCCFLG2_CLEAR, l_data64); */
+}
+
+static void istep_21_1(struct homer_st *homer)
+{
+	load_pm_complex(homer);
+	start_pm_complex(homer);
 }
 
 static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
@@ -1935,4 +2121,6 @@ void build_homer_image(void *homer_bar)
 	stop_gpe_init(homer);
 
 	istep_16_1(this_core);
+
+	istep_21_1(homer);
 }

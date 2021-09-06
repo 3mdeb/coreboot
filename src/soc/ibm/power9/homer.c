@@ -27,6 +27,7 @@
 #define EX_L3_RD_EPS_REG 0x10011829
 #define EX_L3_WR_EPS_REG 0x1001182A
 #define EX_DRAM_REF_REG  0x1001180F
+#define EX_0_NCU_DARN_BAR_REG 0x10011011
 
 #define ODD_EVEN_EX_POS  0x00000400
 
@@ -35,6 +36,9 @@
 #define MAX_L3_SCOM_ENTRIES 16
 
 #define QUAD_BIT_POS     24
+
+#define PPC_PLACE(val, pos, len) \
+	PPC_SHIFT((val) & ((1 << ((len) + 1)) - 1), ((pos) + ((len) - 1)))
 
 /* Subsections of STOP image that contain SCOM entries */
 enum scom_section {
@@ -90,6 +94,11 @@ struct stop_cache_section_t {
 	struct scom_entry_t non_cache_area[MAX_EQ_SCOM_ENTRIES];
 	struct scom_entry_t l2_cache_area[MAX_L2_SCOM_ENTRIES];
 	struct scom_entry_t l3_cache_area[MAX_L3_SCOM_ENTRIES];
+};
+
+enum scom_operation {
+	SCOM_APPEND,
+	SCOM_REPLACE
 };
 
 extern void mount_part_from_pnor(const char *part_name,
@@ -1344,46 +1353,52 @@ static void layout_rings_for_sgpe(struct homer_st *homer,
 	}
 }
 
-static void stop_append_scom(struct homer_st *homer, uint32_t scom_address,
-			     uint64_t scom_data, enum scom_section section)
+static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
+			   uint64_t scom_data, enum scom_section section,
+			   enum scom_operation operation)
 {
 	enum {
 		ORI_OPCODE = 24,
 		BLR_INST = 0x4e800020,
 		ATTN_OPCODE = 0x00000200,
 
+		STOP_API_VER = 0x00,
 		SCOM_ENTRY_START = 0xDEADDEAD,
 	};
 
 	uint8_t chiplet_id = (scom_address >> 24) & 0x3f;
 	uint32_t max_scom_restore_entries = 0;
 	struct stop_cache_section_t *stop_cache_scom = NULL;
-	struct scom_entry_t *scom_entry =  NULL;
-	struct scom_entry_t *nop_location =  NULL;
+	struct scom_entry_t *scom_entry = NULL;
+	struct scom_entry_t *nop_entry = NULL;
+	struct scom_entry_t *matching_entry = NULL;
+	struct scom_entry_t *end_entry = NULL;
 	struct scom_entry_t *entry = NULL;
 	uint32_t nop_inst = 0;
 	uint32_t entry_limit = 0;
 
 	if (chiplet_id >= EC00_CHIPLET_ID) {
-		// XXX: need this case ?
-		max_scom_restore_entries = CORE_SCOM_RESTORE_ENTRIES;
+		uint32_t offset = (chiplet_id - EC00_CHIPLET_ID)*CORE_SCOM_RESTORE_SIZE_PER_CORE;
+		scom_entry = (struct scom_entry_t *)&homer->cpmr.core_scom[offset];
+		max_scom_restore_entries = homer->cpmr.header.core_max_scom_entry;
 	} else {
 		uint32_t offset = (chiplet_id - EP00_CHIPLET_ID)*QUAD_SCOM_RESTORE_SIZE_PER_QUAD;
 		stop_cache_scom =
 			(struct stop_cache_section_t *)&homer->qpmr.cache_scom_region[offset];
-
-		max_scom_restore_entries = QUAD_SCOM_RESTORE_ENTRIES;
+		max_scom_restore_entries = homer->qpmr.sgpe.header.max_quad_restore_entry;
 	}
 
 	if (stop_cache_scom == NULL)
 		die("Failed to prepare for updating STOP SCOM\n");
 
 	switch (section) {
+		case STOP_SECTION_CORE_SCOM:
+			/* This case is handled above. */
+			break;
 		case STOP_SECTION_EQ_SCOM:
 			scom_entry = stop_cache_scom->non_cache_area;
 			entry_limit = MAX_EQ_SCOM_ENTRIES;
 			break;
-
 		default:
 			die("Unhandled STOP image section.\n");
 			break;
@@ -1395,36 +1410,38 @@ static void stop_append_scom(struct homer_st *homer, uint32_t scom_address,
 		uint32_t entry_address = scom_entry[i].address;
 		uint32_t entry_hdr = scom_entry[i].hdr;
 
-		// XXX: append doesn't need this
-		/* if (swizzleAddr == entry_address && !pEntryLocation) */
-		/* 	pEntryLocation = &scom_entry[i]; */
+		if (entry_address == scom_address && matching_entry == NULL)
+			matching_entry = &scom_entry[i];
 
 		if ((entry_address == nop_inst || entry_address == ATTN_OPCODE ||
-		     entry_address == BLR_INST) && nop_location == NULL)
-			nop_location = &scom_entry[i];
+		     entry_address == BLR_INST) && nop_entry == NULL)
+			nop_entry = &scom_entry[i];
 
-		/* if entry is either 0xDEADDEAD or has SCOM entry limit in LSB of its header,
+		/* If entry is either 0xDEADDEAD or has SCOM entry limit in LSB of its header,
 		 * the place is already occupied */
 		if (entry_hdr == SCOM_ENTRY_START || (entry_hdr & 0x000000ff))
 			continue;
 
-		entry = &scom_entry[i];
+		end_entry = &scom_entry[i];
 		break;
 	}
 
-	if (entry == NULL)
+	if (matching_entry == NULL && end_entry == NULL)
 		die("Failed to find SCOM entry in STOP image.\n");
 
-	if (nop_location)
-		entry = nop_location;
+	entry = end_entry;
+	if (operation == SCOM_APPEND && nop_entry != NULL)
+		entry = nop_entry;
+	else if (operation == SCOM_REPLACE && matching_entry != NULL)
+		entry = matching_entry;
 
-	entry->hdr = SCOM_ENTRY_START;
+	if (entry == NULL)
+		die("Failed to insert SCOM entry in STOP image.\n");
+
+	entry->hdr = (0x000000ff & max_scom_restore_entries)
+		   | ((STOP_API_VER & 0x7) << 28);
 	entry->address = scom_address;
 	entry->data = scom_data;
-
-	// TODO: implement this if data won't match
-	// Update SCOM Restore entry with version and memory layout info
-	/* updateEntryHeader(entry, imageVer, max_scom_restore_entries); */
 }
 
 static void populate_epsilon_l2_scom_reg(struct homer_st *homer)
@@ -1438,13 +1455,13 @@ static void populate_epsilon_l2_scom_reg(struct homer_st *homer)
 	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L2_EPS_DIVIDER + 1;
 	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L2_EPS_DIVIDER + 1;
 
-	uint64_t eps_r = PPC_SHIFT(eps_r_t0 & 0x3ff, 0)
-		       | PPC_SHIFT(eps_r_t1 & 0x3ff, 12)
-		       | PPC_SHIFT(eps_r_t2 & 0x3ff, 24);
+	uint64_t eps_r = PPC_PLACE(eps_r_t0, 0, 12)
+		       | PPC_PLACE(eps_r_t1, 12, 12)
+		       | PPC_PLACE(eps_r_t2, 24, 12);
 
-	uint64_t eps_w = PPC_SHIFT(eps_w_t0 & 0x3ff, 0)
-		       | PPC_SHIFT(eps_w_t1 & 0x3ff, 12)
-		       | PPC_SHIFT(L2_EPS_DIVIDER & 0xf, 24);
+	uint64_t eps_w = PPC_PLACE(eps_w_t0, 0, 12)
+		       | PPC_PLACE(eps_w_t1, 12, 12)
+		       | PPC_PLACE(L2_EPS_DIVIDER, 24, 4);
 
 	uint8_t quad = 0;
 
@@ -1454,18 +1471,22 @@ static void populate_epsilon_l2_scom_reg(struct homer_st *homer)
 		/* Create restore entry for epsilon L2 RD register */
 
 		scom_addr = (EX_L2_RD_EPS_REG | (quad << QUAD_BIT_POS));
-		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		scom_addr |= ODD_EVEN_EX_POS;
-		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		/* Create restore entry for epsilon L2 WR register */
 
 		scom_addr = (EX_L2_WR_EPS_REG | (quad << QUAD_BIT_POS));
-		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		scom_addr |= ODD_EVEN_EX_POS;
-		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 	}
 }
 
@@ -1480,13 +1501,13 @@ static void populate_epsilon_l3_scom_reg(struct homer_st *homer)
 	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L3_EPS_DIVIDER + 1;
 	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L3_EPS_DIVIDER + 1;
 
-	uint64_t eps_r = PPC_SHIFT(eps_r_t0 & 0x3ff, 0)
-		       | PPC_SHIFT(eps_r_t1 & 0x3ff, 12)
-		       | PPC_SHIFT(eps_r_t2 & 0x3ff, 24);
+	uint64_t eps_r = PPC_PLACE(eps_r_t0, 0, 12)
+		       | PPC_PLACE(eps_r_t1, 12, 12)
+		       | PPC_PLACE(eps_r_t2, 24, 12);
 
-	uint64_t eps_w = PPC_SHIFT(eps_w_t0 & 0x3ff, 0)
-		       | PPC_SHIFT(eps_w_t1 & 0x3ff, 12)
-		       | PPC_SHIFT(L3_EPS_DIVIDER & 0xf, 30);
+	uint64_t eps_w = PPC_PLACE(eps_w_t0, 0, 12)
+		       | PPC_PLACE(eps_w_t1, 12, 12)
+		       | PPC_PLACE(L2_EPS_DIVIDER, 30, 4);
 
 	uint8_t quad = 0;
 
@@ -1496,18 +1517,22 @@ static void populate_epsilon_l3_scom_reg(struct homer_st *homer)
 		/* Create restore entry for epsilon L2 RD register */
 
 		scom_addr = (EX_L3_RD_EPS_REG | (quad << QUAD_BIT_POS));
-		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		scom_addr |= ODD_EVEN_EX_POS;
-		stop_append_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_r, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		/* Create restore entry for epsilon L2 WR register */
 
 		scom_addr = (EX_L3_WR_EPS_REG | (quad << QUAD_BIT_POS));
-		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 
 		scom_addr |= ODD_EVEN_EX_POS;
-		stop_append_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, eps_w, STOP_SECTION_EQ_SCOM,
+			       SCOM_APPEND);
 	}
 }
 
@@ -1519,22 +1544,44 @@ static void populate_l3_refresh_scom_reg(struct homer_st *homer)
 
 	/* Assuming that ATTR_CHIP_EC_FEATURE_HW408892 == 0 */
 	if (powerbus_cfg()->fabric_freq >= 2000)
-		refresh_val |= PPC_SHIFT(0x2, 8);
+		refresh_val |= PPC_PLACE(0x2, 8, 4);
 
 	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
 		/* Create restore entry for L3 Refresh Timer Divider register */
 
 		uint32_t scom_addr = (EX_DRAM_REF_REG | (quad << QUAD_BIT_POS));
-		stop_append_scom(homer, scom_addr, refresh_val, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, refresh_val,
+			       STOP_SECTION_EQ_SCOM, SCOM_APPEND);
 
 		scom_addr |= ODD_EVEN_EX_POS;
-		stop_append_scom(homer, scom_addr, refresh_val, STOP_SECTION_EQ_SCOM);
+		stop_save_scom(homer, scom_addr, refresh_val,
+			       STOP_SECTION_EQ_SCOM, SCOM_APPEND);
 	}
 }
 
 static void populate_ncu_rng_bar_scom_reg(struct homer_st *homer)
 {
+	enum { NX_RANGE_BAR_ADDR_OFFSET = 0x00000302031D0000 };
 
+	uint8_t ex = 0;
+
+	uint64_t regNcuRngBarData = PPC_PLACE(0x0, 8, 5)   // system ID
+				  | PPC_PLACE(0x3, 13, 2)  // msel
+				  | PPC_PLACE(0x0, 15, 4)  // group ID
+				  | PPC_PLACE(0x0, 19, 3); // chip ID
+
+	regNcuRngBarData += NX_RANGE_BAR_ADDR_OFFSET;
+
+	for (ex = 0; ex < MAX_CMES_PER_CHIP; ++ex) {
+		/* Create restore entry for NCU RNG register */
+
+		uint32_t scom_addr = EX_0_NCU_DARN_BAR_REG
+				   | ((ex / 2) << 24)
+				   | (ex % 2) ? 0x0400 : 0x0000;
+
+		stop_save_scom(homer, scom_addr, regNcuRngBarData,
+			       STOP_SECTION_EQ_SCOM, SCOM_REPLACE);
+	}
 }
 
 static void update_headers(struct homer_st *homer, uint64_t cores)
@@ -1556,7 +1603,7 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 	cpmr_hdr->img_len              = cme_hdr->hcode_len;
 	cpmr_hdr->core_scom_offset     = offsetof(struct cpmr_st, core_scom);
 	cpmr_hdr->core_scom_len        = CORE_SCOM_RESTORE_SIZE;			// 6k
-	cpmr_hdr->core_max_scom_entry  = CORE_SCOM_RESTORE_ENTRIES;
+	cpmr_hdr->core_max_scom_entry  = 15;
 
 	if (cme_hdr->common_ring_len) {
 		cpmr_hdr->cme_common_ring_offset = offsetof(struct cpmr_st, cme_sram_region) +

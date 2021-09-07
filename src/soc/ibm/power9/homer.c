@@ -5,6 +5,7 @@
 #include <commonlib/region.h>
 #include <console/console.h>
 #include <cpu/power/mvpd.h>
+#include <cpu/power/occ.h>
 #include <cpu/power/powerbus.h>
 #include <cpu/power/rom_media.h>
 #include <cpu/power/scom.h>
@@ -65,6 +66,18 @@ enum scom_section {
 #define QPMR_PROC_CONFIG_POS 0xBFC18
 
 #define USE_PSIHB_COMPLEX 0x00000001
+
+#define OCB_PIB_OCR_CORE_RESET_BIT 0
+#define JTG_PIB_OJCFG_DBG_HALT_BIT 6
+
+#define PU_SRAM_SRBV0_SCOM 0x0006A004
+#define PU_SRAM_SRBV1_SCOM 0x0006A005
+#define PU_SRAM_SRBV2_SCOM 0x0006A006
+#define PU_SRAM_SRBV3_SCOM 0x0006A007
+
+#define PU_JTG_PIB_OJCFG_AND 0x0006D005
+#define PU_OCB_PIB_OCR_CLEAR 0x0006D001
+#define PU_OCB_PIB_OCR_OR    0x0006D002
 
 struct ring_data {
 	void *rings_buf;
@@ -1142,6 +1155,154 @@ static void check_proc_config(struct homer_st *homer)
 	*conf_vector = htobe64(vector_value);
 }
 
+static uint32_t ppc_lis( const uint16_t i_Rt,
+		  const uint16_t i_data )
+{
+	enum { LIS_OPCODE = 15 };
+  
+    uint32_t lisInstOpcode = 0;
+    lisInstOpcode = LIS_OPCODE << (31 - 5);
+    lisInstOpcode |= i_Rt << (31 - 10);
+    lisInstOpcode |= i_data;
+
+    return lisInstOpcode;
+}
+
+static uint32_t ppc_ori( const uint16_t i_Rs, const uint16_t i_Ra,
+		  const uint16_t i_data )
+{
+	enum { ORI_OPCODE = 24 };
+
+    uint32_t oriInstOpcode = 0;
+    oriInstOpcode = ORI_OPCODE << (31 - 5);
+    oriInstOpcode |= i_Rs << (31 - 10);
+    oriInstOpcode |= i_Ra << (31 - 15);
+    oriInstOpcode |= i_data;
+
+    return oriInstOpcode;
+}
+
+static uint32_t ppc_mtspr( const uint16_t i_Rs, const uint16_t i_Spr )
+{
+	enum {
+		OPCODE_31 = 31,
+		MTSPR_CONST1 = 467,
+	};
+
+    uint32_t mtsprInstOpcode = 0;
+    mtsprInstOpcode = OPCODE_31 << (31 - 5);
+    mtsprInstOpcode |= i_Rs << (31 - 10);
+    uint32_t temp = (( i_Spr & 0x03FF ) << (31 - 20));
+    mtsprInstOpcode |= ( temp  & 0x0000F800 ) << 5;  // Perform swizzle
+    mtsprInstOpcode |= ( temp & 0x001F0000 ) >> 5;  // Perform swizzle
+    mtsprInstOpcode |= MTSPR_CONST1 << 1;
+
+    return mtsprInstOpcode;
+}
+
+static uint32_t ppc_bctr(void)
+{
+	enum {
+		BCCTR_OPCODE = 19,
+		BCCTR_CONST1 = 528,
+	};
+
+
+    uint32_t bctrInstOpcode = 0;
+    bctrInstOpcode  = BCCTR_OPCODE << (31 - 5);
+    bctrInstOpcode |= 20 << (31 - 10); // BO
+    // BI = 0 taken care by bctrInstOpcode = 0
+    bctrInstOpcode |= BCCTR_CONST1 << 1;
+
+    return bctrInstOpcode;
+}
+
+static uint32_t ppc_b(const uint32_t i_TargetAddr)
+{
+	enum { BR_OPCODE = 18 };
+
+    uint32_t brInstOpcode = 0;
+    brInstOpcode = BR_OPCODE << (31 - 5);
+    brInstOpcode |= (i_TargetAddr & 0x03FFFFFF);
+
+    return brInstOpcode;
+}
+
+// Sets up boot loader in SRAM and returns 32-bit jump instruction to it.
+static uint64_t setup_memory_boot(void)
+{
+	enum {
+		OCC_BOOT_OFFSET = 0x40,
+		CTR = 9,
+		OCC_SRAM_BOOT_ADDR2 = 0xFFF40002,
+	};
+
+    uint64_t sram_program[2];
+    /* uint32_t l_ocb_length_act = 0; */
+
+    /* // Setup use OCB channel 1 for placing instruction in SRAM */
+    /* // Channel will be returned to Linear Stream, Circular upon exit */
+    /* l_rc = p9_pm_ocb_indir_setup_linear(i_target, */
+		  /* p9ocb::OCB_CHAN1, */
+		  /* p9ocb::OCB_TYPE_LINSTR, */
+		  /* OCC_SRAM_BOOT_ADDR);   // Bar */
+    /* FAPI_TRY(l_rc); */
+
+    /* lis r1, 0x8000 */
+    sram_program[0] = ((uint64_t)ppc_lis(1, 0x8000) << 32);
+
+    /* ori r1, r1, OCC_BOOT_OFFSET */
+    sram_program[0] |= (ppc_ori(1, 1, OCC_BOOT_OFFSET));
+
+    /* mtctr (mtspr r1, CTR) */
+    sram_program[1] = ((uint64_t)ppc_mtspr(1, CTR) << 32);
+
+    /* bctr */
+    sram_program[1] |= ppc_bctr();
+
+    /* // Write to SRAM */
+    /* l_rc = p9_pm_ocb_indir_access(i_target, */
+		  /* p9ocb::OCB_CHAN1, */
+		  /* p9ocb::OCB_PUT, */
+		  /* sizeof(sram_program), */
+		  /* false, */
+		  /* 0, */
+		  /* l_ocb_length_act, */
+		  /* l_sram_program); */
+
+
+/* fapi_try_exit: */
+    /* // Channel 1 returned to Linear Stream, Circular upon exit */
+    /* l_rc = p9_pm_ocb_indir_setup_circular(i_target, */
+		  /* p9ocb::OCB_CHAN1, */
+		  /* p9ocb::OCB_TYPE_CIRC, */
+		  /* 0,   // Bar */
+		  /* 0,   // Length */
+		  /* p9ocb::OCB_Q_OUFLOW_NULL, */
+		  /* p9ocb::OCB_Q_ITPTYPE_NULL); */
+
+    return ((uint64_t)ppc_b(OCC_SRAM_BOOT_ADDR2) << 32);
+}
+
+static void pm_occ_control_start_from_mem(void)
+{
+	write_scom(OCBCSRn_OR[0], PPC_BIT(OCB_PIB_OCBCSR0_OCB_STREAM_MODE));
+
+	/*
+	 * Set up Boot Vector Registers in SRAM:
+	 *  - set bv0-2 to all 0's (illegal instructions)
+	 *  - set bv3 to proper branch instruction
+	 */
+	write_scom(PU_SRAM_SRBV0_SCOM, 0);
+	write_scom(PU_SRAM_SRBV1_SCOM, 0);
+	write_scom(PU_SRAM_SRBV2_SCOM, 0);
+	write_scom(PU_SRAM_SRBV3_SCOM, setup_memory_boot());
+
+	write_scom(PU_JTG_PIB_OJCFG_AND, ~PPC_BIT(JTG_PIB_OJCFG_DBG_HALT_BIT));
+	write_scom(PU_OCB_PIB_OCR_OR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
+	write_scom(PU_OCB_PIB_OCR_CLEAR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
+}
+
 /* Initializes power-management and starts OCC */
 static void start_pm_complex(struct homer_st *homer)
 {
@@ -1162,13 +1323,9 @@ static void start_pm_complex(struct homer_st *homer)
 	/* p9_pm_pstate_gpe_init(i_target, p9pm::PM_INIT); */
 
 	check_proc_config(homer);
-	/* clear_occ_special_wakeups(i_target); */
+	clear_occ_special_wakeups();
 	/* special_wakeup_all(i_target, false); */
-	/* p9_pm_occ_control( */
-	/*     i_target, */
-	/*     p9occ_ctrl::PPC405_START,// Operation on PPC405 */
-	/*     p9occ_ctrl::PPC405_BOOT_MEM, // PPC405 boot location */
-	/*     0); //Jump to 405 main instruction - not used here */
+	pm_occ_control_start_from_mem();
 
 	/* fapi2::buffer<uint64_t> l_data64       = 0; */
 	/* l_data64.flush<0>().setBit<p9hcd::STOP_RECOVERY_TRIGGER_ENABLE>(); */

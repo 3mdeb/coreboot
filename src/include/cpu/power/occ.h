@@ -38,7 +38,7 @@
 #define EX_PPM_SPWKUP_OCC (0x200F010C)
 
 #define NUMBER_OF_EX_CHIPLETS (6)
-const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
+static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
 {
     EP00_CHIPLET_ID,
 	EP01_CHIPLET_ID,
@@ -48,7 +48,7 @@ const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
 	EP05_CHIPLET_ID
 };
 
-const uint64_t OCBARn[4] =
+static const uint64_t OCBARn[4] =
 {
     PU_OCB_PIB_OCBAR0,
     PU_OCB_PIB_OCBAR1,
@@ -56,7 +56,7 @@ const uint64_t OCBARn[4] =
     PU_OCB_PIB_OCBAR3
 };
 
-const uint64_t OCBCSRn_CLEAR[4] =
+static const uint64_t OCBCSRn_CLEAR[4] =
 {
     PU_OCB_PIB_OCBCSR0_CLEAR,
     PU_OCB_PIB_OCBCSR1_CLEAR,
@@ -64,7 +64,7 @@ const uint64_t OCBCSRn_CLEAR[4] =
     PU_OCB_PIB_OCBCSR3_CLEAR
 };
 
-const uint64_t OCBCSRn_OR[4] =
+static const uint64_t OCBCSRn_OR[4] =
 {
     PU_OCB_PIB_OCBCSR0_OR,
     PU_OCB_PIB_OCBCSR1_OR,

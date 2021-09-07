@@ -1393,7 +1393,7 @@ static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
 
 	switch (section) {
 		case STOP_SECTION_CORE_SCOM:
-			/* This case is handled above. */
+			entry_limit = max_scom_restore_entries;
 			break;
 		case STOP_SECTION_EQ_SCOM:
 			scom_entry = stop_cache_scom->non_cache_area;
@@ -1577,7 +1577,7 @@ static void populate_ncu_rng_bar_scom_reg(struct homer_st *homer)
 
 		uint32_t scom_addr = EX_0_NCU_DARN_BAR_REG
 				   | ((ex / 2) << 24)
-				   | (ex % 2) ? 0x0400 : 0x0000;
+				   | ((ex % 2) ? 0x0400 : 0x0000);
 
 		stop_save_scom(homer, scom_addr, regNcuRngBarData,
 			       STOP_SECTION_EQ_SCOM, SCOM_REPLACE);

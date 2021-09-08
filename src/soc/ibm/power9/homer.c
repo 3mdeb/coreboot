@@ -233,6 +233,7 @@ static const uint32_t _SMF = 0x5F534D46; // "_SMF"
 
 static const uint32_t ATTN_OP             = 0x00000200;
 static const uint32_t BLR_OP              = 0x4E800020;
+static const uint32_t ORI_OP              = 0x60000000;
 static const uint32_t SKIP_SPR_REST_INST  = 0x4800001C;
 static const uint32_t MR_R0_TO_R10_OP     = 0x7C0A0378;
 static const uint32_t MR_R0_TO_R21_OP     = 0x7C150378;
@@ -1358,15 +1359,11 @@ static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
 			   enum scom_operation operation)
 {
 	enum {
-		ORI_OPCODE = 24,
-		BLR_INST = 0x4e800020,
-		ATTN_OPCODE = 0x00000200,
-
 		STOP_API_VER = 0x00,
 		SCOM_ENTRY_START = 0xDEADDEAD,
 	};
 
-	uint8_t chiplet_id = (scom_address >> 24) & 0x3f;
+	chiplet_id_t chiplet_id = (scom_address >> 24) & 0x3f;
 	uint32_t max_scom_restore_entries = 0;
 	struct stop_cache_section_t *stop_cache_scom = NULL;
 	struct scom_entry_t *scom_entry = NULL;
@@ -1374,7 +1371,6 @@ static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
 	struct scom_entry_t *matching_entry = NULL;
 	struct scom_entry_t *end_entry = NULL;
 	struct scom_entry_t *entry = NULL;
-	uint32_t nop_inst = 0;
 	uint32_t entry_limit = 0;
 
 	if (chiplet_id >= EC00_CHIPLET_ID) {
@@ -1404,8 +1400,6 @@ static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
 			break;
 	}
 
-	nop_inst = ORI_OPCODE << 26;
-
 	for (uint32_t i = 0; i < entry_limit; ++i) {
 		uint32_t entry_address = scom_entry[i].address;
 		uint32_t entry_hdr = scom_entry[i].hdr;
@@ -1413,8 +1407,8 @@ static void stop_save_scom(struct homer_st *homer, uint32_t scom_address,
 		if (entry_address == scom_address && matching_entry == NULL)
 			matching_entry = &scom_entry[i];
 
-		if ((entry_address == nop_inst || entry_address == ATTN_OPCODE ||
-		     entry_address == BLR_INST) && nop_entry == NULL)
+		if ((entry_address == ORI_OP || entry_address == ATTN_OP ||
+		     entry_address == BLR_OP) && nop_entry == NULL)
 			nop_entry = &scom_entry[i];
 
 		/* If entry is either 0xDEADDEAD or has SCOM entry limit in LSB of its header,
@@ -1536,14 +1530,14 @@ static void populate_epsilon_l3_scom_reg(struct homer_st *homer)
 	}
 }
 
-static void populate_l3_refresh_scom_reg(struct homer_st *homer)
+static void populate_l3_refresh_scom_reg(struct homer_st *homer, uint8_t dd)
 {
 	uint64_t refresh_val = 0x2000000000000000ULL;
 
 	uint8_t quad = 0;
 
-	/* Assuming that ATTR_CHIP_EC_FEATURE_HW408892 == 0 */
-	if (powerbus_cfg()->fabric_freq >= 2000)
+	/* ATTR_CHIP_EC_FEATURE_HW408892 === (DD <= 0x20) */
+	if (powerbus_cfg()->fabric_freq >= 2000 && dd > 0x20)
 		refresh_val |= PPC_PLACE(0x2, 8, 4);
 
 	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
@@ -1805,17 +1799,16 @@ void build_homer_image(void *homer_bar)
 	populate_epsilon_l2_scom_reg(homer);
 	populate_epsilon_l3_scom_reg(homer);
 
-	// Update L3 Refresh Timer Control SCOM Registers
-	populate_l3_refresh_scom_reg(homer);
+	/* Update L3 Refresh Timer Control SCOM Registers */
+	populate_l3_refresh_scom_reg(homer, dd);
 
-	// Populate HOMER with SCOM restore value of NCU RNG BAR SCOM Register
+	/* Populate HOMER with SCOM restore value of NCU RNG BAR SCOM Register */
 	populate_ncu_rng_bar_scom_reg(homer);
 
-	// Update CME/SGPE Flags in respective image header.
-	// updateImageFlags( pChipHomer, i_procTgt );
-	// XXX: hard-coded values until updateImageFlags() is implemented
+	/* Update flag fields in image headers */
 	((struct sgpe_img_header *)&homer->qpmr.sgpe.sram_image[INT_VECTOR_SIZE])->reserve_flags = 0x04000000;
 	((struct cme_img_header *)&homer->cpmr.cme_sram_region[INT_VECTOR_SIZE])->qm_mode_flags = 0xf100;
+	((struct pgpe_img_header *)&homer->ppmr.pgpe_sram_img[INT_VECTOR_SIZE])->flags = 0xf032;
 
 	// Set the Fabric IDs
 	// setFabricIds( pChipHomer, i_procTgt );

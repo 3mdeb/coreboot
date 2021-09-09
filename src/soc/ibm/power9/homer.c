@@ -79,6 +79,9 @@ enum scom_section {
 #define PU_OCB_PIB_OCR_CLEAR 0x0006D001
 #define PU_OCB_PIB_OCR_OR    0x0006D002
 
+/* Undocumented */
+#define PU_OCB_OCI_OCCFLG2_CLEAR 0x0006C18B
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -1139,6 +1142,100 @@ static void load_pm_complex(struct homer_st *homer)
 	load_host_data_to_homer(homer);
 }
 
+static void pm_corequad_init(uint64_t cores)
+{
+	enum {
+		EQ_QPPM_QPMMR_CLEAR = 0x100F0104,
+		EQ_QPPM_ERR = 0x100F0121,
+		EQ_QPPM_ERRMSK = 0x100F0122,
+		C_CPPM_CPMMR_CLEAR = 0x200F0107,
+		C_CPPM_ERR = 0x200F0121,
+		C_CPPM_CSAR_CLEAR = 0x200F0139,
+		C_CPPM_ERRMSK = 0x200F0122,
+		DOORBELLS_COUNT = 4,
+	};
+
+	const uint64_t CME_DOORBELL_CLEAR[DOORBELLS_COUNT] = {
+		0x200F0191, 0x200F0195, 0x200F0199, 0x200F019D
+	};
+
+	/* XXX: this is supposed to be stored by pm_corequad_reset()
+	 *      ATTR_QUAD_PPM_ERRMASK and ATTR_CORE_PPM_ERRMASK. */
+	uint32_t err_mask = 0;
+
+	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
+		chiplet_id_t quad_chplt = EP00_CHIPLET_ID + quad;
+
+		if (!IS_EQ_FUNCTIONAL(quad, cores))
+			continue;
+
+		/*
+		 * Setup the Quad PPM Mode Register
+		 * Clear the following bits:
+		 * 0          : Force FSAFE
+		 * 1  - 11    : FSAFE
+		 * 12         : Enable FSAFE on heartbeat loss
+		 * 13         : Enable DROOP protect upon heartbeat loss
+		 * 14         : Enable PFETs upon iVRMs dropout
+		 * 18 - 19    : PCB interrupt
+		 * 20,22,24,26: InterPPM Ivrm/Aclk/Vdata/Dpll enable
+		 */
+		write_scom_for_chiplet(quad_chplt, EQ_QPPM_QPMMR_CLEAR, 0xfffe3aa000000000ull);
+
+		/* Clear QUAD PPM ERROR Register */
+		write_scom_for_chiplet(quad_chplt, EQ_QPPM_ERR, 0);
+
+		/* Restore Quad PPM Error Mask */
+		write_scom_for_chiplet(quad_chplt, EQ_QPPM_ERRMSK, (uint64_t)err_mask << 32);
+
+		for (int core = quad * 4; core < (quad + 1) * 4; ++core) {
+			chiplet_id_t core_chplt = EC00_CHIPLET_ID + core;
+
+			/* Clear the Core PPM CME DoorBells */
+			for (int i = 0; i < DOORBELLS_COUNT; ++i)
+				write_scom_for_chiplet(core_chplt, CME_DOORBELL_CLEAR[i], ~(uint64_t)0);
+
+			/*
+			 * Setup Core PPM Mode register
+			 *
+			 * Clear the following bits:
+			 * 1      : PPM Write control override
+			 * 11     : Block interrupts
+			 * 12     : PPM response for CME error
+			 * 14     : enable pece
+			 * 15     : cme spwu done dis
+                         *
+			 * Other bits are Init or Reset by STOP Hcode and, thus, not touched
+			 * here:
+			 * 0      : PPM Write control
+			 * 9      : FUSED_CORE_MODE
+			 * 10     : STOP_EXIT_TYPE_SEL
+			 * 13     : WKUP_NOTIFY_SELECT
+			 */
+
+			/* Clear Core PPM Mode register */
+			write_scom_for_chiplet(core_chplt, C_CPPM_CPMMR_CLEAR, 0x401b000000000000);
+
+			/* Clear Core PPM Errors */
+			write_scom_for_chiplet(core_chplt, C_CPPM_ERR, 0);
+
+			/*
+			 * Clear Hcode Error Injection and other CSAR settings:
+			 *  - CPPM_CSAR_FIT_HCODE_ERROR_INJECT
+			 *  - CPPM_CSAR_ENABLE_PSTATE_REGISTRATION_INTERLOCK
+			 *  - CPPM_CSAR_PSTATE_HCODE_ERROR_INJECT
+			 *  - CPPM_CSAR_STOP_HCODE_ERROR_INJECT
+			 * CPPM_CSAR_DISABLE_CME_NACK_ON_PROLONGED_DROOP is NOT cleared
+			 * as this is a persistent, characterization setting.
+			 */
+			write_scom_for_chiplet(core_chplt, C_CPPM_CSAR_CLEAR, 0x1b00000000);
+
+			/* Restore CORE PPM Error Mask */
+			write_scom_for_chiplet(core_chplt, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
+		}
+	}
+}
+
 /* Generates host configuration vector and updates the value in HOMER */
 static void check_proc_config(struct homer_st *homer)
 {
@@ -1280,7 +1377,9 @@ static void pm_occ_control_start_from_mem(void)
 /* Initializes power-management and starts OCC */
 static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 {
-	/* pm_corequad_init(i_target); */
+	enum { STOP_RECOVERY_TRIGGER_ENABLE = 29 };
+
+	pm_corequad_init(cores);
 	/* p9_pm_ocb_init( */
 	/*     i_target, */
 	/*     p9pm::PM_INIT,// Channel setup type */
@@ -1301,9 +1400,7 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	special_wakeup_disable(cores);
 	pm_occ_control_start_from_mem();
 
-	/* fapi2::buffer<uint64_t> l_data64       = 0; */
-	/* l_data64.flush<0>().setBit<p9hcd::STOP_RECOVERY_TRIGGER_ENABLE>(); */
-	/* fapi2::putScom(i_target, PU_OCB_OCI_OCCFLG2_CLEAR, l_data64); */
+	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(STOP_RECOVERY_TRIGGER_ENABLE));
 }
 
 static void istep_21_1(struct homer_st *homer, uint64_t cores)
@@ -2242,11 +2339,11 @@ void build_homer_image(void *homer_bar)
 	write_scom(0x00066000, PPC_SHIFT(0x1, 3) | PPC_SHIFT(0xA, 7));
 
 	/* Clear error injection bits
-	  *0x0006C18B                         // undocumented, PU_OCB_OCI_OCCFLG2_CLEAR
+	  *0x0006C18B                         // PU_OCB_OCI_OCCFLG2_CLEAR
 		[all] 0
 		[30]  1       // OCCFLG2_SGPE_HCODE_STOP_REQ_ERR_INJ
 	*/
-	write_scom(0x0006C18B, PPC_BIT(30));
+	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(30));
 
 	// Boot the STOP GPE
 	stop_gpe_init(homer);

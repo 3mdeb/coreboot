@@ -1143,7 +1143,7 @@ static void load_pm_complex(struct homer_st *homer)
 static void check_proc_config(struct homer_st *homer)
 {
 	uint64_t vector_value = INIT_CONFIG_VALUE;
-	/* XXX: how come this points to padding area? */
+	/* XXX: how come this points into padding area? */
 	uint64_t *conf_vector = (void *)((uint8_t *)&homer->qpmr + QPMR_PROC_CONFIG_POS);
 
 	// XXX: where to find these?
@@ -1157,6 +1157,21 @@ static void check_proc_config(struct homer_st *homer)
 	/* checkChiplet<fapi2::TARGET_TYPE_MCA>(i_procTgt, fapi2::TARGET_TYPE_MCA, vector_value, MBA_POS); */
 
 	*conf_vector = htobe64(vector_value);
+}
+
+static void special_wakeup_disable(uint64_t cores)
+{
+	enum { PPM_SPWKUP_FSP = 0x200F010B };
+
+	for (int i = 0; i < MAX_CORES_PER_CHIP; ++i) {
+		uint32_t spwkup_addr = PPM_SPWKUP_FSP + 0x01000000 * i;
+
+		if (!IS_EC_FUNCTIONAL(i, cores))
+			continue;
+
+		write_scom(spwkup_addr, 0);
+		(void)read_scom(spwkup_addr);
+	}
 }
 
 static uint32_t ppc_lis(uint16_t rt, uint16_t data)
@@ -1263,7 +1278,7 @@ static void pm_occ_control_start_from_mem(void)
 }
 
 /* Initializes power-management and starts OCC */
-static void start_pm_complex(struct homer_st *homer)
+static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 {
 	/* pm_corequad_init(i_target); */
 	/* p9_pm_ocb_init( */
@@ -1283,7 +1298,7 @@ static void start_pm_complex(struct homer_st *homer)
 
 	check_proc_config(homer);
 	clear_occ_special_wakeups();
-	/* special_wakeup_all(i_target, false); */
+	special_wakeup_disable(cores);
 	pm_occ_control_start_from_mem();
 
 	/* fapi2::buffer<uint64_t> l_data64       = 0; */
@@ -1291,10 +1306,10 @@ static void start_pm_complex(struct homer_st *homer)
 	/* fapi2::putScom(i_target, PU_OCB_OCI_OCCFLG2_CLEAR, l_data64); */
 }
 
-static void istep_21_1(struct homer_st *homer)
+static void istep_21_1(struct homer_st *homer, uint64_t cores)
 {
 	load_pm_complex(homer);
-	start_pm_complex(homer);
+	start_pm_complex(homer, cores);
 }
 
 static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,
@@ -2238,5 +2253,5 @@ void build_homer_image(void *homer_bar)
 
 	istep_16_1(this_core);
 
-	istep_21_1(homer);
+	istep_21_1(homer, cores);
 }

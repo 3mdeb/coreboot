@@ -306,7 +306,11 @@ static const uint32_t _SMF = 0x5F534D46; // "_SMF"
 
 static const uint32_t ATTN_OP             = 0x00000200;
 static const uint32_t BLR_OP              = 0x4E800020;
+static const uint32_t BR_OP               = 0x48000000;
+static const uint32_t BCCTR_OP            = 0x4C000000;
 static const uint32_t ORI_OP              = 0x60000000;
+static const uint32_t LIS_OP              = 0x3C000000;
+static const uint32_t MTSPR_OP            = 0x7C000000;
 static const uint32_t SKIP_SPR_REST_INST  = 0x4800001C;
 static const uint32_t MR_R0_TO_R10_OP     = 0x7C0A0378;
 static const uint32_t MR_R0_TO_R21_OP     = 0x7C150378;
@@ -1155,133 +1159,88 @@ static void check_proc_config(struct homer_st *homer)
 	*conf_vector = htobe64(vector_value);
 }
 
-static uint32_t ppc_lis( const uint16_t i_Rt,
-		  const uint16_t i_data )
+static uint32_t ppc_lis(uint16_t rt, uint16_t data)
 {
-	enum { LIS_OPCODE = 15 };
-  
-    uint32_t lisInstOpcode = 0;
-    lisInstOpcode = LIS_OPCODE << (31 - 5);
-    lisInstOpcode |= i_Rt << (31 - 10);
-    lisInstOpcode |= i_data;
-
-    return lisInstOpcode;
+	uint32_t inst;
+	inst = LIS_OP;
+	inst |= rt << (31 - 10);
+	inst |= data;
+	return inst;
 }
 
-static uint32_t ppc_ori( const uint16_t i_Rs, const uint16_t i_Ra,
-		  const uint16_t i_data )
+static uint32_t ppc_ori(uint16_t rs, uint16_t ra, uint16_t data)
 {
-	enum { ORI_OPCODE = 24 };
-
-    uint32_t oriInstOpcode = 0;
-    oriInstOpcode = ORI_OPCODE << (31 - 5);
-    oriInstOpcode |= i_Rs << (31 - 10);
-    oriInstOpcode |= i_Ra << (31 - 15);
-    oriInstOpcode |= i_data;
-
-    return oriInstOpcode;
+	uint32_t inst;
+	inst = ORI_OP;
+	inst |= rs << (31 - 10);
+	inst |= ra << (31 - 15);
+	inst |= data;
+	return inst;
 }
 
-static uint32_t ppc_mtspr( const uint16_t i_Rs, const uint16_t i_Spr )
+static uint32_t ppc_mtspr(uint16_t rs, uint16_t spr)
 {
-	enum {
-		OPCODE_31 = 31,
-		MTSPR_CONST1 = 467,
-	};
+	enum { MTSPR_CONST1 = 467 };
 
-    uint32_t mtsprInstOpcode = 0;
-    mtsprInstOpcode = OPCODE_31 << (31 - 5);
-    mtsprInstOpcode |= i_Rs << (31 - 10);
-    uint32_t temp = (( i_Spr & 0x03FF ) << (31 - 20));
-    mtsprInstOpcode |= ( temp  & 0x0000F800 ) << 5;  // Perform swizzle
-    mtsprInstOpcode |= ( temp & 0x001F0000 ) >> 5;  // Perform swizzle
-    mtsprInstOpcode |= MTSPR_CONST1 << 1;
+	uint32_t temp = ((spr & 0x03FF) << (31 - 20));
 
-    return mtsprInstOpcode;
+	uint32_t inst;
+	inst = MTSPR_OP;
+	inst |= rs << (31 - 10);
+	inst |= (temp & 0x0000F800) << 5;  // Perform swizzle
+	inst |= (temp & 0x001F0000) >> 5;  // Perform swizzle
+	inst |= MTSPR_CONST1 << 1;
+	return inst;
 }
 
 static uint32_t ppc_bctr(void)
 {
-	enum {
-		BCCTR_OPCODE = 19,
-		BCCTR_CONST1 = 528,
-	};
+	enum { BCCTR_CONST1 = 528 };
 
-
-    uint32_t bctrInstOpcode = 0;
-    bctrInstOpcode  = BCCTR_OPCODE << (31 - 5);
-    bctrInstOpcode |= 20 << (31 - 10); // BO
-    // BI = 0 taken care by bctrInstOpcode = 0
-    bctrInstOpcode |= BCCTR_CONST1 << 1;
-
-    return bctrInstOpcode;
+	uint32_t inst;
+	inst = BCCTR_OP;
+	inst |= 20 << (31 - 10); // BO
+	/* BI = 0 is taken care of by inst = 0 */
+	inst |= BCCTR_CONST1 << 1;
+	return inst;
 }
 
-static uint32_t ppc_b(const uint32_t i_TargetAddr)
+static uint32_t ppc_b(uint32_t target_addr)
 {
-	enum { BR_OPCODE = 18 };
-
-    uint32_t brInstOpcode = 0;
-    brInstOpcode = BR_OPCODE << (31 - 5);
-    brInstOpcode |= (i_TargetAddr & 0x03FFFFFF);
-
-    return brInstOpcode;
+	uint32_t inst;
+	inst = BR_OP << (31 - 5);
+	inst |= (target_addr & 0x03FFFFFF);
+	return inst;
 }
 
-// Sets up boot loader in SRAM and returns 32-bit jump instruction to it.
+/* Sets up boot loader in SRAM and returns 32-bit jump instruction to it */
 static uint64_t setup_memory_boot(void)
 {
 	enum {
 		OCC_BOOT_OFFSET = 0x40,
 		CTR = 9,
+		OCC_SRAM_BOOT_ADDR = 0xFFF40000,
 		OCC_SRAM_BOOT_ADDR2 = 0xFFF40002,
 	};
 
-    uint64_t sram_program[2];
-    /* uint32_t l_ocb_length_act = 0; */
+	uint64_t sram_program[2];
 
-    /* // Setup use OCB channel 1 for placing instruction in SRAM */
-    /* // Channel will be returned to Linear Stream, Circular upon exit */
-    /* l_rc = p9_pm_ocb_indir_setup_linear(i_target, */
-		  /* p9ocb::OCB_CHAN1, */
-		  /* p9ocb::OCB_TYPE_LINSTR, */
-		  /* OCC_SRAM_BOOT_ADDR);   // Bar */
-    /* FAPI_TRY(l_rc); */
+	/* lis r1, 0x8000 */
+	sram_program[0] = ((uint64_t)ppc_lis(1, 0x8000) << 32);
 
-    /* lis r1, 0x8000 */
-    sram_program[0] = ((uint64_t)ppc_lis(1, 0x8000) << 32);
+	/* ori r1, r1, OCC_BOOT_OFFSET */
+	sram_program[0] |= (ppc_ori(1, 1, OCC_BOOT_OFFSET));
 
-    /* ori r1, r1, OCC_BOOT_OFFSET */
-    sram_program[0] |= (ppc_ori(1, 1, OCC_BOOT_OFFSET));
+	/* mtctr (mtspr r1, CTR) */
+	sram_program[1] = ((uint64_t)ppc_mtspr(1, CTR) << 32);
 
-    /* mtctr (mtspr r1, CTR) */
-    sram_program[1] = ((uint64_t)ppc_mtspr(1, CTR) << 32);
+	/* bctr */
+	sram_program[1] |= ppc_bctr();
 
-    /* bctr */
-    sram_program[1] |= ppc_bctr();
+	/* Write to SRAM */
+	writeOCCSRAM(OCC_SRAM_BOOT_ADDR, sram_program, sizeof(sram_program));
 
-    /* // Write to SRAM */
-    /* l_rc = p9_pm_ocb_indir_access(i_target, */
-		  /* p9ocb::OCB_CHAN1, */
-		  /* p9ocb::OCB_PUT, */
-		  /* sizeof(sram_program), */
-		  /* false, */
-		  /* 0, */
-		  /* l_ocb_length_act, */
-		  /* l_sram_program); */
-
-
-/* fapi_try_exit: */
-    /* // Channel 1 returned to Linear Stream, Circular upon exit */
-    /* l_rc = p9_pm_ocb_indir_setup_circular(i_target, */
-		  /* p9ocb::OCB_CHAN1, */
-		  /* p9ocb::OCB_TYPE_CIRC, */
-		  /* 0,   // Bar */
-		  /* 0,   // Length */
-		  /* p9ocb::OCB_Q_OUFLOW_NULL, */
-		  /* p9ocb::OCB_Q_ITPTYPE_NULL); */
-
-    return ((uint64_t)ppc_b(OCC_SRAM_BOOT_ADDR2) << 32);
+	return ((uint64_t)ppc_b(OCC_SRAM_BOOT_ADDR2) << 32);
 }
 
 static void pm_occ_control_start_from_mem(void)

@@ -51,7 +51,7 @@ enum scom_section {
 	STOP_SECTION_L3,
 };
 
-// TODO: check if istep_6.h will have these at the end
+// TODO: check if istep_6.h will have these at the end 
 #define PU_PBABAR0 (0x05012B00)
 #define PU_PBABAR1 (0x05012B01)
 #define PU_PBABAR2 (0x05012B02)
@@ -82,6 +82,7 @@ enum scom_section {
 
 /* Undocumented */
 #define PU_OCB_OCI_OCCFLG2_CLEAR 0x0006C18B
+#define PU_PBAXCFG_SCOM          0x00068021
 
 struct ring_data {
 	void *rings_buf;
@@ -768,7 +769,7 @@ static void pba_reset(void)
 	write_scom(0x0501284B, PPC_BIT(38));
 
 	/*
-	*0x00068021                       // undocumented, PU_PBAXCFG_SCOM
+	*0x00068021                       // PU_PBAXCFG_SCOM
 	  [all] 0
 	  [2]   1   // PBAXCFG_SND_RESET?
 	  [3]   1   // PBAXCFG_RCV_RESET?
@@ -1080,7 +1081,7 @@ static void istep_16_1(int this_core)
 
 static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
 {
-	// TODO: check if istep_6.h will have these at the end
+	// TODO: check if istep_6.h will have these at the end 
 	static const uint64_t PBA_BARs[4] = {
 		PU_PBABAR0, PU_PBABAR1, PU_PBABAR2, PU_PBABAR3
 	};
@@ -1137,7 +1138,7 @@ static void load_pm_complex(struct homer_st *homer)
 	/* Common OCC area is located right after HOMER image */
 	uint8_t *common_area = (uint8_t *)homer + sizeof(*homer);
 
-	// TODO resetPMComplex(); also used in istep_6_11.c
+	// TODO resetPMComplex(); also used in istep_6_11.c 
 	load_occ_setup(homer, common_area);
 	load_occ_image_to_homer(homer);
 	load_host_data_to_homer(homer);
@@ -1345,9 +1346,156 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	}
 }
 
+static void pba_slave_setup_runtime_phase(void)
+{
+	enum {
+		OCI_MASTER_ID_GPE2     = 0x2,
+		OCI_MASTER_ID_GPE3     = 0x3,
+		OCI_MASTER_ID_ICU      = 0x5,
+		OCI_MASTER_ID_DCU      = 0x7,
+		OCI_MASTER_ID_PGPE     = OCI_MASTER_ID_GPE2,
+		OCI_MASTER_ID_SGPE     = OCI_MASTER_ID_GPE3,
+		OCI_MASTER_ID_MASK_ALL = 0x7,
+
+		PBA_READ_TTYPE_CL_RD_NC            = 0x0, /// Cache line read
+		PBA_WRITE_GATHER_TIMEOUT_2_PULSES  = 0x4,
+		PBA_READ_PREFETCH_NONE             = 0x1, /// No prefetch
+		PBA_WRITE_TTYPE_DMA_PR_WR          = 0x0, /// DMA Partial Write
+
+		/* Values for PBA Mode register fields */
+		PBA_OCI_REGION                   = 0x2,
+		PBA_BCE_OCI_TRANSACTION_64_BYTES = 0x1,
+		PBA_OCI_MARKER_BASE              = 0x40070000,
+
+		PU_PBAMODE_SCOM = 0x00014040,
+		PU_PBASLVCTL0_SCOM = 0x00014044,
+		PU_PBASLVCTL1_SCOM = 0x00014045,
+		PU_PBASLVCTL2_SCOM = 0x00014046,
+	};
+
+	uint64_t data;
+
+	/*
+	 * Set the PBA_MODECTL register. It's not yet clear how PBA BCE
+	 * transaction size will affect performance - for now we go with the
+	 * largest size.  The HTM marker space is enabled and configured. Slave
+	 * fairness is enabled. The setting 'dis_slvmatch_order' ensures that PBA
+	 * will correctly flush write data before allowing a read of the same
+	 * address from a different master on a different slave.  The second write
+	 * buffer is enabled.
+	 */
+
+	data = 0;
+	data |= PPC_PLACE(PBA_OCI_REGION, 16, 2);                    // pba_region
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2);  // bcde_ocitrans
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2);  // bcue_ocitrans
+	data |= PPC_PLACE(true, 8, 1);                               // en_marker_ack
+	data |= PPC_PLACE((PBA_OCI_MARKER_BASE >> 16) & 0x7, 18, 3); // oci_marker_space
+	data |= PPC_PLACE(true, 27, 1);                              // en_slv_fairness
+	data |= PPC_PLACE(true, 10, 1);                              // en_second_wrbuf
+
+	write_scom(PU_PBAMODE_SCOM, data);
+
+	/*
+	 * Slave 0 (SGPE STOP).  This is a read/write slave in the event that
+	 * the STOP functions needs to write to memory.
+	 */
+
+	data = 0;
+	data |= PPC_PLACE(true, 0, 1);                               // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_SGPE, 1, 3);                 // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_PLACE(true, 20, 1);                              // buf_alloc_a
+	data |= PPC_PLACE(true, 21, 1);                              // buf_alloc_b
+	data |= PPC_PLACE(true, 22, 1);                              // buf_alloc_c
+	data |= PPC_PLACE(true, 19, 1);                              // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL0_SCOM, data);
+
+	/*
+	 * Slave 1 (GPE 1, PPC405 booting).  This is a read/write slave.  Write gathering is
+	 * allowed, but with the shortest possible timeout.
+	 */
+
+	data = 0;
+	data |= PPC_PLACE(true, 0, 1);                                  // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU & OCI_MASTER_ID_DCU, 1, 3); // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU & OCI_MASTER_ID_DCU, 5, 3); // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);              // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);               // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);             // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3);    // wr_gather_timeout
+	data |= PPC_PLACE(true, 20, 1);                                 // buf_alloc_a
+	data |= PPC_PLACE(true, 21, 1);                                 // buf_alloc_b
+	data |= PPC_PLACE(true, 22, 1);                                 // buf_alloc_c
+	data |= PPC_PLACE(true, 19, 1);                                 // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL1_SCOM, data);
+
+	/*
+	 * Slave 2 (PGPE Boot, Pstates/WOF).  This is a read/write slave.  Write gethering is
+	 * allowed, but with the shortest possible timeout. This slave is
+	 * effectively disabled soon after IPL.
+	 */
+
+	data = 0;
+	data |= PPC_PLACE(true, 0, 1);                               // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_PGPE, 1, 3);                 // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_PLACE(true, 20, 1);                              // buf_alloc_a
+	data |= PPC_PLACE(true, 21, 1);                              // buf_alloc_b
+	data |= PPC_PLACE(true, 22, 1);                              // buf_alloc_c
+	data |= PPC_PLACE(true, 19, 1);                              // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL2_SCOM, data);
+
+	/* Slave 3 is not modified by this function, because it is owned by SBE */
+}
+
 static void pm_pba_init(void)
 {
-	// TODO: 
+	enum {
+		PU_PBACFG = 0x0501284B,
+		PU_PBAFIR = 0x05012840,
+
+		PU_PBACFG_CHSW_DIS_GROUP_SCOPE = 38,
+
+		/* These don't have corresponding attributes */
+		PBAX_DATA_TIMEOUT                = 0x0,
+		PBAX_SND_RETRY_COMMIT_OVERCOMMIT = 0x0,
+		PBAX_SND_RETRY_THRESHOLD         = 0x0,
+		PBAX_SND_TIMEOUT                 = 0x0,
+	};
+
+	uint64_t data = 0;
+	/* Assuming all these attributes have zero values */
+	uint8_t attr_pbax_groupid = 0;
+	uint8_t attr_pbax_chipid = 0;
+	uint8_t attr_pbax_broadcast_vector = 0;
+
+	/* Assuming ATTR_CHIP_EC_FEATURE_HW423589_OPTION1 == true */
+	write_scom(PU_PBACFG, PPC_BIT(PU_PBACFG_CHSW_DIS_GROUP_SCOPE));
+
+	write_scom(PU_PBAFIR, 0);
+
+	data |= PPC_PLACE(4, 4, attr_pbax_groupid);
+	data |= PPC_PLACE(8, 3, attr_pbax_chipid);
+	data |= PPC_PLACE(12, 8, attr_pbax_broadcast_vector);
+	data |= PPC_PLACE(20, 5, PBAX_DATA_TIMEOUT);
+	data |= PPC_PLACE(27, 1, PBAX_SND_RETRY_COMMIT_OVERCOMMIT);
+	data |= PPC_PLACE(28, 8, PBAX_SND_RETRY_THRESHOLD);
+	data |= PPC_PLACE(36, 5, PBAX_SND_TIMEOUT);
+	write_scom(PU_PBAXCFG_SCOM, data);
+
+	pba_slave_setup_runtime_phase();
 }
 
 static void pm_pstate_gpe_init(struct homer_st *homer, uint64_t cores)
@@ -1500,7 +1648,7 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	enum { STOP_RECOVERY_TRIGGER_ENABLE = 29 };
 
 	pm_corequad_init(cores);
-	/* p9_pm_ocb_init( */
+	/* p9_pm_ocb_init( */ 
 	/*     i_target, */
 	/*     p9pm::PM_INIT,// Channel setup type */
 	/*     p9ocb::OCB_CHAN1,// Channel */
@@ -1509,10 +1657,10 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	/*     0,// Push/Pull queue length */
 	/*     p9ocb::OCB_Q_OUFLOW_NULL,// Channel flow control */
 	/*     p9ocb::OCB_Q_ITPTYPE_NULL);// Channel interrupt control */
-	/* pm_pss_init(); // in 16.1 */
-	/* p9_pm_occ_firinit(); // in 16.1 */
-	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */
-	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); done it earlier */
+	/* pm_pss_init(); // in 16.1 */ 
+	/* p9_pm_occ_firinit(); // in 16.1 */ 
+	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */ 
+	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); done it earlier */ 
 	pm_pstate_gpe_init(homer, cores);
 
 	check_proc_config(homer);

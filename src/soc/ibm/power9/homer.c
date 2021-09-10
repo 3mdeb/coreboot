@@ -18,6 +18,7 @@
 #include "tor.h"
 #include "xip.h"
 #include "pstates_include/p9_pstates_cmeqm.h"
+#include "pstates_include/p9_pstates_occ.h"
 
 #include <lib.h>
 
@@ -1164,7 +1165,7 @@ static void pm_corequad_init(uint64_t cores)
 	uint32_t err_mask = 0;
 
 	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
-		chiplet_id_t quad_chplt = EP00_CHIPLET_ID + quad;
+		chiplet_id_t quad_chiplet = EP00_CHIPLET_ID + quad;
 
 		if (!IS_EQ_FUNCTIONAL(quad, cores))
 			continue;
@@ -1180,20 +1181,20 @@ static void pm_corequad_init(uint64_t cores)
 		 * 18 - 19    : PCB interrupt
 		 * 20,22,24,26: InterPPM Ivrm/Aclk/Vdata/Dpll enable
 		 */
-		write_scom_for_chiplet(quad_chplt, EQ_QPPM_QPMMR_CLEAR, 0xfffe3aa000000000ull);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR_CLEAR, 0xfffe3aa000000000ull);
 
 		/* Clear QUAD PPM ERROR Register */
-		write_scom_for_chiplet(quad_chplt, EQ_QPPM_ERR, 0);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERR, 0);
 
 		/* Restore Quad PPM Error Mask */
-		write_scom_for_chiplet(quad_chplt, EQ_QPPM_ERRMSK, (uint64_t)err_mask << 32);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERRMSK, (uint64_t)err_mask << 32);
 
 		for (int core = quad * 4; core < (quad + 1) * 4; ++core) {
-			chiplet_id_t core_chplt = EC00_CHIPLET_ID + core;
+			chiplet_id_t core_chiplet = EC00_CHIPLET_ID + core;
 
 			/* Clear the Core PPM CME DoorBells */
 			for (int i = 0; i < DOORBELLS_COUNT; ++i)
-				write_scom_for_chiplet(core_chplt, CME_DOORBELL_CLEAR[i], ~(uint64_t)0);
+				write_scom_for_chiplet(core_chiplet, CME_DOORBELL_CLEAR[i], ~(uint64_t)0);
 
 			/*
 			 * Setup Core PPM Mode register
@@ -1214,10 +1215,10 @@ static void pm_corequad_init(uint64_t cores)
 			 */
 
 			/* Clear Core PPM Mode register */
-			write_scom_for_chiplet(core_chplt, C_CPPM_CPMMR_CLEAR, 0x401b000000000000);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_CPMMR_CLEAR, 0x401b000000000000);
 
 			/* Clear Core PPM Errors */
-			write_scom_for_chiplet(core_chplt, C_CPPM_ERR, 0);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_ERR, 0);
 
 			/*
 			 * Clear Hcode Error Injection and other CSAR settings:
@@ -1228,12 +1229,131 @@ static void pm_corequad_init(uint64_t cores)
 			 * CPPM_CSAR_DISABLE_CME_NACK_ON_PROLONGED_DROOP is NOT cleared
 			 * as this is a persistent, characterization setting.
 			 */
-			write_scom_for_chiplet(core_chplt, C_CPPM_CSAR_CLEAR, 0x1b00000000);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_CSAR_CLEAR, 0x1b00000000);
 
 			/* Restore CORE PPM Error Mask */
-			write_scom_for_chiplet(core_chplt, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
 		}
 	}
+}
+
+static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
+{
+	enum {
+		/* The following constants hold approximate values */
+		PGPE_TIMEOUT_MS  = 500,
+		PGPE_POLLTIME_MS = 20,
+		TIMEOUT_COUNT    = PGPE_TIMEOUT_MS / PGPE_POLLTIME_MS,
+
+		EQ_QPPM_QPMMR = 0x100F0103,
+
+		PU_GPE2_PPE_XIXCR    = 0x00064010,
+		PU_GPE2_PPE_XIDBGPRO = 0x00064015,
+		PU_GPE3_PPE_XIDBGPRO = 0x00066015,
+
+		PU_GPE2_GPEIVPR_SCOM    = 0x00064001,
+		PU_OCB_OCI_OCCS2_SCOM   = 0x0006C088,
+		PU_OCB_OCI_OCCFLG_SCOM2 = 0x0006C08C,
+		PU_GPE2_GPETSEL_SCOM    = 0x00064000,
+
+		/* OCC SCRATCH2 */
+		PGPE_ACTIVE                 = 0,
+		PGPE_PSTATE_PROTOCOL_ACTIVE = 1,
+
+		/* XSR */
+		HALTED_STATE = 0,
+
+		/* XCR */
+		RESUME         = 2,
+		TOGGLE_XSR_TRH = 4,
+		HARD_RESET     = 6,
+	};
+
+	uint64_t occ_scratch;
+	uint64_t xsr_iar;
+	uint32_t timeout_counter = TIMEOUT_COUNT;
+	/* ATTR_VDD_AVSBUS_BUSNUM */
+	uint8_t l_avsbus_number = 0;
+	/* ATTR_VDD_AVSBUS_RAIL */
+	uint8_t l_avsbus_rail = 0;
+
+	/* Assuming ATTR_SYSTEM_PSTATES_MODE == fapi2::ENUM_ATTR_SYSTEM_PSTATES_MODE_AUTO */
+
+	write_scom(PU_GPE2_GPEIVPR_SCOM, (uint64_t)homer->ppmr.l1_bootloader << 32);
+	occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
+
+	occ_scratch &= ~PPC_BIT(PGPE_ACTIVE);
+	occ_scratch &= ~PPC_BITMASK(27, 32);
+	occ_scratch |= PPC_PLACE(l_avsbus_number, 27, 1);
+	occ_scratch |= PPC_PLACE(l_avsbus_rail, 28, 4);
+
+	write_scom(PU_OCB_OCI_OCCS2_SCOM, occ_scratch);
+
+	/* PGPE_PSTATE_PROTOCOL_AUTO_ACTIVATE */
+	write_scom(PU_OCB_OCI_OCCFLG_SCOM2, PPC_BIT(1));
+
+	write_scom(PU_GPE2_GPETSEL_SCOM, 0x1A00000000000000);
+
+	/* OCCFLG2_PGPE_HCODE_FIT_ERR_INJ | OCCFLG2_PGPE_HCODE_PSTATE_REQ_ERR_INJ */
+	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, 0x1100000000);
+
+	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(HARD_RESET, 1, 3));
+	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(TOGGLE_XSR_TRH, 1, 3));
+	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(RESUME, 1, 3));
+
+	do {
+		occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
+		xsr_iar = read_scom(PU_GPE2_PPE_XIDBGPRO);
+		/* Does this need to be such a long time? */
+		wait_ms(20, false);
+	} while (!(occ_scratch & PPC_BIT(PGPE_ACTIVE)) &&
+		 !(xsr_iar & PPC_BIT(HALTED_STATE)) &&
+		 --timeout_counter != 0);
+
+	do {
+		occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
+		xsr_iar = read_scom(PU_GPE3_PPE_XIDBGPRO);
+		/* Does this need to be such a long time? */
+		wait_ms(20, false);
+	} while (!(occ_scratch & PPC_BIT(PGPE_PSTATE_PROTOCOL_ACTIVE)) &&
+		 !(xsr_iar & PPC_BIT(HALTED_STATE)) &&
+		 --timeout_counter != 0);
+
+	if (timeout_counter == 0 ||
+	    !(occ_scratch & PPC_BIT(PGPE_PSTATE_PROTOCOL_ACTIVE)) ||
+	    (xsr_iar & PPC_BIT(HALTED_STATE)))
+		die("Pstate GPE Protocol Auto Start timeout");
+
+	OCCPstateParmBlock *oppb = (OCCPstateParmBlock *)homer->ppmr.occ_parm_block;
+	GlobalPstateParmBlock *gppb = (GlobalPstateParmBlock *)
+		&homer->ppmr.pgpe_sram_img[homer->ppmr.header.hcode_len];
+
+	uint32_t safe_mode_freq =
+		((oppb->frequency_min_khz * 1000) * gppb->frequency_step_khz) /
+		gppb->reference_frequency_khz;
+
+	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
+		uint64_t data;
+		chiplet_id_t quad_chiplet = EP00_CHIPLET_ID + quad;
+
+		if (!IS_EQ_FUNCTIONAL(quad, cores))
+			continue;
+
+		data = read_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR);
+		data = (data & ~PPC_BITMASK(1, 12)) | PPC_PLACE(safe_mode_freq, 1, 11);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR, data);
+	}
+}
+
+static void pm_pba_init(void)
+{
+	// TODO: 
+}
+
+static void pm_pstate_gpe_init(struct homer_st *homer, uint64_t cores)
+{
+	pstate_gpe_init(homer, cores);
+	pm_pba_init();
 }
 
 /* Generates host configuration vector and updates the value in HOMER */
@@ -1384,16 +1504,16 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	/*     i_target, */
 	/*     p9pm::PM_INIT,// Channel setup type */
 	/*     p9ocb::OCB_CHAN1,// Channel */
-	/*     p9ocb:: OCB_TYPE_NULL,// Channel type */
+	/*     p9ocb::OCB_TYPE_NULL,// Channel type */
 	/*     0,// Channel base address */
 	/*     0,// Push/Pull queue length */
 	/*     p9ocb::OCB_Q_OUFLOW_NULL,// Channel flow control */
 	/*     p9ocb::OCB_Q_ITPTYPE_NULL);// Channel interrupt control */
-	/* p9_pm_pss_init(i_target, p9pm::PM_INIT); */
-	/* p9_pm_occ_firinit(i_target, p9pm::PM_INIT); */
-	/* p9_pm_firinit(i_target, p9pm::PM_INIT); */
-	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); */
-	/* p9_pm_pstate_gpe_init(i_target, p9pm::PM_INIT); */
+	/* pm_pss_init(); // in 16.1 */
+	/* p9_pm_occ_firinit(); // in 16.1 */
+	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */
+	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); done it earlier */
+	pm_pstate_gpe_init(homer, cores);
 
 	check_proc_config(homer);
 	clear_occ_special_wakeups();

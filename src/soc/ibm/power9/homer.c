@@ -1626,7 +1626,7 @@ static uint64_t setup_memory_boot(void)
 	sram_program[1] |= ppc_bctr();
 
 	/* Write to SRAM */
-	writeOCCSRAM(OCC_SRAM_BOOT_ADDR, sram_program, sizeof(sram_program));
+	writeOCCSRAM(OCC_SRAM_BOOT_ADDR, sram_program, ARRAY_SIZE(sram_program));
 
 	return ((uint64_t)ppc_b(OCC_SRAM_BOOT_ADDR2) << 32);
 }
@@ -1670,10 +1670,89 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(STOP_RECOVERY_TRIGGER_ENABLE));
 }
 
+/* Wait for OCC to reach communications checkpoint */
+static void wait_for_occ_checkpoint(void)
+{
+	enum {
+		/* Wait up to 15 seconds for OCC to be ready (150 * 100ms = 15s) */
+		MS_BETWEEN_READ  = 100,
+		READ_RETRY_LIMIT = 150,
+
+		OCC_RC_INIT_FAILURE        = 0xE5,
+		OCC_RC_OCC_INIT_CHECKPOINT = 0xE1,
+
+		OCC_COMM_INIT_COMPLETE = 0x0EFF,
+		OCC_INIT_FAILURE       = 0xE000,
+
+		OCC_RSP_SRAM_ADDR = 0xFFFBF000,
+	};
+
+	uint8_t retry_count = 0;
+
+	while (retry_count++ < READ_RETRY_LIMIT) {
+		uint8_t response[8] = { 0x0 };
+		uint8_t status;
+		uint16_t checkpoint;
+
+		wait_ms(MS_BETWEEN_READ, false);
+
+		/* Read SRAM response buffer to check for OCC checkpoint */
+		readOCCSRAM(OCC_RSP_SRAM_ADDR, (uint64_t *)response, sizeof(response));
+
+		/* Pull status from response (byte 2) */
+		status = response[2];
+
+		/* Pull checkpoint from response (bytes 6-7) */
+		checkpoint = (response[6] << 8) | response[7];
+
+		if (status == OCC_RC_OCC_INIT_CHECKPOINT &&
+		    checkpoint == OCC_COMM_INIT_COMPLETE)
+			break;
+
+		if (((checkpoint & OCC_INIT_FAILURE) == OCC_INIT_FAILURE) ||
+		    status == OCC_RC_INIT_FAILURE)
+			die("OCC initialization has failed\n");
+	}
+
+	die("Waiting for OCC initialization checkpoint has timed out\n");
+}
+
+/* Moves OCC to active state */
+static void activate_occ(void)
+{
+	// TODO: 
+
+	/* l_err = calcMemThrottles(); */
+	/* if (l_err) return; */
+
+	/* Make sure OCCs are ready for communication */
+	wait_for_occ_checkpoint();
+
+	/* // Send initial poll to all OCCs to establish communication */
+	/* l_err = OccManager::sendOccPoll(); */
+	/* if (l_err) return; */
+
+	/* // Send ALL config data */
+	/* sendOccConfigData(); */
+
+	/* // Set the User PCAP */
+	/* l_err = sendOccUserPowerCap(); */
+	/* if (l_err) return; */
+
+	/* // Wait for all OCCs to go to the target state */
+	/* l_err = waitForOccState(); */
+	/* if (l_err) return; */
+
+	/* // Set active sensors for all OCCs, so BMC can start communication with OCCs */
+	/* l_err = setOccActiveSensors(true); */
+	/* if (l_err) return; */
+}
+
 static void istep_21_1(struct homer_st *homer, uint64_t cores)
 {
 	load_pm_complex(homer);
 	start_pm_complex(homer, cores);
+	activate_occ();
 }
 
 static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,

@@ -85,6 +85,28 @@ enum scom_section {
 #define PU_OCB_OCI_OCCFLG2_CLEAR 0x0006C18B
 #define PU_PBAXCFG_SCOM          0x00068021
 
+#define OCC_MAX_DATA_LENGTH 0x00001000
+
+struct occ_poll_response {
+	uint8_t  status;
+	uint8_t  ext_status;
+	uint8_t  occs_present;
+	uint8_t  requested_cfg;
+	uint8_t  state;
+	uint8_t  mode;
+	uint8_t  ips_status;
+	uint8_t  error_id;
+	uint32_t error_address;
+	uint16_t error_length;
+	uint8_t  error_source;
+	uint8_t  gpu_cfg;
+	uint8_t  code_level[16];
+	uint8_t  sensor[6];
+	uint8_t  num_blocks;
+	uint8_t  version;
+	uint8_t  sensor_data[4049];
+} __attribute__((packed));
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -1717,6 +1739,48 @@ static void wait_for_occ_checkpoint(void)
 	die("Waiting for OCC initialization checkpoint has timed out\n");
 }
 
+static void send_occ_cmd(uint8_t occ_cmd, const uint8_t *data, uint32_t data_len,
+			 uint8_t *response, uint32_t *response_len)
+{
+	// TODO: 
+}
+
+/* TODO: maybe make this return bool */ 
+static void poll_occ(bool flush_all_errors)
+{
+	enum {
+		OCC_POLL_DATA_MIN_SIZE = 40,
+
+		OCC_CMD_POLL = 0x00,
+	};
+
+	uint8_t max_more_errors = 10;
+	while (true) {
+		const uint8_t poll_data[1] = { 0x20 /*version*/ };
+
+		uint8_t poll_response[OCC_MAX_DATA_LENGTH];
+		uint32_t response_len = sizeof(poll_response);
+
+		const struct occ_poll_response *poll_rsp = (void *)poll_response;
+
+		send_occ_cmd(OCC_CMD_POLL, poll_data, sizeof(poll_data),
+			     poll_response, &response_len);
+
+		if (response_len < OCC_POLL_DATA_MIN_SIZE)
+			die("Invalid data length");
+
+		if (!flush_all_errors)
+			break;
+
+		if (poll_rsp->error_id == 0)
+			break;
+
+		--max_more_errors;
+		if (max_more_errors == 0)
+			die("Hit too many errors on polling OCC\n");
+	}
+}
+
 /* Moves OCC to active state */
 static void activate_occ(void)
 {
@@ -1728,9 +1792,9 @@ static void activate_occ(void)
 	/* Make sure OCCs are ready for communication */
 	wait_for_occ_checkpoint();
 
-	/* // Send initial poll to all OCCs to establish communication */
-	/* l_err = OccManager::sendOccPoll(); */
-	/* if (l_err) return; */
+	/* Send initial poll to all OCCs to establish communication */
+	poll_occ(/*flush_all_errors=*/false);
+	/* if (l_err) return; */ 
 
 	/* // Send ALL config data */
 	/* sendOccConfigData(); */

@@ -4,6 +4,7 @@
 #include <cbfs.h>
 #include <commonlib/region.h>
 #include <console/console.h>
+#include <cpu/power/istep_13.h>
 #include <cpu/power/mvpd.h>
 #include <cpu/power/occ.h>
 #include <cpu/power/powerbus.h>
@@ -1511,15 +1512,22 @@ static void check_proc_config(struct homer_st *homer)
 	/* XXX: how come this points into padding area? */
 	uint64_t *conf_vector = (void *)((uint8_t *)&homer->qpmr + QPMR_PROC_CONFIG_POS);
 
-	// XXX: where to find these?
-	/* checkChiplet<fapi2::TARGET_TYPE_MCS >( i_procTgt, fapi2::TARGET_TYPE_MCS, vector_value, MCS_POS ); */
-	/* checkChiplet<fapi2::TARGET_TYPE_XBUS>( i_procTgt, fapi2::TARGET_TYPE_XBUS, vector_value, XBUS_POS ); */
-	/* checkChiplet<fapi2::TARGET_TYPE_PHB>( i_procTgt, fapi2::TARGET_TYPE_PHB, vector_value, PHB_POS ); */
-	/* checkChiplet<fapi2::TARGET_TYPE_CAPP>( i_procTgt, fapi2::TARGET_TYPE_CAPP, vector_value, CAPP_POS ); */
+	int mcs_i = 0;
 
-	/* checkObusChipletHierarchy(i_procTgt, vector_value, OBUS_POS, NVLINK_POS); */
+	for (mcs_i = 0; mcs_i < MCS_PER_PROC; mcs_i++) {
+		chiplet_id_t nest = mcs_to_nest[mcs_ids[mcs_i]];
 
-	/* checkChiplet<fapi2::TARGET_TYPE_MCA>(i_procTgt, fapi2::TARGET_TYPE_MCA, vector_value, MBA_POS); */
+		/* MCS_MCFGP and MCS_MCFGPM registers are undocumented, see istep 14.5. */
+		if ((read_scom_for_chiplet(nest, 0x0501080A) & PPC_BIT(0)) ||
+		    (read_scom_for_chiplet(nest, 0x0501080C) & PPC_BIT(0))) {
+			uint8_t pos = MCS_POS + mcs_i;
+			*conf_vector |= (0x8000000000000000ull >> pos);
+		}
+	}
+
+	// TODO: set configuration bits for XBUS, PHB, CAPP, OBUS
+
+	/* TODO: checkChiplet<fapi2::TARGET_TYPE_MCA>(i_procTgt, fapi2::TARGET_TYPE_MCA, vector_value, MBA_POS); */ 
 
 	*conf_vector = htobe64(vector_value);
 }
@@ -1648,15 +1656,6 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	enum { STOP_RECOVERY_TRIGGER_ENABLE = 29 };
 
 	pm_corequad_init(cores);
-	/* p9_pm_ocb_init( */ 
-	/*     i_target, */
-	/*     p9pm::PM_INIT,// Channel setup type */
-	/*     p9ocb::OCB_CHAN1,// Channel */
-	/*     p9ocb::OCB_TYPE_NULL,// Channel type */
-	/*     0,// Channel base address */
-	/*     0,// Push/Pull queue length */
-	/*     p9ocb::OCB_Q_OUFLOW_NULL,// Channel flow control */
-	/*     p9ocb::OCB_Q_ITPTYPE_NULL);// Channel interrupt control */
 	/* pm_pss_init(); // in 16.1 */ 
 	/* p9_pm_occ_firinit(); // in 16.1 */ 
 	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */ 

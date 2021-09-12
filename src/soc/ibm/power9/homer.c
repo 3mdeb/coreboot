@@ -90,8 +90,9 @@ enum scom_section {
 #define OCC_CMD_ADDR 0x000E0000
 #define OCC_RSP_ADDR 0x000E1000
 
-#define OCC_CMD_POLL      0x00
-#define OCC_CMD_SET_STATE 0x20
+#define OCC_CMD_POLL          0x00
+#define OCC_CMD_SET_STATE     0x20
+#define OCC_CMD_SET_POWER_CAP 0x22
 
 #define OCC_RC_SUCCESS             0x00
 #define OCC_RC_INIT_FAILURE        0xE5
@@ -2037,6 +2038,14 @@ static void set_occ_state(struct homer_st *homer, uint8_t state)
 		die("Failed to set state of OCC to 0x%02x.\n", state);
 }
 
+static void send_occ_user_power_cap(struct homer_st *homer)
+{
+	/* No power limit */
+	const uint8_t data[2] = { 0x00, 0x00 };
+	uint32_t response_len = 0;
+	send_occ_cmd(homer, OCC_CMD_SET_POWER_CAP, data, sizeof(data), NULL, &response_len);
+}
+
 static void set_occ_active_state(struct homer_st *homer)
 {
 	enum {
@@ -2067,9 +2076,8 @@ static void activate_occ(struct homer_st *homer)
 	/* // Send ALL config data */
 	/* sendOccConfigData(); */
 
-	/* // Set the User PCAP */
-	/* l_err = sendOccUserPowerCap(); */
-	/* if (l_err) return; */
+	/* Set the User PCAP */
+	send_occ_user_power_cap(homer);
 
 	/* Switch for OCC to active state */
 	set_occ_active_state(homer);

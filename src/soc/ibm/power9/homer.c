@@ -90,13 +90,17 @@ enum scom_section {
 #define OCC_CMD_ADDR 0x000E0000
 #define OCC_RSP_ADDR 0x000E1000
 
-#define OCC_CMD_POLL          0x00
-#define OCC_CMD_SET_STATE     0x20
-#define OCC_CMD_SET_POWER_CAP 0x22
+#define OCC_CMD_POLL           0x00
+#define OCC_CMD_SET_STATE      0x20
+#define OCC_CMD_SETUP_CFG_DATA 0x21
+#define OCC_CMD_SET_POWER_CAP  0x22
 
 #define OCC_RC_SUCCESS             0x00
 #define OCC_RC_INIT_FAILURE        0xE5
 #define OCC_RC_OCC_INIT_CHECKPOINT 0xE1
+
+#define OCC_CFGDATA_FREQ_POINT 0x02
+#define OCC_CFGDATA_OCC_ROLE   0x03
 
 struct occ_poll_response {
 	uint8_t  status;
@@ -2038,6 +2042,93 @@ static void set_occ_state(struct homer_st *homer, uint8_t state)
 		die("Failed to set state of OCC to 0x%02x.\n", state);
 }
 
+static void get_freq_point_msg_data(struct homer_st *homer, uint8_t *data, uint16_t *data_len)
+{
+	enum { OCC_CFGDATA_FREQ_POINT_VERSION = 0x20 };
+	OCCPstateParmBlock *oppb = (void *)homer->ppmr.occ_parm_block;
+
+	const struct voltage_kwd *voltage = NULL;
+	const struct voltage_bucket_data *bucket = NULL;
+
+	uint8_t i = 0;
+	uint16_t index = 0;
+	uint16_t min_freq = 0;
+
+	/* Using LRP0 because frequencies are the same in all LRP records */
+	voltage = mvpd_get_voltage_data(0);
+
+	for (i = 0; i < VOLTAGE_BUCKET_COUNT; ++i) {
+		bucket = &voltage->buckets[i];
+		if (bucket->id != 0)
+			break;
+	}
+
+	if (bucket == NULL)
+		die("Failed to find a valid voltage data bucket.\n");
+
+	data[index++] = OCC_CFGDATA_FREQ_POINT;
+	data[index++] = OCC_CFGDATA_FREQ_POINT_VERSION;
+
+	/* Nominal Frequency in MHz */
+	memcpy(&data[index], &bucket->nominal.freq, 2);
+	index += 2;
+
+	/* Turbo Frequency in MHz */
+	memcpy(&data[index], &bucket->turbo.freq, 2);
+	index += 2;
+
+	/* Minimum Frequency in MHz */
+	min_freq = oppb->frequency_min_khz * 1000;
+	memcpy(&data[index], &min_freq, 2);
+	index += 2;
+
+	/* Ultra Turbo Frequency in MHz */
+	memcpy(&data[index], &bucket->ultra_turbo.freq, 2);
+	index += 2;
+
+	/* Reserved (Static Power Save in PowerVM) */
+	memset(&data[index], 0, 2);
+	index += 2;
+
+	/* Reserved (FFO in PowerVM) */
+	memset(&data[index], 0, 2);
+	index += 2;
+
+	*data_len = index;
+}
+
+static void get_occ_role_msg_data(uint8_t *data, uint16_t *data_len)
+{
+	enum { OCC_ROLE_MASTER = 0x01 };
+
+	data[0] = OCC_CFGDATA_OCC_ROLE;
+	data[1] = OCC_ROLE_MASTER;
+
+	*data_len = 2;
+}
+
+static void send_occ_config_data(struct homer_st *homer)
+{
+	enum { OCC_MAX_DATA_LENGTH = 0x00001000 };
+
+	uint8_t data[OCC_MAX_DATA_LENGTH] = { 0x00 };
+	uint16_t data_len = 0;
+	uint32_t response_len = 0;
+
+	/* Poll is sent between config packets to flush errors */
+	struct occ_poll_response poll_response;
+
+	get_occ_role_msg_data(data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
+	get_freq_point_msg_data(homer, data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
+	// TODO: 
+}
+
 static void send_occ_user_power_cap(struct homer_st *homer)
 {
 	/* No power limit */
@@ -2073,8 +2164,8 @@ static void activate_occ(struct homer_st *homer)
 	/* Send initial poll to all OCCs to establish communication */
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 
-	/* // Send ALL config data */
-	/* sendOccConfigData(); */
+	/* Send OCC's config data */
+	send_occ_config_data(homer);
 
 	/* Set the User PCAP */
 	send_occ_user_power_cap(homer);

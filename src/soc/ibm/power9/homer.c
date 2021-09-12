@@ -88,6 +88,13 @@ enum scom_section {
 #define OCC_MAX_DATA_LENGTH     0x00001000
 #define OCC_COMMAND_IN_PROGRESS 0xFF
 
+#define OCC_CMD_ADDR 0x000E0000
+#define OCC_RSP_ADDR 0x000E1000
+
+#define OCC_RC_SUCCESS             0x00
+#define OCC_RC_INIT_FAILURE        0xE5
+#define OCC_RC_OCC_INIT_CHECKPOINT 0xE1
+
 struct occ_poll_response {
 	uint8_t  status;
 	uint8_t  ext_status;
@@ -1701,9 +1708,6 @@ static void wait_for_occ_checkpoint(void)
 		MS_BETWEEN_READ  = 100,
 		READ_RETRY_LIMIT = 150,
 
-		OCC_RC_INIT_FAILURE        = 0xE5,
-		OCC_RC_OCC_INIT_CHECKPOINT = 0xE1,
-
 		OCC_COMM_INIT_COMPLETE = 0x0EFF,
 		OCC_INIT_FAILURE       = 0xE000,
 
@@ -1743,12 +1747,10 @@ static void wait_for_occ_checkpoint(void)
 static void build_occ_cmd(struct homer_st *homer, uint8_t occ_cmd, uint8_t seq_num,
 			  const uint8_t *data, uint16_t data_len)
 {
-	enum { OCC_CMD_ADDR = 0x000E0000 };
-
 	uint8_t *cmd_buf = &homer->occ_host_area[OCC_CMD_ADDR];
 	uint16_t cmd_len = 0;
 	uint16_t checksum = 0;
-	uint8_t i = 0;
+	uint16_t i = 0;
 
 	cmd_buf[cmd_len++] = seq_num;
 	cmd_buf[cmd_len++] = occ_cmd;
@@ -1813,16 +1815,14 @@ static void write_circular_buffer(uint64_t write_data)
 	write_scom(OCBDR_address, write_data);
 }
 
-static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout,
+static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 				  uint8_t seq_num)
 {
-	// TODO: 
+	enum { OCC_RSP_SAMPLE_TIME_MS = 100 };
 
-	enum { OCC_RSP_ADDR = 0x000E1000 };
+	const uint8_t *rsp_buf = &homer->occ_host_area[OCC_RSP_ADDR];
 
-	/* uint8_t *rsp_buf = &homer->occ_host_area[OCC_RSP_ADDR]; */
-
-	int32_t timeout_ms = (timeout < 100 ? 100 : timeout*1000);
+	int32_t timeout_ms = (timeout_sec == 0 ? OCC_RSP_SAMPLE_TIME_MS : timeout_sec*1000);
 
 	while (timeout_ms >= 0) {
 		/*
@@ -1835,52 +1835,78 @@ static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout,
 		 * Note: Need to check the sequence number to be sure we are
 		 *       processing the expected response
 		 */
-		/* if (rsp_buffer[2] == OCC_COMMAND_IN_PROGRESS && */
-		/*     rsp_buffer[0] == iv_Occ->iv_seqNumber) */
-		/* { */
-		/* 	// Need an 'isync' here to ensure that previous instructions */
-		/* 	// have completed before the code continues on. This is a type */
-		/* 	// of read-barrier.  Without this the processor can do */
-		/* 	// speculative reads of the HOMER data and you can actually */
-		/* 	// get stale data as part of the instructions that happen */
-		/* 	// afterwards. Another 'weak consistency' issue. */
-		/* 	isync(); */
+		if (rsp_buf[2] == OCC_COMMAND_IN_PROGRESS && rsp_buf[0] == seq_num) {
+			/*
+			 * Need an 'isync' here to ensure that previous instructions
+			 * have completed before the code continues on. This is a type
+			 * of read-barrier.  Without this the processor can do
+			 * speculative reads of the HOMER data and you can actually
+			 * get stale data as part of the instructions that happen
+			 * afterwards. Another 'weak consistency' issue.
+			 */
+			asm volatile("isync" ::: "memory");
 
-		/* 	// OCC must have processed the command */
-		/* 	const uint16_t rspDataLen = UINT16_GET(&rsp_buffer[3]); */
-		/* 	rspLength = OCC_RSP_HDR_LENGTH + rspDataLen; */
-		/* 	l_time_expired = false; */
-		/* 	break; */
-		/* } */
+			/* OCC must have processed the command */
+			break;
+		}
 
-		/* if (l_msec_remaining > 0) */
-		/* { */
-		/* 	// delay before next check */
-		/* 	const int64_t l_sleep_msec = std::min(l_msec_remaining, */
-		/* 					      OCC_RSP_SAMPLE_TIME); */
-		/* 	nanosleep( 0, NS_PER_MSEC * l_sleep_msec ); */
-		/* 	l_msec_remaining -= l_sleep_msec; */
-		/* } */
-		/* else */
-		/* { */
-		/* 	// time expired */
-		/* 	l_msec_remaining = -1; */
+		if (timeout_ms > 0) {
+			/* Delay before the next check */
+			int32_t sleep_ms = OCC_RSP_SAMPLE_TIME_MS ;
+			if (timeout_ms < sleep_ms)
+				sleep_ms = timeout_ms;
 
-		/* 	// Read SRAM response buffer to check for exception */
-		/* 	// (On exception, data may not be copied to HOMER) */
-		/* 	handleOccException(); */
-		/* 	die(); */
-		/* } */
+			wait_ms(sleep_ms, false);
+			timeout_ms -= sleep_ms;
+		} else {
+			/* time expired */
+			die("Timed out while waiting for a response from OCC.\n");
+		}
 	}
 }
 
-static void parse_occ_response(uint8_t *status, uint8_t *seq_num)
+static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t *seq_num,
+			       uint8_t *response, uint32_t *response_len)
 {
-	// TODO: 
+	uint16_t index = 0;
+	uint16_t data_len = 0;
+	uint16_t checksum = 0;
+	uint16_t i = 0;
+
+	const uint8_t *rsp_buf = &homer->occ_host_area[OCC_RSP_ADDR];
+
+	*seq_num = rsp_buf[index++];
+	index += 1; /* command */
+	*status = rsp_buf[index++];
+
+	data_len= *(uint16_t *)&rsp_buf[index];
+	index += 2;
+
+	if (data_len > 0) {
+		if (data_len > *response_len) {
+			printk(BIOS_WARNING, "Truncating OCC response from %d to %d bytes\n",
+			       data_len, *response_len);
+			data_len = *response_len;
+		}
+
+		memcpy(response, &rsp_buf[index], data_len);
+		index += data_len;
+
+		*response_len = data_len;
+	}
+
+	for (i = 0; i < index; ++i)
+		checksum += rsp_buf[i];
+
+	if (checksum != *(uint16_t *)&rsp_buf[index])
+		return false;
+
+	return (status == OCC_RC_SUCCESS);
 }
 
-static void write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
-			  const uint8_t *data, uint16_t data_len)
+static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
+			  const uint8_t *data, uint16_t data_len,
+			  uint8_t *response, uint32_t *response_len)
 {
 	static uint8_t cmd_seq_num;
 
@@ -1900,28 +1926,43 @@ static void write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 	 * same for all commands) */
 	wait_for_occ_response(homer, 20, cmd_seq_num);
 
-	/* Parse the OCC response even if timed out */
-	parse_occ_response(&status, &rsp_seq_num);
-
-	if (status == OCC_COMMAND_IN_PROGRESS)
-		die("OCC command 0x%08x timed out\n", occ_cmd);
+	if (!parse_occ_response(homer, &status, &rsp_seq_num, response, response_len))
+		return false;
 
 	/* Statuses of 0xE0-EF are reserved for OCC exceptions */
 	if ((status & 0xF0) == 0xE0)
-		die("OCC exception occurred while running 0x%08x command\n", occ_cmd);
+		printk(BIOS_WARNING, "OCC exception occurred while running 0x%08x command\n",
+		       occ_cmd);
 	else if (rsp_seq_num != cmd_seq_num)
-		die("Received OCC response for a wrong command while running 0x%08x\n",
-		    occ_cmd);
+		printk(BIOS_WARNING,
+		       "Received OCC response for a wrong command while running 0x%08x\n",
+		       occ_cmd);
+	else
+		return true;
+
+	return false;
 }
 
 static void send_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 			 const uint8_t *data, uint16_t data_len,
 			 uint8_t *response, uint32_t *response_len)
 {
-	write_occ_cmd(homer, occ_cmd, data, data_len);
+	enum { MAX_TRIES = 2 };
+
+	uint8_t i = 0;
+
+	for (i = 0; i < MAX_TRIES; ++i) {
+		if (write_occ_cmd(homer, occ_cmd, data, data_len, response, response_len))
+			break;
+
+		if (i < MAX_TRIES - 1)
+			printk(BIOS_WARNING, "Retrying running OCC command 0x%08x\n", occ_cmd);
+	}
+
+	if (i == MAX_TRIES)
+		die("Failed running OCC command 0x%08x %d times\n", occ_cmd, MAX_TRIES);
 }
 
-/* TODO: maybe make this return bool */ 
 static void poll_occ(struct homer_st *homer, bool flush_all_errors)
 {
 	enum {
@@ -1970,7 +2011,6 @@ static void activate_occ(struct homer_st *homer)
 
 	/* Send initial poll to all OCCs to establish communication */
 	poll_occ(homer, /*flush_all_errors=*/false);
-	/* if (l_err) return; */ 
 
 	/* // Send ALL config data */
 	/* sendOccConfigData(); */

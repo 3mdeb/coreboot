@@ -85,11 +85,13 @@ enum scom_section {
 #define PU_OCB_OCI_OCCFLG2_CLEAR 0x0006C18B
 #define PU_PBAXCFG_SCOM          0x00068021
 
-#define OCC_MAX_DATA_LENGTH     0x00001000
 #define OCC_COMMAND_IN_PROGRESS 0xFF
 
 #define OCC_CMD_ADDR 0x000E0000
 #define OCC_RSP_ADDR 0x000E1000
+
+#define OCC_CMD_POLL      0x00
+#define OCC_CMD_SET_STATE 0x20
 
 #define OCC_RC_SUCCESS             0x00
 #define OCC_RC_INIT_FAILURE        0xE5
@@ -1931,11 +1933,11 @@ static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 
 	/* Statuses of 0xE0-EF are reserved for OCC exceptions */
 	if ((status & 0xF0) == 0xE0)
-		printk(BIOS_WARNING, "OCC exception occurred while running 0x%08x command\n",
+		printk(BIOS_WARNING, "OCC exception occurred while running 0x%02x command\n",
 		       occ_cmd);
 	else if (rsp_seq_num != cmd_seq_num)
 		printk(BIOS_WARNING,
-		       "Received OCC response for a wrong command while running 0x%08x\n",
+		       "Received OCC response for a wrong command while running 0x%02x\n",
 		       occ_cmd);
 	else
 		return true;
@@ -1956,32 +1958,25 @@ static void send_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 			break;
 
 		if (i < MAX_TRIES - 1)
-			printk(BIOS_WARNING, "Retrying running OCC command 0x%08x\n", occ_cmd);
+			printk(BIOS_WARNING, "Retrying running OCC command 0x%02x\n", occ_cmd);
 	}
 
 	if (i == MAX_TRIES)
-		die("Failed running OCC command 0x%08x %d times\n", occ_cmd, MAX_TRIES);
+		die("Failed running OCC command 0x%02x %d times\n", occ_cmd, MAX_TRIES);
 }
 
-static void poll_occ(struct homer_st *homer, bool flush_all_errors)
+static void poll_occ(struct homer_st *homer, bool flush_all_errors,
+		     struct occ_poll_response *response)
 {
-	enum {
-		OCC_POLL_DATA_MIN_SIZE = 40,
-
-		OCC_CMD_POLL = 0x00,
-	};
+	enum { OCC_POLL_DATA_MIN_SIZE = 40 };
 
 	uint8_t max_more_errors = 10;
 	while (true) {
 		const uint8_t poll_data[1] = { 0x20 /*version*/ };
-
-		uint8_t poll_response[OCC_MAX_DATA_LENGTH];
-		uint32_t response_len = sizeof(poll_response);
-
-		const struct occ_poll_response *poll_rsp = (void *)poll_response;
+		uint32_t response_len = sizeof(*response);
 
 		send_occ_cmd(homer, OCC_CMD_POLL, poll_data, sizeof(poll_data),
-			     poll_response, &response_len);
+			     (uint8_t *)response, &response_len);
 
 		if (response_len < OCC_POLL_DATA_MIN_SIZE)
 			die("Invalid data length");
@@ -1989,7 +1984,7 @@ static void poll_occ(struct homer_st *homer, bool flush_all_errors)
 		if (!flush_all_errors)
 			break;
 
-		if (poll_rsp->error_id == 0)
+		if (response->error_id == 0)
 			break;
 
 		--max_more_errors;
@@ -1998,9 +1993,66 @@ static void poll_occ(struct homer_st *homer, bool flush_all_errors)
 	}
 }
 
+static void wait_for_occ_status(struct homer_st *homer, uint8_t status_bit)
+{
+	enum {
+		MAX_POLLS = 40,
+		DELAY_BETWEEN_POLLS_MS = 250,
+	};
+
+	uint8_t num_polls = 0;
+
+	for (num_polls = 0; num_polls < MAX_POLLS; ++num_polls) {
+		struct occ_poll_response poll_response;
+		poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+		if (poll_response.status & status_bit)
+			break;
+
+		if (num_polls < MAX_POLLS)
+			wait_ms(DELAY_BETWEEN_POLLS_MS, false);
+	}
+
+	if (num_polls == MAX_POLLS)
+		die("Failed to wait until OCC has reached state 0x%02x\n", status_bit);
+}
+
+static void set_occ_state(struct homer_st *homer, uint8_t state)
+{
+	struct occ_poll_response poll_response;
+
+	/* Fields: version, state, reserved */
+	const uint8_t data[3] = { 0x00, state, 0x00 };
+	uint32_t response_len = 0;
+
+	/* Send poll cmd to confirm comm has been established and flush old errors */
+	poll_occ(homer, /*flush_all_errors=*/true, &poll_response);
+
+	/* Try to switch to a new state */
+	send_occ_cmd(homer, OCC_CMD_SET_STATE, data, sizeof(data), NULL, &response_len);
+
+	/* Send poll to query state of all OCC and flush any errors */
+	poll_occ(homer, /*flush_all_errors=*/true, &poll_response);
+
+	if (poll_response.state != state)
+		die("Failed to set state of OCC to 0x%02x.\n", state);
+}
+
+static void set_occ_active_state(struct homer_st *homer)
+{
+	enum {
+		OCC_STATUS_ACTIVE_READY = 0x01,
+		OCC_STATE_ACTIVE = 0x03,
+	};
+
+	wait_for_occ_status(homer, OCC_STATUS_ACTIVE_READY);
+	set_occ_state(homer, OCC_STATE_ACTIVE);
+}
+
 /* Moves OCC to active state */
 static void activate_occ(struct homer_st *homer)
 {
+	struct occ_poll_response poll_response;
+
 	// TODO: 
 
 	/* l_err = calcMemThrottles(); */
@@ -2010,7 +2062,7 @@ static void activate_occ(struct homer_st *homer)
 	wait_for_occ_checkpoint();
 
 	/* Send initial poll to all OCCs to establish communication */
-	poll_occ(homer, /*flush_all_errors=*/false);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 
 	/* // Send ALL config data */
 	/* sendOccConfigData(); */
@@ -2019,9 +2071,8 @@ static void activate_occ(struct homer_st *homer)
 	/* l_err = sendOccUserPowerCap(); */
 	/* if (l_err) return; */
 
-	/* // Wait for all OCCs to go to the target state */
-	/* l_err = waitForOccState(); */
-	/* if (l_err) return; */
+	/* Switch for OCC to active state */
+	set_occ_active_state(homer);
 
 	/* // Set active sensors for all OCCs, so BMC can start communication with OCCs */
 	/* l_err = setOccActiveSensors(true); */

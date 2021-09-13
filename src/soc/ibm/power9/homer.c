@@ -99,8 +99,9 @@ enum scom_section {
 #define OCC_RC_INIT_FAILURE        0xE5
 #define OCC_RC_OCC_INIT_CHECKPOINT 0xE1
 
-#define OCC_CFGDATA_FREQ_POINT 0x02
-#define OCC_CFGDATA_OCC_ROLE   0x03
+#define OCC_CFGDATA_FREQ_POINT  0x02
+#define OCC_CFGDATA_OCC_ROLE    0x03
+#define OCC_CFGDATA_PCAP_CONFIG 0x07
 
 struct occ_poll_response {
 	uint8_t  status;
@@ -2107,6 +2108,44 @@ static void get_occ_role_msg_data(uint8_t *data, uint16_t *data_len)
 	*data_len = 2;
 }
 
+static void get_power_cap_msg_data(uint8_t *data, uint16_t *data_len)
+{
+	enum { OCC_CFGDATA_PCAP_CONFIG_VERSION = 0x20 };
+
+	uint64_t index = 0;
+
+	/* Values of the following attributes were taken from Hostboot's log */
+
+	/* Minimum HARD Power Cap (ATTR_OPEN_POWER_MIN_POWER_CAP_WATTS) */
+	uint16_t min_pcap = 2000;
+
+	/* Minimum SOFT Power Cap (ATTR_OPEN_POWER_SOFT_MIN_PCAP_WATTS) */
+	uint16_t soft_pcap = 2000;
+
+	/* Quick Power Drop Power Cap (ATTR_OPEN_POWER_N_BULK_POWER_LIMIT_WATTS) */
+	uint16_t qpd_pcap = 2000;
+
+	/* System Maximum Power Cap (ATTR_OPEN_POWER_N_PLUS_ONE_HPC_BULK_POWER_LIMIT_WATTS) */
+	uint16_t max_pcap = 3000;
+
+	data[index++] = OCC_CFGDATA_PCAP_CONFIG;
+	data[index++] = OCC_CFGDATA_PCAP_CONFIG_VERSION;
+
+	memcpy(&data[index], &soft_pcap, 2);
+	index += 2;
+
+	memcpy(&data[index], &min_pcap, 2);
+	index += 2;
+
+	memcpy(&data[index], &max_pcap, 2);
+	index += 2;
+
+	memcpy(&data[index], &qpd_pcap, 2);
+	index += 2;
+
+	*data_len = index;
+}
+
 static void send_occ_config_data(struct homer_st *homer)
 {
 	enum { OCC_MAX_DATA_LENGTH = 0x00001000 };
@@ -2123,6 +2162,10 @@ static void send_occ_config_data(struct homer_st *homer)
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 
 	get_freq_point_msg_data(homer, data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
+	get_power_cap_msg_data(data, &data_len);
 	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 

@@ -1615,7 +1615,7 @@ static uint32_t ppc_bctr(void)
 static uint32_t ppc_b(uint32_t target_addr)
 {
 	uint32_t inst;
-	inst = BR_OP << (31 - 5);
+	inst = BR_OP;
 	inst |= (target_addr & 0x03FFFFFF);
 	return inst;
 }
@@ -1636,7 +1636,7 @@ static uint64_t setup_memory_boot(void)
 	sram_program[0] = ((uint64_t)ppc_lis(1, 0x8000) << 32);
 
 	/* ori r1, r1, OCC_BOOT_OFFSET */
-	sram_program[0] |= (ppc_ori(1, 1, OCC_BOOT_OFFSET));
+	sram_program[0] |= ppc_ori(1, 1, OCC_BOOT_OFFSET);
 
 	/* mtctr (mtspr r1, CTR) */
 	sram_program[1] = ((uint64_t)ppc_mtspr(1, CTR) << 32);
@@ -1645,7 +1645,7 @@ static uint64_t setup_memory_boot(void)
 	sram_program[1] |= ppc_bctr();
 
 	/* Write to SRAM */
-	writeOCCSRAM(OCC_SRAM_BOOT_ADDR, sram_program, ARRAY_SIZE(sram_program));
+	writeOCCSRAM(OCC_SRAM_BOOT_ADDR, sram_program, sizeof(sram_program));
 
 	return ((uint64_t)ppc_b(OCC_SRAM_BOOT_ADDR2) << 32);
 }

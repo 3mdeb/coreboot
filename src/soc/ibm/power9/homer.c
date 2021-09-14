@@ -1317,8 +1317,6 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	/* ATTR_VDD_AVSBUS_RAIL */
 	uint8_t avsbus_rail = 0;
 
-	/* Assuming ATTR_SYSTEM_PSTATES_MODE == fapi2::ENUM_ATTR_SYSTEM_PSTATES_MODE_AUTO */
-
 	write_scom(PU_GPE2_GPEIVPR_SCOM, (uint64_t)homer->ppmr.l1_bootloader << 32);
 	occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
 
@@ -1328,9 +1326,6 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	occ_scratch |= PPC_PLACE(avsbus_rail, 28, 4);
 
 	write_scom(PU_OCB_OCI_OCCS2_SCOM, occ_scratch);
-
-	/* PGPE_PSTATE_PROTOCOL_AUTO_ACTIVATE */
-	write_scom(PU_OCB_OCI_OCCFLG_SCOM2, PPC_BIT(1));
 
 	write_scom(PU_GPE2_GPETSEL_SCOM, 0x1A00000000000000);
 
@@ -1349,20 +1344,6 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	} while (!(occ_scratch & PPC_BIT(PGPE_ACTIVE)) &&
 		 !(xsr_iar & PPC_BIT(HALTED_STATE)) &&
 		 --timeout_counter != 0);
-
-	do {
-		occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
-		xsr_iar = read_scom(PU_GPE3_PPE_XIDBGPRO);
-		/* Does this need to be such a long time? */
-		wait_ms(20, false);
-	} while (!(occ_scratch & PPC_BIT(PGPE_PSTATE_PROTOCOL_ACTIVE)) &&
-		 !(xsr_iar & PPC_BIT(HALTED_STATE)) &&
-		 --timeout_counter != 0);
-
-	if (timeout_counter == 0 ||
-	    !(occ_scratch & PPC_BIT(PGPE_PSTATE_PROTOCOL_ACTIVE)) ||
-	    (xsr_iar & PPC_BIT(HALTED_STATE)))
-		die("Pstate GPE Protocol Auto Start timeout");
 
 	OCCPstateParmBlock *oppb = (OCCPstateParmBlock *)homer->ppmr.occ_parm_block;
 	GlobalPstateParmBlock *gppb = (GlobalPstateParmBlock *)

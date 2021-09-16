@@ -215,7 +215,7 @@ struct occ_host_config
 /* Bit positions for various chiplets in host configuration vector */
 enum {
 	MCS_POS           = 1,
-	MBA_POS           = 9,
+	MBA_POS           = 9,	// This is actually MCA_POS
 	MEM_BUF_POS       = 17,
 	XBUS_POS          = 25,
 	PHB_POS           = 30,
@@ -1180,7 +1180,11 @@ static void load_pm_complex(struct homer_st *homer)
 	/* Common OCC area is located right after HOMER image */
 	uint8_t *common_area = (uint8_t *)homer + sizeof(*homer);
 
-	// TODO resetPMComplex(); also used in istep_6_11.c 
+	/*
+	 * Hostboot resets OCC here, but we haven't started it yet, so reset
+	 * shouldn't be necessary.
+	 */
+
 	load_occ_setup(homer, common_area);
 	load_occ_image_to_homer(homer);
 	load_host_data_to_homer(homer);
@@ -1204,7 +1208,8 @@ static void pm_corequad_init(uint64_t cores)
 	};
 
 	/* XXX: this is supposed to be stored by pm_corequad_reset()
-	 *      ATTR_QUAD_PPM_ERRMASK and ATTR_CORE_PPM_ERRMASK. */
+	 *      ATTR_QUAD_PPM_ERRMASK and ATTR_CORE_PPM_ERRMASK.
+	 *      If there was no reset, no need to set it? */
 	uint32_t err_mask = 0;
 
 	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
@@ -1749,7 +1754,7 @@ static void wait_for_occ_checkpoint(void)
 			die("OCC initialization has failed\n");
 	}
 
-	die("Waiting for OCC initialization checkpoint has timed out\n");
+	die("Waiting for OCC initialization checkpoint has timed out.\n");
 }
 
 static void build_occ_cmd(struct homer_st *homer, uint8_t occ_cmd, uint8_t seq_num,
@@ -1830,7 +1835,7 @@ static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 
 	const uint8_t *rsp_buf = &homer->occ_host_area[OCC_RSP_ADDR];
 
-	int32_t timeout_ms = (timeout_sec == 0 ? OCC_RSP_SAMPLE_TIME_MS : timeout_sec*1000);
+	int32_t timeout_ms = (timeout_sec == 0 ? OCC_RSP_SAMPLE_TIME_MS : timeout_sec * 1000);
 
 	while (timeout_ms >= 0) {
 		/*
@@ -1860,15 +1865,15 @@ static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 
 		if (timeout_ms > 0) {
 			/* Delay before the next check */
-			int32_t sleep_ms = OCC_RSP_SAMPLE_TIME_MS ;
+			int32_t sleep_ms = OCC_RSP_SAMPLE_TIME_MS;
 			if (timeout_ms < sleep_ms)
 				sleep_ms = timeout_ms;
 
 			wait_ms(sleep_ms, false);
 			timeout_ms -= sleep_ms;
 		} else {
-			/* time expired */
-			die("Timed out while waiting for a response from OCC.\n");
+			/* Time expired */
+			die("Timed out while waiting for OCC response\n");
 		}
 	}
 }
@@ -2168,7 +2173,7 @@ static void send_occ_config_data(struct homer_st *homer)
 	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 
-	// TODO: 
+	/* There are more configuration data, but they seem to not be required */
 }
 
 static void send_occ_user_power_cap(struct homer_st *homer)
@@ -2194,11 +2199,6 @@ static void set_occ_active_state(struct homer_st *homer)
 static void activate_occ(struct homer_st *homer)
 {
 	struct occ_poll_response poll_response;
-
-	// TODO: 
-
-	/* l_err = calcMemThrottles(); */
-	/* if (l_err) return; */
 
 	/* Make sure OCCs are ready for communication */
 	wait_for_occ_checkpoint();

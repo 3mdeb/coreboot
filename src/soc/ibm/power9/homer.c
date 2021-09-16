@@ -1741,7 +1741,8 @@ static void wait_for_occ_checkpoint(void)
 
 		if (status == OCC_RC_OCC_INIT_CHECKPOINT &&
 		    checkpoint == OCC_COMM_INIT_COMPLETE)
-			break;
+			/* Success */
+			return;
 
 		if (((checkpoint & OCC_INIT_FAILURE) == OCC_INIT_FAILURE) ||
 		    status == OCC_RC_INIT_FAILURE)

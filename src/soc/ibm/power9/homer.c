@@ -120,7 +120,7 @@ struct occ_poll_response {
 	uint8_t  sensor[6];
 	uint8_t  num_blocks;
 	uint8_t  version;
-	uint8_t  sensor_data[4049];
+	uint8_t  sensor_data[];	// 4049 bytes
 } __attribute__((packed));
 
 struct ring_data {
@@ -2128,9 +2128,8 @@ static void get_power_cap_msg_data(uint8_t *data, uint16_t *data_len)
 
 static void send_occ_config_data(struct homer_st *homer)
 {
-	enum { OCC_MAX_DATA_LENGTH = 0x00001000 };
-
-	uint8_t data[OCC_MAX_DATA_LENGTH] = { 0x00 };
+	/* All our messages are very short */
+	uint8_t data[64];
 	uint16_t data_len = 0;
 	uint32_t response_len = 0;
 

@@ -1505,13 +1505,13 @@ static void pm_pba_init(void)
 
 	write_scom(PU_PBAFIR, 0);
 
-	data |= PPC_PLACE(4, 4, attr_pbax_groupid);
-	data |= PPC_PLACE(8, 3, attr_pbax_chipid);
-	data |= PPC_PLACE(12, 8, attr_pbax_broadcast_vector);
-	data |= PPC_PLACE(20, 5, PBAX_DATA_TIMEOUT);
-	data |= PPC_PLACE(27, 1, PBAX_SND_RETRY_COMMIT_OVERCOMMIT);
-	data |= PPC_PLACE(28, 8, PBAX_SND_RETRY_THRESHOLD);
-	data |= PPC_PLACE(36, 5, PBAX_SND_TIMEOUT);
+	data |= PPC_PLACE(attr_pbax_groupid, 4, 4);
+	data |= PPC_PLACE(attr_pbax_chipid, 8, 3);
+	data |= PPC_PLACE(attr_pbax_broadcast_vector, 12, 8);
+	data |= PPC_PLACE(PBAX_DATA_TIMEOUT, 20, 5);
+	data |= PPC_PLACE(PBAX_SND_RETRY_COMMIT_OVERCOMMIT, 27, 1);
+	data |= PPC_PLACE(PBAX_SND_RETRY_THRESHOLD, 28, 8);
+	data |= PPC_PLACE(PBAX_SND_TIMEOUT, 36, 5);
 	write_scom(PU_PBAXCFG_SCOM, data);
 
 	pba_slave_setup_runtime_phase();

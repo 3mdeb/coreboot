@@ -1313,21 +1313,20 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	};
 
 	uint64_t occ_scratch;
-	uint64_t xsr_iar;
-	uint32_t timeout_counter = TIMEOUT_COUNT;
 	/* ATTR_VDD_AVSBUS_BUSNUM */
 	uint8_t avsbus_number = 0;
 	/* ATTR_VDD_AVSBUS_RAIL */
 	uint8_t avsbus_rail = 0;
 
-	write_scom(PU_GPE2_GPEIVPR_SCOM, (uint64_t)homer->ppmr.l1_bootloader << 32);
-	occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
+	uint64_t ivpr = 0x80000000 + offsetof(struct homer_st, ppmr.l1_bootloader);
+	write_scom(PU_GPE2_GPEIVPR_SCOM, ivpr << 32);
 
+	/* Set up the OCC Scratch 2 register before PGPE boot */
+	occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
 	occ_scratch &= ~PPC_BIT(PGPE_ACTIVE);
 	occ_scratch &= ~PPC_BITMASK(27, 32);
 	occ_scratch |= PPC_PLACE(avsbus_number, 27, 1);
 	occ_scratch |= PPC_PLACE(avsbus_rail, 28, 4);
-
 	write_scom(PU_OCB_OCI_OCCS2_SCOM, occ_scratch);
 
 	write_scom(PU_GPE2_GPETSEL_SCOM, 0x1A00000000000000);
@@ -1335,26 +1334,27 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	/* OCCFLG2_PGPE_HCODE_FIT_ERR_INJ | OCCFLG2_PGPE_HCODE_PSTATE_REQ_ERR_INJ */
 	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, 0x1100000000);
 
+	printk(BIOS_ERR, "Attempting PGPE activation...\n");
+
 	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(HARD_RESET, 1, 3));
 	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(TOGGLE_XSR_TRH, 1, 3));
 	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(RESUME, 1, 3));
 
-	do {
-		occ_scratch = read_scom(PU_OCB_OCI_OCCS2_SCOM);
-		xsr_iar = read_scom(PU_GPE2_PPE_XIDBGPRO);
-		/* Does this need to be such a long time? */
-		wait_ms(20, false);
-	} while (!(occ_scratch & PPC_BIT(PGPE_ACTIVE)) &&
-		 !(xsr_iar & PPC_BIT(HALTED_STATE)) &&
-		 --timeout_counter != 0);
+	/* Does this need to be such a long time? */
+	wait_ms(20*TIMEOUT_COUNT,
+		(read_scom(PU_OCB_OCI_OCCS2_SCOM) & PPC_BIT(PGPE_ACTIVE)) ||
+		(read_scom(PU_GPE2_PPE_XIDBGPRO) & PPC_BIT(HALTED_STATE)));
+
+	if (read_scom(PU_OCB_OCI_OCCS2_SCOM) & PPC_BIT(PGPE_ACTIVE))
+		printk(BIOS_ERR, "PGPE was activated successfully\n");
+	else
+		die("Failed to activate PGPE\n");
 
 	OCCPstateParmBlock *oppb = (OCCPstateParmBlock *)homer->ppmr.occ_parm_block;
 	GlobalPstateParmBlock *gppb = (GlobalPstateParmBlock *)
 		&homer->ppmr.pgpe_sram_img[homer->ppmr.header.hcode_len];
 
-	uint32_t safe_mode_freq =
-		((oppb->frequency_min_khz * 1000) * gppb->frequency_step_khz) /
-		gppb->reference_frequency_khz;
+	uint32_t safe_mode_freq = oppb->frequency_min_khz / gppb->frequency_step_khz;
 
 	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
 		uint64_t data;

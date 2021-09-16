@@ -1120,16 +1120,8 @@ static void istep_16_1(int this_core)
 
 static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
 {
-	// TODO: check if istep_6.h will have these at the end 
-	static const uint64_t PBA_BARs[4] = {
-		PU_PBABAR0, PU_PBABAR1, PU_PBABAR2, PU_PBABAR3
-	};
-	static const uint64_t PBA_BARMSKs[4] = {
-		PU_PBABARMSK0, PU_PBABARMSK1, PU_PBABARMSK2, PU_PBABARMSK3
-	};
-
-	write_scom_direct(PBA_BARs[index], bar_addr & 0x1FFFFFFFFFFFFFFFull);
-	write_scom_direct(PBA_BARMSKs[index], 0x300000);
+	write_scom_direct(PU_PBABAR0 + index, bar_addr & 0x1FFFFFFFFFFFFFFFull);
+	write_scom_direct(PU_PBABARMSK0 + index, 0x300000);
 }
 
 static void load_occ_setup(struct homer_st *homer, uint8_t *common_area)

@@ -52,16 +52,6 @@ enum scom_section {
 	STOP_SECTION_L3,
 };
 
-// TODO: check if istep_6.h will have these at the end 
-#define PU_PBABAR0 (0x05012B00)
-#define PU_PBABAR1 (0x05012B01)
-#define PU_PBABAR2 (0x05012B02)
-#define PU_PBABAR3 (0x05012B03)
-#define PU_PBABARMSK0 (0x05012B04)
-#define PU_PBABARMSK1 (0x05012B05)
-#define PU_PBABARMSK2 (0x05012B06)
-#define PU_PBABARMSK3 (0x05012B07)
-
 #define PHYSICAL_ADDR_MASK 0x7FFFFFFFFFFFFFFFull
 
 #define INIT_CONFIG_VALUE    0x8000000C09800000ull
@@ -102,6 +92,27 @@ enum scom_section {
 #define OCC_CFGDATA_FREQ_POINT  0x02
 #define OCC_CFGDATA_OCC_ROLE    0x03
 #define OCC_CFGDATA_PCAP_CONFIG 0x07
+
+#define PU_PBABAR0 (0x05012B00)
+#define PU_PBABAR1 (0x05012B01)
+#define PU_PBABAR2 (0x05012B02)
+#define PU_PBABAR3 (0x05012B03)
+#define PU_PBABARMSK0 (0x05012B04)
+#define PU_PBABARMSK1 (0x05012B05)
+#define PU_PBABARMSK2 (0x05012B06)
+#define PU_PBABARMSK3 (0x05012B07)
+
+#define PU_SPIMPSS_ADC_CTRL_REG0 (0x00070000)
+#define PU_SPIPSS_ADC_CTRL_REG1 (0x00070001)
+#define PU_SPIPSS_ADC_CTRL_REG2 (0x00070002)
+#define PU_SPIPSS_ADC_WDATA_REG (0x00070010)
+
+#define PU_SPIPSS_P2S_CTRL_REG0 (0x00070040)
+#define PU_SPIPSS_P2S_CTRL_REG1 (0x00070041)
+#define PU_SPIPSS_P2S_CTRL_REG2 (0x00070042)
+#define PU_SPIPSS_P2S_WDATA_REG (0x00070050)
+
+#define PU_SPIPSS_100NS_REG (0x00070028)
 
 struct occ_poll_response {
 	uint8_t  status;
@@ -1660,16 +1671,32 @@ static void pm_occ_control_start_from_mem(void)
 	write_scom(PU_OCB_PIB_OCR_CLEAR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
 }
 
+static void pm_pss_init(void)
+{
+	scom_and_or(PU_SPIMPSS_ADC_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
+	scom_and_or(PU_SPIPSS_ADC_CTRL_REG1, ~PPC_BITMASK(0, 17),
+		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12));
+	scom_and(PU_SPIPSS_ADC_CTRL_REG2, ~PPC_BITMASK(0, 16));
+	write_scom(PU_SPIPSS_ADC_WDATA_REG, 0);
+	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
+	scom_and_or(PU_SPIPSS_P2S_CTRL_REG1, ~PPC_BITMASK(1, 3),
+		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12) | PPC_BIT(17));
+	scom_and(PU_SPIPSS_P2S_CTRL_REG2, ~PPC_BITMASK(0, 16));
+	write_scom(PU_SPIPSS_P2S_WDATA_REG, 0);
+	scom_and_or(PU_SPIPSS_100NS_REG, 0xFFFFFFFF,
+		    (uint64_t)(powerbus_cfg()->fabric_freq / 40) << 32);
+}
+
 /* Initializes power-management and starts OCC */
 static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 {
 	enum { STOP_RECOVERY_TRIGGER_ENABLE = 29 };
 
 	pm_corequad_init(cores);
-	/* pm_pss_init(); // in 16.1 */ 
-	/* p9_pm_occ_firinit(); // in 16.1 */ 
+	pm_pss_init();
+	/* pm_occ_fir_init(); // not dealing with FIR, right? */ 
 	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */ 
-	/* p9_pm_stop_gpe_init(i_target, p9pm::PM_INIT); done it earlier */ 
+	/* stop_gpe_init(homer); // done it earlier, need to repeat? */ 
 	pm_pstate_gpe_init(homer, cores);
 
 	check_proc_config(homer);

@@ -1372,7 +1372,6 @@ static void pba_slave_setup_runtime_phase(void)
 		OCI_MASTER_ID_GPE2     = 0x2,
 		OCI_MASTER_ID_GPE3     = 0x3,
 		OCI_MASTER_ID_ICU      = 0x5,
-		OCI_MASTER_ID_DCU      = 0x7,
 		OCI_MASTER_ID_PGPE     = OCI_MASTER_ID_GPE2,
 		OCI_MASTER_ID_SGPE     = OCI_MASTER_ID_GPE3,
 		OCI_MASTER_ID_MASK_ALL = 0x7,
@@ -1406,13 +1405,13 @@ static void pba_slave_setup_runtime_phase(void)
 	 */
 
 	data = 0;
-	data |= PPC_PLACE(PBA_OCI_REGION, 16, 2);                    // pba_region
-	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2);  // bcde_ocitrans
-	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2);  // bcue_ocitrans
-	data |= PPC_PLACE(true, 8, 1);                               // en_marker_ack
-	data |= PPC_PLACE((PBA_OCI_MARKER_BASE >> 16) & 0x7, 18, 3); // oci_marker_space
-	data |= PPC_PLACE(true, 27, 1);                              // en_slv_fairness
-	data |= PPC_PLACE(true, 10, 1);                              // en_second_wrbuf
+	data |= PPC_PLACE(PBA_OCI_REGION, 16, 2);                   // pba_region
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2); // bcde_ocitrans
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2); // bcue_ocitrans
+	data |= PPC_BIT(8);                                         // en_marker_ack
+	data |= PPC_PLACE(PBA_OCI_MARKER_BASE >> 16, 18, 3);        // oci_marker_space
+	data |= PPC_BIT(27);                                        // en_slv_fairness
+	data |= PPC_BIT(10);                                        // en_second_wrbuf
 
 	write_scom(PU_PBAMODE_SCOM, data);
 
@@ -1422,17 +1421,17 @@ static void pba_slave_setup_runtime_phase(void)
 	 */
 
 	data = 0;
-	data |= PPC_PLACE(true, 0, 1);                               // enable
+	data |= PPC_BIT(0);                                          // enable
 	data |= PPC_PLACE(OCI_MASTER_ID_SGPE, 1, 3);                 // mid_match_value
 	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
 	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
 	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
 	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
 	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
-	data |= PPC_PLACE(true, 20, 1);                              // buf_alloc_a
-	data |= PPC_PLACE(true, 21, 1);                              // buf_alloc_b
-	data |= PPC_PLACE(true, 22, 1);                              // buf_alloc_c
-	data |= PPC_PLACE(true, 19, 1);                              // buf_alloc_w
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
 
 	write_scom(PU_PBASLVCTL0_SCOM, data);
 
@@ -1442,17 +1441,17 @@ static void pba_slave_setup_runtime_phase(void)
 	 */
 
 	data = 0;
-	data |= PPC_PLACE(true, 0, 1);                                  // enable
-	data |= PPC_PLACE(OCI_MASTER_ID_ICU & OCI_MASTER_ID_DCU, 1, 3); // mid_match_value
-	data |= PPC_PLACE(OCI_MASTER_ID_ICU & OCI_MASTER_ID_DCU, 5, 3); // mid_care_mask
-	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);              // read_ttype
-	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);               // read_prefetch_ctl
-	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);             // write_ttype
-	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3);    // wr_gather_timeout
-	data |= PPC_PLACE(true, 20, 1);                                 // buf_alloc_a
-	data |= PPC_PLACE(true, 21, 1);                                 // buf_alloc_b
-	data |= PPC_PLACE(true, 22, 1);                                 // buf_alloc_c
-	data |= PPC_PLACE(true, 19, 1);                                 // buf_alloc_w
+	data |= PPC_BIT(0);                                          // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 1, 3);                  // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 5, 3);                  // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
 
 	write_scom(PU_PBASLVCTL1_SCOM, data);
 
@@ -1463,17 +1462,17 @@ static void pba_slave_setup_runtime_phase(void)
 	 */
 
 	data = 0;
-	data |= PPC_PLACE(true, 0, 1);                               // enable
+	data |= PPC_BIT(0);                                          // enable
 	data |= PPC_PLACE(OCI_MASTER_ID_PGPE, 1, 3);                 // mid_match_value
 	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
 	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
 	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
 	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
 	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
-	data |= PPC_PLACE(true, 20, 1);                              // buf_alloc_a
-	data |= PPC_PLACE(true, 21, 1);                              // buf_alloc_b
-	data |= PPC_PLACE(true, 22, 1);                              // buf_alloc_c
-	data |= PPC_PLACE(true, 19, 1);                              // buf_alloc_w
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
 
 	write_scom(PU_PBASLVCTL2_SCOM, data);
 

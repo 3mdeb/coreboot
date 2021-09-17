@@ -91,7 +91,10 @@ enum scom_section {
 
 #define OCC_CFGDATA_FREQ_POINT  0x02
 #define OCC_CFGDATA_OCC_ROLE    0x03
+#define OCC_CFGDATA_APSS_CONFIG 0x04
+#define OCC_CFGDATA_MEM_CONFIG  0x05
 #define OCC_CFGDATA_PCAP_CONFIG 0x07
+#define OCC_CFGDATA_SYS_CONFIG  0x0F
 
 #define PU_PBABAR0 (0x05012B00)
 #define PU_PBABAR1 (0x05012B01)
@@ -2114,6 +2117,153 @@ static void get_occ_role_msg_data(uint8_t *data, uint16_t *data_len)
 	*data_len = 2;
 }
 
+static void get_apss_msg_data(uint8_t *data, uint16_t *size)
+{
+	enum { OCC_CFGDATA_APSS_VERSION = 0x20 };
+
+	/* ATTR_APSS_GPIO_PORT_PINS */
+	uint8_t function[16] = { 0x0 };
+
+	/* ATTR_ADC_CHANNEL_GNDS */
+	uint8_t ground[16] = { 0x0 };
+
+	/* ATTR_ADC_CHANNEL_GAINS */
+	uint32_t gain[16] = { 0x0 };
+
+	/* ATTR_ADC_CHANNEL_OFFSETS */
+	uint32_t offset[16] = { 0x0 };
+
+	uint16_t index = 0;
+
+	data[index++] = OCC_CFGDATA_APSS_CONFIG;
+	data[index++] = OCC_CFGDATA_APSS_VERSION;
+	data[index++] = 0;
+	data[index++] = 0;
+
+	for (uint64_t channel = 0; channel < sizeof(function); ++channel) {
+		data[index++] = function[channel];         // ADC Channel assignement
+
+		memset(&data[index], 0, sizeof(uint32_t)); // Sensor ID
+		index += 4;
+
+		data[index++] = ground[channel];           // Ground Select
+
+		memcpy(&data[index], &gain[channel], sizeof(uint32_t));
+		index += 4;
+
+		memcpy(&data[index], &offset[channel], sizeof(uint32_t));
+		index += 4;
+	}
+
+	/* ATTR_APSS_GPIO_PORT_MODES */
+	uint8_t gpioMode[2] = { 0x0 };
+	/* ATTR_APSS_GPIO_PORT_PINS */
+	uint8_t gpioPin[16] = { 0x0 };
+
+	uint64_t pinsPerPort = sizeof(gpioPin) / sizeof(gpioMode);
+	uint64_t pinIdx = 0;
+
+	for (uint64_t port = 0; port < sizeof(gpioMode); ++port) {
+		data[index++] = gpioMode[port];
+		data[index++] = 0;
+
+		memcpy(&data[index], gpioPin + pinIdx, pinsPerPort);
+		index += pinsPerPort;
+
+		pinIdx += pinsPerPort;
+	}
+
+	*size = index;
+}
+
+static void get_mem_cfg_msg_data(uint8_t *data, uint16_t *size)
+{
+	enum { OCC_CFGDATA_MEM_CONFIG_VERSION = 0x21 };
+
+	uint16_t index = 0;
+
+	data[index++] = OCC_CFGDATA_MEM_CONFIG;
+	data[index++] = OCC_CFGDATA_MEM_CONFIG_VERSION;
+
+	/* If OPAL then no "Power Control Default" support */
+
+	/* Byte 3: Memory Power Control Default */
+	data[index++] = 0xFF;
+	/* Byte 4: Idle Power Memory Power Control */
+	data[index++] = 0xFF;
+
+	/* Byte 5: Number of data sets */
+	data[index++] = 0; // Monitoring is disabled
+
+	*size = index;
+}
+
+static void get_sys_cfg_msg_data(uint8_t *data, uint16_t *size)
+{
+	/* TODO: all sensors IDs are zero, because we don't have IPMI messaging,
+	 *       which seems to be required */ 
+
+	enum {
+		OCC_CFGDATA_SYS_CONFIG_VERSION = 0x21,
+
+		/* KVM or OPAL mode + single node */
+		OCC_CFGDATA_OPENPOWER_OPALVM = 0x81,
+
+		OCC_CFGDATA_NON_REDUNDANT_PS      = 0x02,
+		OCC_REPORT_THROTTLE_BELOW_NOMINAL = 0x08,
+	};
+
+	uint8_t system_type = OCC_CFGDATA_OPENPOWER_OPALVM;
+	uint16_t index = 0;
+	uint8_t i = 0;
+
+	data[index++] = OCC_CFGDATA_SYS_CONFIG;
+	data[index++] = OCC_CFGDATA_SYS_CONFIG_VERSION;
+
+	/* System Type */
+
+	/* ATTR_REPORT_THROTTLE_BELOW_NOMINAL == 0 */
+
+	/* 0 = OCC report throttling when max frequency lowered below turbo */
+	system_type &= ~OCC_REPORT_THROTTLE_BELOW_NOMINAL;
+	/* Power supply policy is redundant */
+	system_type &= ~OCC_CFGDATA_NON_REDUNDANT_PS;
+	data[index++] = system_type;
+
+	/* Processor Callout Sensor ID */
+	memset(&data[index], 0, 4);
+	index += 4;
+
+	/* Next 12*4 bytes are for core sensors */
+	for (i = 0; i < MAX_CORES_PER_CHIP; ++i) {
+		/* Core Temp Sensor ID */
+		memset(&data[index], 0, 4);
+		index += 4;
+
+		/* Core Frequency Sensor ID */
+		memset(&data[index], 0, 4);
+		index += 4;
+	}
+
+	/* Backplane Callout Sensor ID */
+	memset(&data[index], 0, 4);
+	index += 4;
+
+	/* APSS Callout Sensor ID */
+	memset(&data[index], 0, 4);
+	index += 4;
+
+	/* Format 21 - VRM VDD Callout Sensor ID */
+	memset(&data[index], 0, 4);
+	index += 4;
+
+	/* Format 21 - VRM VDD Temperature Sensor ID */
+	memset(&data[index], 0, 4);
+	index += 4;
+
+	*size = index;
+}
+
 static void get_power_cap_msg_data(uint8_t *data, uint16_t *data_len)
 {
 	enum { OCC_CFGDATA_PCAP_CONFIG_VERSION = 0x20 };
@@ -2162,11 +2312,23 @@ static void send_occ_config_data(struct homer_st *homer)
 	/* Poll is sent between config packets to flush errors */
 	struct occ_poll_response poll_response;
 
+	get_freq_point_msg_data(homer, data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
 	get_occ_role_msg_data(data, &data_len);
 	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 
-	get_freq_point_msg_data(homer, data, &data_len);
+	get_apss_msg_data(data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
+	get_mem_cfg_msg_data(data, &data_len);
+	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
+	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
+
+	get_sys_cfg_msg_data(data, &data_len);
 	send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
 	poll_occ(homer, /*flush_all_errors=*/false, &poll_response);
 

@@ -1848,7 +1848,7 @@ static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 		 * Note: Need to check the sequence number to be sure we are
 		 *       processing the expected response
 		 */
-		if (rsp_buf[2] == OCC_COMMAND_IN_PROGRESS && rsp_buf[0] == seq_num) {
+		if (rsp_buf[2] != OCC_COMMAND_IN_PROGRESS && rsp_buf[0] == seq_num) {
 			/*
 			 * Need an 'isync' here to ensure that previous instructions
 			 * have completed before the code continues on. This is a type
@@ -1892,20 +1892,21 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t 
 	index += 1; /* command */
 	*status = rsp_buf[index++];
 
-	data_len= *(uint16_t *)&rsp_buf[index];
+	data_len = *(uint16_t *)&rsp_buf[index];
 	index += 2;
 
 	if (data_len > 0) {
-		if (data_len > *response_len) {
+		uint16_t copy_size = data_len;
+		if (copy_size > *response_len) {
 			printk(BIOS_WARNING, "Truncating OCC response from %d to %d bytes\n",
-			       data_len, *response_len);
-			data_len = *response_len;
+			       copy_size, *response_len);
+			copy_size = *response_len;
 		}
 
-		memcpy(response, &rsp_buf[index], data_len);
-		index += data_len;
+		memcpy(response, &rsp_buf[index], copy_size);
+		*response_len = copy_size;
 
-		*response_len = data_len;
+		index += data_len;
 	}
 
 	for (i = 0; i < index; ++i)
@@ -1914,7 +1915,7 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t 
 	if (checksum != *(uint16_t *)&rsp_buf[index])
 		return false;
 
-	return (status == OCC_RC_SUCCESS);
+	return (*status == OCC_RC_SUCCESS);
 }
 
 static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
@@ -2065,7 +2066,7 @@ static void get_freq_point_msg_data(struct homer_st *homer, uint8_t *data, uint1
 
 	for (i = 0; i < VOLTAGE_BUCKET_COUNT; ++i) {
 		bucket = &voltage->buckets[i];
-		if (bucket->id != 0)
+		if (bucket->powerbus.freq != 0)
 			break;
 	}
 
@@ -2084,7 +2085,7 @@ static void get_freq_point_msg_data(struct homer_st *homer, uint8_t *data, uint1
 	index += 2;
 
 	/* Minimum Frequency in MHz */
-	min_freq = oppb->frequency_min_khz * 1000;
+	min_freq = oppb->frequency_min_khz / 1000;
 	memcpy(&data[index], &min_freq, 2);
 	index += 2;
 

@@ -2485,20 +2485,9 @@ static void get_avs_bus_cfg_msg_data(struct homer_st *homer, uint8_t *data, uint
 	*size = index;
 }
 
-static void get_gpu_msg_data(struct homer_st *homer, uint8_t *data, uint16_t *size)
+static void get_power_data(struct homer_st *homer, uint16_t *power_max, uint16_t *power_drop)
 {
-	enum {
-		OCC_CFGDATA_GPU_CONFIG_VERSION = 0x01,
-		MAX_GPUS = 3,
-	};
-
 	const struct voltage_bucket_data *bucket = get_voltage_data();
-
-	uint16_t index = 0;
-
-	data[index++] = OCC_CFGDATA_GPU_CONFIG;
-	data[index++] = OCC_CFGDATA_GPU_CONFIG_VERSION;
-
 
 	/* All processor chips (do not have to be functional) */
 	const uint8_t num_procs = 2; // from Hostboot log
@@ -2515,26 +2504,44 @@ static void get_gpu_msg_data(struct homer_st *homer, uint8_t *data, uint16_t *si
 	 *   (ultra turbo) and memory at maximum power (least throttled) plus
 	 *   everything else (fans...) excluding GPUs.
 	 */
-	uint32_t power_max = proc_socket_power * num_procs;
-	power_max += mem_power_min_throttles + misc_power;
+	*power_max = proc_socket_power * num_procs;
+	*power_max += mem_power_min_throttles + misc_power;
 
 	OCCPstateParmBlock *oppb = (void *)homer->ppmr.occ_parm_block;
 	uint16_t min_freq = oppb->frequency_min_khz / 1000;
 	const uint16_t mhz_per_watt = 28; // ATTR_PROC_MHZ_PER_WATT, from talos.xml
-	// Drop always calculated from Turbo to Min (not ultra)
+	/* Drop is always calculated from Turbo to Min (not ultra) */
 	uint32_t proc_drop = (bucket->turbo.freq - min_freq) / mhz_per_watt;
 	proc_drop *= num_procs;
 	const uint16_t memory_drop = mem_power_min_throttles - mem_power_max_throttles;
-	const uint16_t power_drop = proc_drop + memory_drop;
 
+	*power_drop = proc_drop + memory_drop;
+}
+
+static void get_gpu_msg_data(struct homer_st *homer, uint8_t *data, uint16_t *size)
+{
+	enum {
+		OCC_CFGDATA_GPU_CONFIG_VERSION = 0x01,
+		MAX_GPUS = 3,
+	};
+
+	uint16_t power_max = 0;
+	uint16_t power_drop = 0;
+
+	uint16_t index = 0;
+
+	data[index++] = OCC_CFGDATA_GPU_CONFIG;
+	data[index++] = OCC_CFGDATA_GPU_CONFIG_VERSION;
+
+	get_power_data(homer, &power_max, &power_drop);
 
 	memcpy(&data[index], &power_max, 2);   // Total non-GPU max power (W)
 	index += 2;
 
-	memcpy(&data[index], &power_drop, 2);   // Total proc/mem power drop (W)
+	memcpy(&data[index], &power_drop, 2);  // Total proc/mem power drop (W)
 	index += 2;
-	data[index++] = 0;                // reserved
-	data[index++] = 0;
+	data[index++] = 0; // reserved
+	data[index++] = 0; // reserved
 
 	/* No sensors ID.  Might require OBus or just be absent. */
 	uint32_t gpu_func_sensors[MAX_GPUS] = {0};

@@ -1928,10 +1928,18 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t 
 	for (i = 0; i < index; ++i)
 		checksum += rsp_buf[i];
 
-	if (checksum != *(uint16_t *)&rsp_buf[index])
+	if (checksum != *(uint16_t *)&rsp_buf[index]) {
+		printk(BIOS_WARNING, "OCC response has invalid checksum\n");
 		return false;
+	}
 
-	return (*status == OCC_RC_SUCCESS);
+	if (*status != OCC_RC_SUCCESS) {
+		printk(BIOS_WARNING, "OCC command failed with an error code: 0x%02x\n",
+		       *status);
+		return false;
+	}
+
+	return true;
 }
 
 static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
@@ -1956,8 +1964,12 @@ static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 	 * same for all commands) */
 	wait_for_occ_response(homer, 20, cmd_seq_num);
 
-	if (!parse_occ_response(homer, &status, &rsp_seq_num, response, response_len))
+	if (!parse_occ_response(homer, &status, &rsp_seq_num, response, response_len)) {
+		printk(BIOS_WARNING, "Received OCC response:\n");
+		hexdump(response, *response_len);
+		printk(BIOS_WARNING, "Failed to parse OCC response\n");
 		return false;
+	}
 
 	/* Statuses of 0xE0-EF are reserved for OCC exceptions */
 	if ((status & 0xF0) == 0xE0)
@@ -2052,6 +2064,7 @@ static void poll_occ(struct homer_st *homer, bool flush_all_errors,
 
 		--max_more_errors;
 		if (max_more_errors == 0) {
+			printk(BIOS_WARNING, "Last OCC poll response:\n");
 			hexdump(response, response_len);
 			die("Hit too many errors on polling OCC\n");
 		}
@@ -2103,7 +2116,8 @@ static void set_occ_state(struct homer_st *homer, uint8_t state)
 	poll_occ(homer, /*flush_all_errors=*/true, &poll_response);
 
 	if (poll_response.state != state)
-		die("Failed to set state of OCC to 0x%02x.\n", state);
+		die("State of OCC is 0x%02x instead of 0x%02x.\n",
+		    poll_response.state, state);
 }
 
 static const struct voltage_bucket_data * get_voltage_data(void)

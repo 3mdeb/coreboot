@@ -80,10 +80,11 @@ enum scom_section {
 #define OCC_CMD_ADDR 0x000E0000
 #define OCC_RSP_ADDR 0x000E1000
 
-#define OCC_CMD_POLL           0x00
-#define OCC_CMD_SET_STATE      0x20
-#define OCC_CMD_SETUP_CFG_DATA 0x21
-#define OCC_CMD_SET_POWER_CAP  0x22
+#define OCC_CMD_POLL            0x00
+#define OCC_CMD_CLEAR_ERROR_LOG 0x12
+#define OCC_CMD_SET_STATE       0x20
+#define OCC_CMD_SETUP_CFG_DATA  0x21
+#define OCC_CMD_SET_POWER_CAP   0x22
 
 #define OCC_RC_SUCCESS             0x00
 #define OCC_RC_INIT_FAILURE        0xE5
@@ -1992,6 +1993,39 @@ static void send_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 		die("Failed running OCC command 0x%02x %d times\n", occ_cmd, MAX_TRIES);
 }
 
+/* Reports OCC error to the user and clears it on OCC's side */
+static void handle_occ_error(struct homer_st *homer,
+			     const struct occ_poll_response *response)
+{
+	static uint8_t error_log_buf[4096];
+
+	uint16_t error_length = response->error_length;
+
+	const uint8_t clear_log_data[4] = {
+		0x01, // Version
+		response->error_id,
+		response->error_source,
+		0x00  // Reserved
+	};
+	uint32_t response_len = 0;
+
+	if (error_length > sizeof(error_log_buf)) {
+		printk(BIOS_WARNING, "Truncating OCC error log from %d to %ld bytes\n",
+		       error_length, sizeof(error_log_buf));
+		error_length = sizeof(error_log_buf);
+	}
+
+	readOCCSRAM(response->error_address, (uint64_t *)error_log_buf, error_length);
+
+	printk(BIOS_WARNING, "OCC error log:\n");
+	hexdump(error_log_buf, error_length);
+
+	/* Confirm to OCC that we've read the log */
+	send_occ_cmd(homer, OCC_CMD_CLEAR_ERROR_LOG,
+		     clear_log_data, sizeof(clear_log_data),
+		     NULL, &response_len);
+}
+
 static void poll_occ(struct homer_st *homer, bool flush_all_errors,
 		     struct occ_poll_response *response)
 {
@@ -2013,6 +2047,8 @@ static void poll_occ(struct homer_st *homer, bool flush_all_errors,
 
 		if (response->error_id == 0)
 			break;
+
+		handle_occ_error(homer, response);
 
 		--max_more_errors;
 		if (max_more_errors == 0) {

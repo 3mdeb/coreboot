@@ -2019,7 +2019,8 @@ static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 	}
 }
 
-static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t *seq_num,
+static bool parse_occ_response(struct homer_st *homer, uint8_t occ_cmd,
+			       uint8_t *status, uint8_t *seq_num,
 			       uint8_t *response, uint32_t *response_len)
 {
 	uint16_t index = 0;
@@ -2039,8 +2040,9 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t 
 	if (data_len > 0) {
 		uint16_t copy_size = data_len;
 		if (copy_size > *response_len) {
-			printk(BIOS_WARNING, "Truncating OCC response from %d to %d bytes\n",
-			       copy_size, *response_len);
+			printk(BIOS_WARNING,
+			       "Truncating OCC response from %d to %d bytes (0x%02x command)\n",
+			       copy_size, *response_len, occ_cmd);
 			copy_size = *response_len;
 		}
 
@@ -2054,13 +2056,14 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t *status, uint8_t 
 		checksum += rsp_buf[i];
 
 	if (checksum != *(uint16_t *)&rsp_buf[index]) {
-		printk(BIOS_WARNING, "OCC response has invalid checksum\n");
+		printk(BIOS_WARNING, "OCC response for 0x%02x has invalid checksum\n",
+		       occ_cmd);
 		return false;
 	}
 
 	if (*status != OCC_RC_SUCCESS) {
-		printk(BIOS_WARNING, "OCC command failed with an error code: 0x%02x\n",
-		       *status);
+		printk(BIOS_WARNING, "0x%02x OCC command failed with an error code: 0x%02x\n",
+		       occ_cmd, *status);
 		return false;
 	}
 
@@ -2089,7 +2092,8 @@ static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 	 * same for all commands) */
 	wait_for_occ_response(homer, 20, cmd_seq_num);
 
-	if (!parse_occ_response(homer, &status, &rsp_seq_num, response, response_len)) {
+	if (!parse_occ_response(homer, occ_cmd, &status, &rsp_seq_num, response,
+				response_len)) {
 		printk(BIOS_WARNING, "Received OCC response:\n");
 		hexdump(response, *response_len);
 		printk(BIOS_WARNING, "Failed to parse OCC response\n");

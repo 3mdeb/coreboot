@@ -1370,6 +1370,7 @@ static void pm_corequad_init(uint64_t cores)
 		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERR, 0);
 
 		/* Restore Quad PPM Error Mask */
+		err_mask = 0xFFFFFF00; // from Hostboot's log
 		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERRMSK, (uint64_t)err_mask << 32);
 
 		for (int core = quad * 4; core < (quad + 1) * 4; ++core) {
@@ -1415,6 +1416,7 @@ static void pm_corequad_init(uint64_t cores)
 			write_scom_for_chiplet(core_chiplet, C_CPPM_CSAR_CLEAR, 0x1b00000000);
 
 			/* Restore CORE PPM Error Mask */
+			err_mask = 0xfff00000; // from Hostboot's log
 			write_scom_for_chiplet(core_chiplet, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
 		}
 	}

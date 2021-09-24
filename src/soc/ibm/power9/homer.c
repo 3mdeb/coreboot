@@ -2654,8 +2654,14 @@ static void activate_occ(struct homer_st *homer)
 static void istep_21_1(struct homer_st *homer, uint64_t cores)
 {
 	load_pm_complex(homer);
+
+	printk(BIOS_ERR, "Starting PM complex...\n");
 	start_pm_complex(homer, cores);
+	printk(BIOS_ERR, "Done starting PM complex\n");
+
+	printk(BIOS_ERR, "Activating OCC...\n");
 	activate_occ(homer);
+	printk(BIOS_ERR, "Done activating OCC\n");
 }
 
 static void get_ppe_scan_rings(struct xip_hw_header *hw, uint8_t dd,

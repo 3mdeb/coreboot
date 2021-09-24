@@ -3610,10 +3610,7 @@ void build_homer_image(void *homer_bar)
 	*/
 	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(30));
 
-	// Boot the STOP GPE
-	stop_gpe_init(homer);
+	istep_21_1(homer, cores);
 
 	istep_16_1(this_core);
-
-	istep_21_1(homer, cores);
 }

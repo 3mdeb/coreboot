@@ -57,25 +57,9 @@ enum scom_section {
 #define INIT_CONFIG_VALUE    0x8000000C09800000ull
 #define QPMR_PROC_CONFIG_POS 0xBFC18
 
-#define USE_PSIHB_COMPLEX 0x00000001
-
-#define OCB_PIB_OCR_CORE_RESET_BIT 0
-#define JTG_PIB_OJCFG_DBG_HALT_BIT 6
-
-#define PU_SRAM_SRBV0_SCOM 0x0006A004
-#define PU_SRAM_SRBV1_SCOM 0x0006A005
-#define PU_SRAM_SRBV2_SCOM 0x0006A006
-#define PU_SRAM_SRBV3_SCOM 0x0006A007
-
-#define PU_JTG_PIB_OJCFG_AND 0x0006D005
-#define PU_OCB_PIB_OCR_CLEAR 0x0006D001
-#define PU_OCB_PIB_OCR_OR    0x0006D002
-
 /* Undocumented */
 #define PU_OCB_OCI_OCCFLG2_CLEAR 0x0006C18B
 #define PU_PBAXCFG_SCOM          0x00068021
-
-#define OCC_COMMAND_IN_PROGRESS 0xFF
 
 #define OCC_CMD_ADDR 0x000E0000
 #define OCC_RSP_ADDR 0x000E1000
@@ -99,27 +83,6 @@ enum scom_section {
 #define OCC_CFGDATA_TCT_CONFIG    0x13
 #define OCC_CFGDATA_AVSBUS_CONFIG 0x14
 #define OCC_CFGDATA_GPU_CONFIG    0x15
-
-#define PU_PBABAR0 (0x05012B00)
-#define PU_PBABAR1 (0x05012B01)
-#define PU_PBABAR2 (0x05012B02)
-#define PU_PBABAR3 (0x05012B03)
-#define PU_PBABARMSK0 (0x05012B04)
-#define PU_PBABARMSK1 (0x05012B05)
-#define PU_PBABARMSK2 (0x05012B06)
-#define PU_PBABARMSK3 (0x05012B07)
-
-#define PU_SPIMPSS_ADC_CTRL_REG0 (0x00070000)
-#define PU_SPIPSS_ADC_CTRL_REG1 (0x00070001)
-#define PU_SPIPSS_ADC_CTRL_REG2 (0x00070002)
-#define PU_SPIPSS_ADC_WDATA_REG (0x00070010)
-
-#define PU_SPIPSS_P2S_CTRL_REG0 (0x00070040)
-#define PU_SPIPSS_P2S_CTRL_REG1 (0x00070041)
-#define PU_SPIPSS_P2S_CTRL_REG2 (0x00070042)
-#define PU_SPIPSS_P2S_WDATA_REG (0x00070050)
-
-#define PU_SPIPSS_100NS_REG (0x00070028)
 
 struct occ_cfg_info {
 	const char *name;
@@ -198,8 +161,6 @@ enum scom_operation {
 	SCOM_APPEND,
 	SCOM_REPLACE
 };
-
-#define OCC_HOST_DATA_VERSION 0x00000090
 
 /* Host configuration information passed from host to OCC */
 struct occ_host_config
@@ -1143,6 +1104,11 @@ static void istep_16_1(int this_core)
 
 static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
 {
+	enum {
+		PU_PBABAR0    = 0x05012B00,
+		PU_PBABARMSK0 = 0x05012B04,
+	};
+
 	write_scom_direct(PU_PBABAR0 + index, bar_addr & 0x1FFFFFFFFFFFFFFFull);
 	write_scom_direct(PU_PBABARMSK0 + index, 0x300000);
 }
@@ -1177,6 +1143,11 @@ static void load_occ_image_to_homer(struct homer_st *homer)
 /* Writes information about the host to be read by OCC */
 static void load_host_data_to_homer(struct homer_st *homer)
 {
+	enum {
+		OCC_HOST_DATA_VERSION = 0x00000090,
+		USE_PSIHB_COMPLEX = 0x00000001,
+	};
+
 	struct occ_host_config *config_data =
 		(void *)&homer->occ_host_area[HOMER_OFFSET_TO_OCC_HOST_DATA];
 
@@ -1549,7 +1520,6 @@ static void pm_pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 static void check_proc_config(struct homer_st *homer)
 {
 	uint64_t vector_value = INIT_CONFIG_VALUE;
-	/* XXX: how come this points into padding area? */
 	uint64_t *conf_vector = (void *)((uint8_t *)&homer->qpmr + QPMR_PROC_CONFIG_POS);
 
 	int mcs_i = 0;
@@ -1563,15 +1533,14 @@ static void check_proc_config(struct homer_st *homer)
 			uint8_t pos = MCS_POS + mcs_i;
 			*conf_vector |= (0x8000000000000000ull >> pos);
 
-			/* MCS and MBA seem to have equivalent values */ 
+			/* MCS and MBA/MCA seem to have equivalent values */
 			pos = MBA_POS + mcs_i;
 			*conf_vector |= (0x8000000000000000ull >> pos);
 		}
 	}
 
-	// TODO: set configuration bits for XBUS, PHB, CAPP, OBUS
-
-	/* TODO: checkChiplet<fapi2::TARGET_TYPE_MCA>(i_procTgt, fapi2::TARGET_TYPE_MCA, vector_value, MBA_POS); */ 
+	/* TODO: set configuration bits for XBUS, PHB, CAPP, OBUS when their state
+	 *       will be available */
 
 	*conf_vector = htobe64(vector_value);
 }
@@ -1677,6 +1646,17 @@ static uint64_t setup_memory_boot(void)
 
 static void pm_occ_control_start_from_mem(void)
 {
+	enum {
+		OCB_PIB_OCR_CORE_RESET_BIT = 0,
+		JTG_PIB_OJCFG_DBG_HALT_BIT = 6,
+
+		PU_SRAM_SRBV0_SCOM = 0x0006A004,
+
+		PU_JTG_PIB_OJCFG_AND = 0x0006D005,
+		PU_OCB_PIB_OCR_CLEAR = 0x0006D001,
+		PU_OCB_PIB_OCR_OR    = 0x0006D002,
+	};
+
 	write_scom(OCBCSRn_OR[0], PPC_BIT(OCB_PIB_OCBCSR0_OCB_STREAM_MODE));
 
 	/*
@@ -1685,9 +1665,9 @@ static void pm_occ_control_start_from_mem(void)
 	 *  - set bv3 to proper branch instruction
 	 */
 	write_scom(PU_SRAM_SRBV0_SCOM, 0);
-	write_scom(PU_SRAM_SRBV1_SCOM, 0);
-	write_scom(PU_SRAM_SRBV2_SCOM, 0);
-	write_scom(PU_SRAM_SRBV3_SCOM, setup_memory_boot());
+	write_scom(PU_SRAM_SRBV0_SCOM + 1, 0);
+	write_scom(PU_SRAM_SRBV0_SCOM + 2, 0);
+	write_scom(PU_SRAM_SRBV0_SCOM + 3, setup_memory_boot());
 
 	write_scom(PU_JTG_PIB_OJCFG_AND, ~PPC_BIT(JTG_PIB_OJCFG_DBG_HALT_BIT));
 	write_scom(PU_OCB_PIB_OCR_OR, PPC_BIT(OCB_PIB_OCR_CORE_RESET_BIT));
@@ -1696,16 +1676,28 @@ static void pm_occ_control_start_from_mem(void)
 
 static void pm_pss_init(void)
 {
-	scom_and_or(PU_SPIMPSS_ADC_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
-	scom_and_or(PU_SPIPSS_ADC_CTRL_REG1, ~PPC_BITMASK(0, 17),
+	enum {
+		PU_SPIPSS_ADC_CTRL_REG0 = 0x00070000,
+		PU_SPIPSS_ADC_WDATA_REG = 0x00070010,
+		PU_SPIPSS_P2S_CTRL_REG0 = 0x00070040,
+		PU_SPIPSS_P2S_WDATA_REG = 0x00070050,
+		PU_SPIPSS_100NS_REG     = 0x00070028,
+	};
+
+	scom_and_or(PU_SPIPSS_ADC_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
+	scom_and_or(PU_SPIPSS_ADC_CTRL_REG0 + 1, ~PPC_BITMASK(0, 17),
 		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12));
-	scom_and(PU_SPIPSS_ADC_CTRL_REG2, ~PPC_BITMASK(0, 16));
+	scom_and(PU_SPIPSS_ADC_CTRL_REG0 + 2, ~PPC_BITMASK(0, 16));
+
 	write_scom(PU_SPIPSS_ADC_WDATA_REG, 0);
+
 	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
-	scom_and_or(PU_SPIPSS_P2S_CTRL_REG1, ~PPC_BITMASK(1, 3),
+	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0 + 1, ~PPC_BITMASK(1, 3),
 		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12) | PPC_BIT(17));
-	scom_and(PU_SPIPSS_P2S_CTRL_REG2, ~PPC_BITMASK(0, 16));
+	scom_and(PU_SPIPSS_P2S_CTRL_REG0 + 2, ~PPC_BITMASK(0, 16));
+
 	write_scom(PU_SPIPSS_P2S_WDATA_REG, 0);
+
 	scom_and_or(PU_SPIPSS_100NS_REG, 0xFFFFFFFF,
 		    (uint64_t)(powerbus_cfg()->fabric_freq / 40) << 32);
 }
@@ -1717,9 +1709,7 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 
 	pm_corequad_init(cores);
 	pm_pss_init();
-	/* pm_occ_fir_init(); // not dealing with FIR, right? */ 
-	/* p9_pm_firinit(i_target, p9pm::PM_INIT); // not collecting FIR, right? */ 
-	stop_gpe_init(homer); // done it earlier, need to repeat? 
+	stop_gpe_init(homer);
 	pm_pstate_gpe_init(homer, cores);
 
 	check_proc_config(homer);
@@ -1767,7 +1757,7 @@ static void wait_for_occ_checkpoint(void)
 			/* Success */
 			return;
 
-		if (((checkpoint & OCC_INIT_FAILURE) == OCC_INIT_FAILURE) ||
+		if ((checkpoint & OCC_INIT_FAILURE) == OCC_INIT_FAILURE ||
 		    status == OCC_RC_INIT_FAILURE)
 			die("OCC initialization has failed\n");
 	}
@@ -1849,7 +1839,10 @@ static void write_circular_buffer(uint64_t write_data)
 static void wait_for_occ_response(struct homer_st *homer, uint32_t timeout_sec,
 				  uint8_t seq_num)
 {
-	enum { OCC_RSP_SAMPLE_TIME_MS = 100 };
+	enum {
+		OCC_RSP_SAMPLE_TIME_MS = 100,
+		OCC_COMMAND_IN_PROGRESS = 0xFF,
+	};
 
 	const uint8_t *rsp_buf = &homer->occ_host_area[OCC_RSP_ADDR];
 
@@ -2282,8 +2275,8 @@ static void get_mem_cfg_msg_data(struct homer_st *homer, uint8_t *data, uint16_t
 
 static void get_sys_cfg_msg_data(struct homer_st *homer, uint8_t *data, uint16_t *size)
 {
-	/* TODO: all sensors IDs are zero, because we don't have IPMI messaging,
-	 *       which seems to be required */ 
+	/* TODO: all sensor IDs are zero, because we don't have IPMI messaging,
+	 *       which seems to be required to get them */
 
 	enum {
 		OCC_CFGDATA_SYS_CONFIG_VERSION = 0x21,
@@ -2514,10 +2507,10 @@ static void get_power_data(struct homer_st *homer, uint16_t *power_max, uint16_t
 	*power_max += mem_power_min_throttles + misc_power;
 
 	OCCPstateParmBlock *oppb = (void *)homer->ppmr.occ_parm_block;
-	uint16_t min_freq = oppb->frequency_min_khz / 1000;
+	uint16_t min_freq_mhz = oppb->frequency_min_khz / 1000;
 	const uint16_t mhz_per_watt = 28; // ATTR_PROC_MHZ_PER_WATT, from talos.xml
 	/* Drop is always calculated from Turbo to Min (not ultra) */
-	uint32_t proc_drop = (bucket->turbo.freq - min_freq) / mhz_per_watt;
+	uint32_t proc_drop = (bucket->turbo.freq - min_freq_mhz) / mhz_per_watt;
 	proc_drop *= num_procs;
 	const uint16_t memory_drop = mem_power_min_throttles - mem_power_max_throttles;
 
@@ -2662,9 +2655,8 @@ static void activate_occ(struct homer_st *homer)
 	/* Switch for OCC to active state */
 	set_occ_active_state(homer);
 
-	/* // Set active sensors for all OCCs, so BMC can start communication with OCCs */
-	/* l_err = setOccActiveSensors(true); */
-	/* if (l_err) return; */
+	/* Hostboot sets active sensors for all OCCs here, so BMC can start
+	 * communication with OCCs. */
 }
 
 static void istep_21_1(struct homer_st *homer, uint64_t cores)

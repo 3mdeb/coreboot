@@ -41,9 +41,8 @@
 #define EX_PPM_SPWKUP_OCC (0x200F010C)
 
 #define NUMBER_OF_EX_CHIPLETS (6)
-static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
-{
-    EP00_CHIPLET_ID,
+static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] = {
+	EP00_CHIPLET_ID,
 	EP01_CHIPLET_ID,
 	EP02_CHIPLET_ID,
 	EP03_CHIPLET_ID,
@@ -51,38 +50,29 @@ static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] =
 	EP05_CHIPLET_ID
 };
 
-static const uint64_t OCBARn[4] =
-{
-    PU_OCB_PIB_OCBAR0,
-    PU_OCB_PIB_OCBAR1,
-    PU_OCB_PIB_OCBAR2,
-    PU_OCB_PIB_OCBAR3
+static const uint64_t OCBARn[4] = {
+	PU_OCB_PIB_OCBAR0,
+	PU_OCB_PIB_OCBAR1,
+	PU_OCB_PIB_OCBAR2,
+	PU_OCB_PIB_OCBAR3
 };
 
-static const uint64_t OCBCSRn_CLEAR[4] =
-{
-    PU_OCB_PIB_OCBCSR0_CLEAR,
-    PU_OCB_PIB_OCBCSR1_CLEAR,
-    PU_OCB_PIB_OCBCSR2_CLEAR,
-    PU_OCB_PIB_OCBCSR3_CLEAR
+static const uint64_t OCBCSRn_CLEAR[4] = {
+	PU_OCB_PIB_OCBCSR0_CLEAR,
+	PU_OCB_PIB_OCBCSR1_CLEAR,
+	PU_OCB_PIB_OCBCSR2_CLEAR,
+	PU_OCB_PIB_OCBCSR3_CLEAR
 };
 
-static const uint64_t OCBCSRn_OR[4] =
-{
-    PU_OCB_PIB_OCBCSR0_OR,
-    PU_OCB_PIB_OCBCSR1_OR,
-    PU_OCB_PIB_OCBCSR2_OR,
-    PU_OCB_PIB_OCBCSR3_OR
+static const uint64_t OCBCSRn_OR[4] = {
+	PU_OCB_PIB_OCBCSR0_OR,
+	PU_OCB_PIB_OCBCSR1_OR,
+	PU_OCB_PIB_OCBCSR2_OR,
+	PU_OCB_PIB_OCBCSR3_OR
 };
 
-void writeOCCSRAM(
-    const uint32_t address,
-    uint64_t * buffer,
-    size_t data_length);
-void readOCCSRAM(
-    const uint32_t address,
-    uint64_t * buffer,
-    size_t data_length);
+void writeOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
+void readOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
 uint64_t makeStart405Instruction(void);
 void clear_occ_special_wakeups(void);
 

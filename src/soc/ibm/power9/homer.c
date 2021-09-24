@@ -109,6 +109,48 @@ struct occ_poll_response {
 	uint8_t  sensor_data[];	// 4049 bytes
 } __attribute__((packed));
 
+/* Host configuration information passed from host to OCC */
+struct occ_host_config {
+	uint32_t version;	// Version of this structure
+
+	uint32_t nest_freq;	// For computation of timebase frequency
+
+	/*
+	 * Interrupt type to the host:
+	 *  - 0x00000000 = FSI2HOST Mailbox
+	 *  - 0x00000001 = OCC interrupt line through PSIHB complex
+	 */
+	uint32_t interrupt_type;
+
+	uint32_t is_fir_master;	// If this OCC is the FIR master
+
+	/* FIR collection configuration data needed by FIR Master OCC in the
+	 * event of a checkstop */
+	uint8_t firdataConfig[3072];
+
+	uint32_t is_smf_mode;	// Whether SMF mode is enabled
+};
+
+/* Bit positions for various chiplets in host configuration vector */
+enum {
+	MCS_POS           = 1,
+	MBA_POS           = 9,	// This is actually MCA_POS
+	MEM_BUF_POS       = 17,
+	XBUS_POS          = 25,
+	PHB_POS           = 30,
+	CAPP_POS          = 37,
+	OBUS_POS          = 41,
+	ABUS_POS          = 41,
+	NVLINK_POS        = 45,
+
+	OBUS_BRICK_0_POS  = 0,
+	OBUS_BRICK_1_POS  = 1,
+	OBUS_BRICK_2_POS  = 2,
+	OBUS_BRICK_9_POS  = 9,
+	OBUS_BRICK_10_POS = 10,
+	OBUS_BRICK_11_POS = 11,
+};
+
 struct ring_data {
 	void *rings_buf;
 	void *work_buf1;
@@ -160,49 +202,6 @@ struct stop_cache_section_t {
 enum scom_operation {
 	SCOM_APPEND,
 	SCOM_REPLACE
-};
-
-/* Host configuration information passed from host to OCC */
-struct occ_host_config
-{
-	uint32_t version;	// Version of this structure
-
-	uint32_t nest_freq;	// For computation of timebase frequency
-
-	/*
-	 * Interrupt type to the host:
-	 *  - 0x00000000 = FSI2HOST Mailbox
-	 *  - 0x00000001 = OCC interrupt line through PSIHB complex
-	 */
-	uint32_t interrupt_type;
-
-	uint32_t is_fir_master;	// If this OCC is the FIR master
-
-	/* FIR collection configuration data needed by FIR Master OCC in the
-	 * event of a checkstop */
-	uint8_t firdataConfig[3072];
-
-	uint32_t is_smf_mode;	// Whether SMF mode is enabled
-};
-
-/* Bit positions for various chiplets in host configuration vector */
-enum {
-	MCS_POS           = 1,
-	MBA_POS           = 9,	// This is actually MCA_POS
-	MEM_BUF_POS       = 17,
-	XBUS_POS          = 25,
-	PHB_POS           = 30,
-	CAPP_POS          = 37,
-	OBUS_POS          = 41,
-	ABUS_POS          = 41,
-	NVLINK_POS        = 45,
-
-	OBUS_BRICK_0_POS  = 0,
-	OBUS_BRICK_1_POS  = 1,
-	OBUS_BRICK_2_POS  = 2,
-	OBUS_BRICK_9_POS  = 9,
-	OBUS_BRICK_10_POS = 10,
-	OBUS_BRICK_11_POS = 11,
 };
 
 enum operation_type {
@@ -792,12 +791,12 @@ static void pba_reset(void)
 	write_scom(0x0501284B, PPC_BIT(38));
 
 	/*
-	*0x00068021                       // PU_PBAXCFG_SCOM
+	*0x00068021                       // Undocumented, PU_PBAXCFG_SCOM
 	  [all] 0
 	  [2]   1   // PBAXCFG_SND_RESET?
 	  [3]   1   // PBAXCFG_RCV_RESET?
 	*/
-	write_scom(0x00068021, PPC_BIT(2) | PPC_BIT(3));
+	write_scom(PU_PBAXCFG_SCOM, PPC_BIT(2) | PPC_BIT(3));
 
 	/*
 	 * The following registers are undocumented. Their fields can be decoded
@@ -3594,12 +3593,13 @@ void build_homer_image(void *homer_bar)
 	write_scom(0x00066000, PPC_SHIFT(0x1, 3) | PPC_SHIFT(0xA, 7));
 
 	/* Clear error injection bits
-	  *0x0006C18B                         // PU_OCB_OCI_OCCFLG2_CLEAR
+	  *0x0006C18B                         // Undocumented, PU_OCB_OCI_OCCFLG2_CLEAR
 		[all] 0
 		[30]  1       // OCCFLG2_SGPE_HCODE_STOP_REQ_ERR_INJ
 	*/
 	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(30));
 
+	/* Boot OCC here and activate SGPE at the same time */
 	istep_21_1(homer, cores);
 
 	istep_16_1(this_core);

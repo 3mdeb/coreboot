@@ -1909,12 +1909,8 @@ static bool parse_occ_response(struct homer_st *homer, uint8_t occ_cmd,
 
 	if (data_len > 0) {
 		uint16_t copy_size = data_len;
-		if (copy_size > *response_len) {
-			printk(BIOS_WARNING,
-			       "Truncating OCC response from %d to %d bytes (0x%02x command)\n",
-			       copy_size, *response_len, occ_cmd);
+		if (copy_size > *response_len)
 			copy_size = *response_len;
-		}
 
 		memcpy(response, &rsp_buf[index], copy_size);
 		*response_len = copy_size;
@@ -2603,13 +2599,9 @@ static void send_occ_config_data(struct homer_st *homer)
 		/* Poll is sent between configuration packets to flush errors */
 		struct occ_poll_response poll_response;
 
-		printk(BIOS_EMERG, "Sending OCC::%s\n", cfg_info[i].name);
-
 		cfg_info[i].func(homer, data, &data_len);
 		if (data_len > sizeof(data))
 			die("Buffer for OCC data is too small!\n");
-
-		hexdump(data, data_len);
 
 		send_occ_cmd(homer, OCC_CMD_SETUP_CFG_DATA, data, data_len, NULL, &response_len);
 		poll_occ(homer, /*flush_all_errors=*/false, &poll_response);

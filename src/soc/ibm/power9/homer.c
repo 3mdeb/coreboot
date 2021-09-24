@@ -1710,47 +1710,10 @@ static void pm_pss_init(void)
 		    (uint64_t)(powerbus_cfg()->fabric_freq / 40) << 32);
 }
 
-static void stop_gpe_reset(void)
-{
-	long time;
-
-	enum {
-		HALT = 1,
-
-		SGPE_ACTIVE = 8,
-
-		SGPE_POLLS       = 100,
-		SGPE_POLLTIME_MS = 20,
-
-		PU_GPE3_PPE_XIXCR       = 0x00066010,
-		PU_GPE3_GPEXIXSR_SCOM   = 0x00066021,
-		PU_OCB_OCI_OCCFLG_CLEAR = 0x0006C08B,
-
-		/* XSR */
-		HALTED_STATE = 0,
-	};
-
-	write_scom(PU_GPE3_PPE_XIXCR, PPC_PLACE(HALT, 1, 3));
-
-	time = wait_ms(SGPE_POLLS*SGPE_POLLTIME_MS,
-		       (read_scom(PU_GPE3_GPEXIXSR_SCOM) & PPC_BIT(HALTED_STATE)));
-	if (!time)
-		die("Timed out while waiting for SGPE to hal\n");
-
-	write_scom(PU_OCB_OCI_OCCFLG_CLEAR, PPC_BIT(SGPE_ACTIVE));
-}
-
 /* Initializes power-management and starts OCC */
 static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 {
 	enum { STOP_RECOVERY_TRIGGER_ENABLE = 29 };
-	enum { PU_OCB_OCI_OCCFLG_SCOM = 0x0006C08A };
-	enum { PU_OCB_OCI_OCCS2_SCOM  = 0x0006C088 };
-
-	stop_gpe_reset();
-
-	write_scom(PU_OCB_OCI_OCCFLG_SCOM, 0);
-	write_scom(PU_OCB_OCI_OCCS2_SCOM, 0);
 
 	pm_corequad_init(cores);
 	pm_pss_init();

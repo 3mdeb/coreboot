@@ -99,9 +99,10 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 	for (i = 0; i < seg_count; i++) {
 		unsigned int len;
 		uint64_t read_not_write, stop, read_cont, port;
+		uint8_t addr;
 
 		/* Only read for now, implement different flags when needed */
-		if (segment[i].flags & ~I2C_M_RD) {
+		if (segment[i].flags & ~(I2C_M_RD | I2C_M_WITH_PORT)) {
 			printk(BIOS_ERR, "Unsupported I2C flags (0x%4.4x)\n", segment[i].flags);
 			return -1;
 		}
@@ -109,7 +110,14 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 		read_not_write = (segment[i].flags & I2C_M_RD) ? READ_NOT_WRITE : 0;
 		stop = (i == seg_count - 1) ? STOP : 0;
 		read_cont = (!stop && !read_not_write) ? READ_CONT : 0;
-		port = segment[i].slave & 0x80 ? 1 : 0;
+
+		if (segment[i].flags & I2C_M_WITH_PORT) {
+			addr = segment[i].slave & 0xFF;
+			port = segment[i].slave >> 8;
+		} else {
+			addr = segment[i].slave & 0x7F;
+			port = segment[i].slave & 0x80 ? 1 : 0;
+		}
 
 		/*
 		 * Divisor fields in this register are poorly documented:

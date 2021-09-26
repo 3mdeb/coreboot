@@ -1693,51 +1693,6 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 	pgpe_hdr->magic               = 0x504750455f312e30;	// PGPE_1.0
 }
 
-#include <device/i2c_simple.h>
-
-static int read_mvpd(uint8_t *data, uint16_t len)
-{
-	struct i2c_msg seg[2];
-
-	unsigned int bus = 2;
-	uint8_t slave = 0x00a0;
-
-	uint64_t offset = 0;
-
-	seg[0].flags = I2C_M_WITH_PORT;
-	seg[0].slave = slave;
-	seg[0].buf   = (uint8_t *)&offset;
-	seg[0].len   = sizeof(offset);
-	seg[1].flags = I2C_M_WITH_PORT | I2C_M_RD;
-	seg[1].slave = slave;
-	seg[1].buf   = data;
-	seg[1].len   = len;
-
-	return i2c_transfer(bus, seg, ARRAY_SIZE(seg));
-}
-
-static void mvpd_partition(void)
-{
-	uint8_t mvpd_buf[8*32];
-
-	if (read_mvpd(mvpd_buf, sizeof(mvpd_buf)) != sizeof(mvpd_buf))
-		die("Failed to read EEPROM MVPD TOC!\n");
-
-	printk(BIOS_EMERG, "EEPROM MVPD:");
-	hexdump(mvpd_buf, sizeof(mvpd_buf));
-
-	mvpd_device_init();
-	const struct region_device *mvpd_device = mvpd_device_ro();
-
-	if (rdev_readat(mvpd_device, mvpd_buf, 0, sizeof(mvpd_buf)) != sizeof(mvpd_buf))
-		die("Failed to read PNOR MVPD TOC!\n");
-
-	printk(BIOS_EMERG, "PNOR MVPD:");
-	hexdump(mvpd_buf, sizeof(mvpd_buf));
-
-	die("Halting now...\n");
-}
-
 /*
  * This logic is for SMF disabled only!
  */
@@ -1766,8 +1721,6 @@ void build_homer_image(void *homer_bar)
 
 	if (this_core == -1)
 		die("Couldn't found active core\n");
-
-	mvpd_partition(); 
 
 	printk(BIOS_ERR, "DD%2.2x, boot core: %d\n", dd, this_core);
 

@@ -330,6 +330,134 @@ static void prepare_dimm_data(void)
 	}
 }
 
+#include <device/i2c_simple.h>
+#include <cpu/power/mvpd.h>
+
+static int read_eeprom(uint64_t offset, uint8_t *data, uint16_t len)
+{
+	struct i2c_msg seg[2];
+
+	/* engine=2 port=0 addr=0xa0 */
+	unsigned int bus = 2;
+	uint16_t slave = 0x00a0 >> 1;
+
+	/* engine=1 port=0 addr=0xa0 */
+	/* unsigned int bus = 1; */
+	/* uint16_t slave = 0x00a0 >> 1; */
+
+	// fails
+	/* engine=1 port=2 addr=0xa0 */
+	/* unsigned int bus = 1; */
+	/* uint16_t slave = 0x0200 | (0xa0 >> 1); */
+
+	/* engine=3 port=0 addr=0xa0 */
+	/* unsigned int bus = 3; */
+	/* uint16_t slave = 0x0000 | (0xa0 >> 1); */
+
+	/* engine=3 port=0 addr=0xa4 */
+	/* unsigned int bus = 3; */
+	/* uint16_t slave = 0x0000 | (0xa4 >> 1); */
+
+	seg[0].flags = I2C_M_WITH_PORT;
+	seg[0].slave = slave;
+	seg[0].buf   = (uint8_t *)&offset;
+	seg[0].len   = sizeof(offset);
+	seg[1].flags = I2C_M_WITH_PORT | I2C_M_RD;
+	seg[1].slave = slave;
+	seg[1].buf   = data;
+	seg[1].len   = len;
+
+	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - 8;
+	/* return i2c_transfer(bus, &seg[1], 1); */
+}
+
+struct pt_record {
+    char record_name[4];
+    /* All of these fields are in little endian */
+    uint16_t record_type;
+    uint16_t record_offset;
+    uint16_t record_length;
+    uint16_t ecc_offset;
+    uint16_t ecc_length;
+} __attribute__((packed));
+
+/* static const uint8_t *eeprom_find_kwd(const char *kwd_name, size_t *size) */
+/* { */
+/* 	/1* Skip the ECC data + large resource ID in the VHDR *1/ */
+/* 	size_t offset = 6; */
+/* 	uint16_t record_size = 0; */
+
+/* 	if (strlen(kwd_name) != VPD_KWD_NAME_LEN) */
+/* 		die("Keyword name has wrong length: %s!\n", kwd_name); */
+
+/* 	if (read_eeprom(&record_size, sizeof(record_size)) != VPD_RECORD_SIZE_LEN) */
+/* 		die("Failed to read keyword size from EEPROM\n"); */
+
+/* 	offset += VPD_RECORD_SIZE_LEN; */
+/* 	record_size = le16toh(record_size); */
+
+/* 	/1* Skip mandatory "RT" and one byte of record size (always 4) *1/ */
+/* 	offset += VPD_KWD_NAME_LEN + 1; */
+
+/* 	if (memcmp(&record[offset], record_name, VPD_RECORD_NAME_LEN)) */
+/* 		die("Expected to be working with %s record!\n", record_name); */
+/* 	offset += VPD_RECORD_NAME_LEN; */
+
+/* 	while (offset < record_size) { */
+/* 		uint16_t kwd_size = 0; */
+/* 		bool match = false; */
+/* 		const int two_byte_size = (record[offset] == '#'); */
+
+/* 		/1* This is always the last keyword *1/ */
+/* 		if (!memcmp(&record[offset], "PF", VPD_KWD_NAME_LEN)) */
+/* 			break; */
+
+/* 		match = (!memcmp(&record[offset], kwd_name, VPD_KWD_NAME_LEN)); */
+
+/* 		offset += VPD_KWD_NAME_LEN; */
+
+/* 		if (two_byte_size) { */
+/* 			memcpy(&kwd_size, &record[offset], sizeof(kwd_size)); */
+/* 			kwd_size = le16toh(kwd_size); */
+/* 			offset += 2; */
+/* 		} else { */
+/* 			kwd_size = record[offset]; */
+/* 			offset += 1; */
+/* 		} */
+
+/* 		if (match) { */
+/* 			*size = kwd_size; */
+/* 			return &record[offset]; */
+/* 		} */
+
+/* 		offset += kwd_size; */
+/* 	} */
+
+/* 	return NULL; */
+/* } */
+
+static void mvpd_partition(void)
+{
+	uint8_t mvpd_buf[32*8 + 1024];
+
+	if (read_eeprom(0, mvpd_buf, sizeof(mvpd_buf)) != sizeof(mvpd_buf))
+		die("Failed to read EEPROM MVPD TOC!\n");
+
+	printk(BIOS_EMERG, "EEPROM MVPD:\n");
+	hexdump(mvpd_buf, sizeof(mvpd_buf));
+
+	/* mvpd_device_init(); */
+	/* const struct region_device *mvpd_device = mvpd_device_ro(); */
+
+	/* if (rdev_readat(mvpd_device, mvpd_buf, 0, sizeof(mvpd_buf)) != sizeof(mvpd_buf)) */
+	/* 	die("Failed to read PNOR MVPD TOC!\n"); */
+
+	/* printk(BIOS_EMERG, "PNOR MVPD:\n"); */
+	/* hexdump(mvpd_buf, sizeof(mvpd_buf)); */
+
+	die("Halting now...\n");
+}
+
 void main(void)
 {
 	timestamp_add_now(TS_START_ROMSTAGE);
@@ -339,6 +467,8 @@ void main(void)
 	init_timer();
 
 	timestamp_add_now(TS_BEFORE_INITRAM);
+
+	mvpd_partition(); 
 
 	vpd_pnor_main();
 	prepare_dimm_data();

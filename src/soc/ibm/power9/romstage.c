@@ -333,44 +333,75 @@ static void prepare_dimm_data(void)
 #include <device/i2c_simple.h>
 #include <cpu/power/mvpd.h>
 
-static int read_eeprom(uint64_t offset, void *data, uint16_t len)
+static int read_eeprom(uint16_t offset, void *data, uint16_t len)
 {
 	struct i2c_msg seg[2];
 
 	/* engine=2 port=0 addr=0xa0 */
-	unsigned int bus = 2;
-	uint16_t slave = 0x00a0 >> 1;
+	/* unsigned int bus = 2; */
+	/* uint16_t slave = 0x00a0 >> 1; */
+
+	/* All accesses fall within the first chip */
+
+	/*
+	 <attribute>
+	  <id>EEPROM_VPD_PRIMARY_INFO</id>
+	  <default>
+	   <field>
+	    <id>i2cMasterPath</id>
+	    <value>/sys-0/node-0/motherboard-0/proc_socket-0/sforza-0/p9_proc_s/i2c-master-prom0-mvpd-primary/</value>
+	   </field>
+	   <field><id>port</id><value>0</value></field>
+	   <field><id>devAddr</id><value>0xA0</value></field>
+	   <field><id>engine</id><value>1</value></field>
+	   <field><id>byteAddrOffset</id><value>0x02</value></field>
+	   <field><id>maxMemorySizeKB</id><value>0x80</value></field>
+	   <field><id>chipCount</id><value>0x02</value></field>
+	   <field><id>writePageSize</id><value>0x80</value></field>
+	   <field><id>writeCycleTime</id><value>0x0A</value></field>
+	  </default>
+	 </attribute>
+	*/
 
 	/* engine=1 port=0 addr=0xa0 */
-	/* unsigned int bus = 1; */
-	/* uint16_t slave = 0x00a0 >> 1; */
+	unsigned int bus = 1;
+	uint16_t slave = 0x00a0 >> 1;
 
 	// fails
 	/* engine=1 port=2 addr=0xa0 */
 	/* unsigned int bus = 1; */
 	/* uint16_t slave = 0x0200 | (0xa0 >> 1); */
 
+	// not first chip?
 	/* engine=3 port=0 addr=0xa0 */
 	/* unsigned int bus = 3; */
 	/* uint16_t slave = 0x0000 | (0xa0 >> 1); */
 
+	// not first chip?
 	/* engine=3 port=0 addr=0xa4 */
 	/* unsigned int bus = 3; */
 	/* uint16_t slave = 0x0000 | (0xa4 >> 1); */
 
-	offset <<= 48;
+	// not first chip?
+	/* engine=3 port=1 addr=0xa8 */
+	/* unsigned int bus = 3; */
+	/* uint16_t slave = 0x0100 | (0xa8 >> 1); */
+
+	// not first chip?
+	/* engine=3 port=1 addr=0xac */
+	/* unsigned int bus = 3; */
+	/* uint16_t slave = 0x0100 | (0xac >> 1); */
 
 	seg[0].flags = I2C_M_WITH_PORT;
 	seg[0].slave = slave;
 	seg[0].buf   = (uint8_t *)&offset;
-	seg[0].len   = sizeof(offset);
+	seg[0].len   = 2;
 	seg[1].flags = I2C_M_WITH_PORT | I2C_M_RD;
 	seg[1].slave = slave;
 	seg[1].buf   = data;
 	seg[1].len   = len;
 
-	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - 8;
-	/* return i2c_transfer(bus, &seg[1], 1); */
+	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - 2;
 }
 
 struct pt_record {
@@ -383,7 +414,8 @@ struct pt_record {
 	uint16_t ecc_length;
 } __attribute__((packed));
 
-static bool eeprom_find_kwd(uint64_t offset, const char *record_name, const char *kwd_name,
+static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
+			    const char *record_name, const char *kwd_name,
 			    uint8_t *buf, size_t *size)
 {
 	uint16_t record_size = 0;
@@ -397,12 +429,8 @@ static bool eeprom_find_kwd(uint64_t offset, const char *record_name, const char
 	if (read_eeprom(offset, &record_size, sizeof(record_size)) != VPD_RECORD_SIZE_LEN)
 		die("Failed to read record size from EEPROM\n");
 
-	printk(BIOS_EMERG, "record_size = 0x%04x\n", record_size);
-
 	offset += VPD_RECORD_SIZE_LEN;
 	record_size = le16toh(record_size);
-
-	printk(BIOS_EMERG, "record_size = 0x%04x\n", record_size);
 
 	/* Skip mandatory "RT" and one byte of keyword size (always 4) */
 	offset += VPD_KWD_NAME_LEN + 1;
@@ -413,6 +441,8 @@ static bool eeprom_find_kwd(uint64_t offset, const char *record_name, const char
 	if (memcmp(name, record_name, VPD_RECORD_NAME_LEN))
 		die("Expected to be working with %s record, got %.4s!\n",
 		    record_name, name);
+
+	printk(BIOS_EMERG, "kwd (%s) index = %d\n", kwd_name, index);
 
 	offset += VPD_RECORD_NAME_LEN;
 
@@ -443,7 +473,9 @@ static bool eeprom_find_kwd(uint64_t offset, const char *record_name, const char
 			offset += 1;
 		}
 
-		if (!memcmp(name_buf, kwd_name, VPD_KWD_NAME_LEN)) {
+		if (!memcmp(name_buf, kwd_name, VPD_KWD_NAME_LEN) && index-- == 0) {
+			printk(BIOS_EMERG, "kwd (%s) offset = %lld\n", kwd_name, offset);
+
 			if (*size < kwd_size)
 				die("Keyword buffer is too small: %llu instead of %llu\n",
 				    (unsigned long long)*size, (unsigned long long)kwd_size);
@@ -464,10 +496,7 @@ static bool eeprom_find_kwd(uint64_t offset, const char *record_name, const char
 /* Builds MVPD partition for a single processor (64 KiB per chip) */
 static void mvpd_partition(void)
 {
-	enum {
-		SECTION_SIZE = 64 * KiB,
-		CORRECTION = -5,
-	};
+	enum { SECTION_SIZE = 64 * KiB };
 
 	static uint8_t mvpd_buf[SECTION_SIZE];
 
@@ -488,23 +517,22 @@ static void mvpd_partition(void)
 	uint8_t i = 0;
 
 	/* Skip the ECC data + large resource ID in the VHDR */
-	uint64_t offset = 6;
+	uint64_t offset = 12;
 
 	if (read_eeprom(0, mvpd_buf, 1024) != 1024)
 		die("Failed to read EEPROM!\n");
 	printk(BIOS_EMERG, "EEPROM:\n");
 	hexdump(mvpd_buf, 1024);
 
-	if (!eeprom_find_kwd(offset, "VHDR", "PT", pt_buf, &pt_size))
+	if (!eeprom_find_kwd(offset, 0, "VHDR", "PT", pt_buf, &pt_size))
 		die("Failed to find PT keyword of VHDR record in EEPROM.\n");
 
 	if (memcmp(pt_record->record_name, "VTOC", VPD_RECORD_NAME_LEN))
 		die("VHDR in EEPROM is invalid (got %.4s instead of VTOC.\n",
 		    pt_record->record_name);
 
-	/* Move to the TOC record, skip 'large resource' byte (0x84) */
+	/* Move to the TOC record, skip "large resource" byte (0x84) */
 	offset = le16toh(pt_record->record_offset) + 1;
-	printk(BIOS_EMERG, "offset = 0x%04llx\n", offset);
 
 	/* Fill whole TOC with 0xFF */
 	memset(toc, 0xFF, MVPD_TOC_SIZE);
@@ -515,9 +543,9 @@ static void mvpd_partition(void)
 		uint8_t entry_count;
 
 		pt_size = sizeof(pt_buf);
-		if (!eeprom_find_kwd(offset, "VTOC", "PT", pt_buf, &pt_size)) {
+		if (!eeprom_find_kwd(offset, i, "VTOC", "PT", pt_buf, &pt_size)) {
 			if (i == 0)
-				die("Failed to find any PT keyword of VTOC record in EEPROM.\n");
+				die("Failed to find any PT keyword of VTOC record in EEPROM\n");
 			break;
 		}
 
@@ -525,7 +553,7 @@ static void mvpd_partition(void)
 
 		for (j = 0; j < entry_count; ++j) {
 			const char *record_name = pt_record[j].record_name;
-			/* Skip 'large resource' byte (0x84) */
+			/* Skip "large resource" byte (0x84) */
 			const uint16_t record_offset = le16toh(pt_record[j].record_offset) + 1;
 			const uint16_t record_size = le16toh(pt_record[j].record_length);
 
@@ -538,8 +566,10 @@ static void mvpd_partition(void)
 			if (k == ARRAY_SIZE(mvpd_records))
 				continue;
 
+			printk(BIOS_EMERG, "%.4s %d @ %d\n", record_name, record_size, mvpd_offset);
+
 			if (mvpd_offset + record_size > SECTION_SIZE)
-				die("MVPD section doesn't have space for %s record of size %d\n",
+				die("MVPD section doesn't have space for %.4s record of size %d\n",
 				    record_name, record_size);
 
 			/* Store this record to MVPD */
@@ -550,14 +580,15 @@ static void mvpd_partition(void)
 			toc->reserved[1] = 0x5A;
 
 			if (read_eeprom(record_offset, mvpd_buf + mvpd_offset, record_size) != record_size)
-				die("Failed to read %s record from EEPROM\n", record_name);
+				die("Failed to read %.4s record from EEPROM\n", record_name);
 
 			++toc;
+			mvpd_offset += record_size;
 		}
 	}
 
 	printk(BIOS_EMERG, "Constructed MVPD:\n");
-	hexdump(mvpd_buf, 1024);
+	hexdump(mvpd_buf, sizeof(mvpd_buf));
 
 
 	mvpd_device_init();

@@ -150,7 +150,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 				while ((r & (DATA_REQUEST | FIFO_COUNT_FLD)) == 0) {
 					if (r & UNRECOVERABLE) {
 						/* This may be DIMM not present so use low verbosity */
-						printk(BIOS_INFO, "I2C transfer failed (0x%16.16llx)\n", r);
+						printk(BIOS_INFO, "I2C read failed (0x%16.16llx)\n", r);
 						return -1;
 					}
 					r = read_scom(STATUS_REG(bus));
@@ -164,7 +164,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 				/* Write */
 				while ((r & DATA_REQUEST) == 0) {
 					if (r & UNRECOVERABLE) {
-						printk(BIOS_INFO, "I2C transfer failed (0x%16.16llx)\n", r);
+						printk(BIOS_INFO, "I2C write failed (0x%16.16llx)\n", r);
 						return -1;
 					}
 					r = read_scom(STATUS_REG(bus));

@@ -17,6 +17,8 @@
 #define MVPD_TOC_ENTRIES 32
 #define MVPD_TOC_SIZE    (MVPD_TOC_ENTRIES*sizeof(struct mvpd_toc_entry))
 
+#define EEPROM_CHIP_SIZE (64 * KiB)
+
 /* Each entry points to a VPD record */
 struct mvpd_toc_entry {
 	char name[4];		// Name without trailing NUL byte
@@ -34,47 +36,82 @@ struct pt_record {
 	uint16_t ecc_length;
 } __attribute__((packed));
 
-static int read_eeprom(uint16_t offset, void *data, uint16_t len)
+/*
+ * From talos.xml:
+ * <attribute>
+ *  <id>EEPROM_VPD_PRIMARY_INFO</id>
+ *  <default>
+ *   <field>
+ *    <id>i2cMasterPath</id>
+ *    <value>
+ *     /sys-0/node-0/motherboard-0/proc_socket-0/sforza-0/p9_proc_s/i2c-master-prom0-mvpd-primary/
+ *    </value>
+ *   </field>
+ *   <field><id>port</id><value>0</value></field>
+ *   <field><id>devAddr</id><value>0xA0</value></field>
+ *   <field><id>engine</id><value>1</value></field>
+ *   <field><id>byteAddrOffset</id><value>0x02</value></field>
+ *   <field><id>maxMemorySizeKB</id><value>0x80</value></field>
+ *   <field><id>chipCount</id><value>0x02</value></field>
+ *   <field><id>writePageSize</id><value>0x80</value></field>
+ *   <field><id>writeCycleTime</id><value>0x0A</value></field>
+ *  </default>
+ * </attribute>
+ */
+
+static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 {
+	/* engine=1 port=0 addr=0xa0 */
+	const unsigned int bus = 1;
+	uint16_t addr = 0xa0;
+	uint16_t slave;
+
 	struct i2c_msg seg[2];
 
-	/*
-	 * From talos.xml:
-	 * <attribute>
-	 *  <id>EEPROM_VPD_PRIMARY_INFO</id>
-	 *  <default>
-	 *   <field>
-	 *    <id>i2cMasterPath</id>
-	 *    <value>
-	 *     /sys-0/node-0/motherboard-0/proc_socket-0/sforza-0/p9_proc_s/i2c-master-prom0-mvpd-primary/
-	 *    </value>
-	 *   </field>
-	 *   <field><id>port</id><value>0</value></field>
-	 *   <field><id>devAddr</id><value>0xA0</value></field>
-	 *   <field><id>engine</id><value>1</value></field>
-	 *   <field><id>byteAddrOffset</id><value>0x02</value></field>
-	 *   <field><id>maxMemorySizeKB</id><value>0x80</value></field>
-	 *   <field><id>chipCount</id><value>0x02</value></field>
-	 *   <field><id>writePageSize</id><value>0x80</value></field>
-	 *   <field><id>writeCycleTime</id><value>0x0A</value></field>
-	 *  </default>
-	 * </attribute>
-	 */
+	if (offset > EEPROM_CHIP_SIZE) {
+		offset -= EEPROM_CHIP_SIZE;
+		addr += 0x02;
+	}
 
-	/* engine=1 port=0 addr=0xa0 */
-	unsigned int bus = 1;
-	uint16_t slave = 0x00a0 >> 1;
+	assert(offset < EEPROM_CHIP_SIZE);
 
-	seg[0].flags = I2C_M_WITH_PORT;
+	slave = addr >> 1;
+
+	seg[0].flags = 0;
 	seg[0].slave = slave;
 	seg[0].buf   = (uint8_t *)&offset;
-	seg[0].len   = 2;
-	seg[1].flags = I2C_M_WITH_PORT | I2C_M_RD;
+	seg[0].len   = sizeof(offset);
+	seg[1].flags = I2C_M_RD;
 	seg[1].slave = slave;
 	seg[1].buf   = data;
 	seg[1].len   = len;
 
+	/* Subtract length of the offset */
 	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - 2;
+}
+
+static int read_eeprom(uint16_t offset, void *data, uint32_t len)
+{
+	int ret_value1;
+	int ret_value2;
+	uint16_t len1;
+	uint16_t len2;
+
+	if (offset / EEPROM_CHIP_SIZE == (offset + len) / EEPROM_CHIP_SIZE)
+		return read_eeprom_chip(offset, data, len);
+
+	len1 = EEPROM_CHIP_SIZE - offset;
+	len2 = (offset + len) % EEPROM_CHIP_SIZE;
+
+	ret_value1 = read_eeprom_chip(offset, data, len1);
+	if (ret_value1 < 0)
+		return ret_value1;
+
+	ret_value2 = read_eeprom_chip(EEPROM_CHIP_SIZE, (uint8_t *)data + len1, len2);
+	if (ret_value2 < 0)
+		return ret_value2;
+
+	return ret_value1 + ret_value2;
 }
 
 static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
@@ -156,10 +193,8 @@ static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
 	return false;
 }
 
-const uint8_t *mvpd_get(void);
-
 /* Builds MVPD partition for a single processor (64 KiB per chip) */
-const uint8_t *mvpd_get(void)
+static const uint8_t *mvpd_get(void)
 {
 	enum { SECTION_SIZE = 64 * KiB };
 

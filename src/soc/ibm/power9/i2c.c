@@ -99,10 +99,9 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 	for (i = 0; i < seg_count; i++) {
 		unsigned int len;
 		uint64_t read_not_write, stop, read_cont, port;
-		uint8_t addr;
 
 		/* Only read for now, implement different flags when needed */
-		if (segment[i].flags & ~(I2C_M_RD | I2C_M_WITH_PORT)) {
+		if (segment[i].flags & ~I2C_M_RD) {
 			printk(BIOS_ERR, "Unsupported I2C flags (0x%4.4x)\n", segment[i].flags);
 			return -1;
 		}
@@ -110,14 +109,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 		read_not_write = (segment[i].flags & I2C_M_RD) ? READ_NOT_WRITE : 0;
 		stop = (i == seg_count - 1) ? STOP : 0;
 		read_cont = (!stop && !read_not_write) ? READ_CONT : 0;
-
-		if (segment[i].flags & I2C_M_WITH_PORT) {
-			addr = segment[i].slave & 0xFF;
-			port = segment[i].slave >> 8;
-		} else {
-			addr = segment[i].slave & 0x7F;
-			port = segment[i].slave & 0x80 ? 1 : 0;
-		}
+		port = segment[i].slave & 0x80 ? 1 : 0;
 
 		/*
 		 * Divisor fields in this register are poorly documented:
@@ -150,7 +142,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 				while ((r & (DATA_REQUEST | FIFO_COUNT_FLD)) == 0) {
 					if (r & UNRECOVERABLE) {
 						/* This may be DIMM not present so use low verbosity */
-						printk(BIOS_INFO, "I2C read failed (0x%16.16llx)\n", r);
+						printk(BIOS_INFO, "I2C transfer failed (0x%16.16llx)\n", r);
 						return -1;
 					}
 					r = read_scom(STATUS_REG(bus));
@@ -164,7 +156,7 @@ int platform_i2c_transfer(unsigned int bus, struct i2c_msg *segment,
 				/* Write */
 				while ((r & DATA_REQUEST) == 0) {
 					if (r & UNRECOVERABLE) {
-						printk(BIOS_INFO, "I2C write failed (0x%16.16llx)\n", r);
+						printk(BIOS_INFO, "I2C transfer failed (0x%16.16llx)\n", r);
 						return -1;
 					}
 					r = read_scom(STATUS_REG(bus));

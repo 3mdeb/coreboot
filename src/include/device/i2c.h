@@ -32,7 +32,6 @@
 struct i2c_msg {
 	uint16_t flags;
 #define I2C_M_RD		0x0001	/* read data, from slave to master */
-#define I2C_M_WITH_PORT		0x0002	/* upper by of slave is port       */
 #define I2C_M_TEN		0x0010	/* this is a ten bit chip address */
 #define I2C_M_RECV_LEN		0x0400	/* length will be first received byte */
 #define I2C_M_NOSTART		0x4000	/* don't send a repeated START */

@@ -44,16 +44,6 @@ struct voltage_kwd
 	struct voltage_bucket_data buckets[VOLTAGE_BUCKET_COUNT];
 } __attribute__((__packed__));
 
-#define MVPD_TOC_ENTRIES 32
-#define MVPD_TOC_SIZE    (MVPD_TOC_ENTRIES*sizeof(struct mvpd_toc_entry))
-
-/* Each entry points to a VPD record */
-struct mvpd_toc_entry {
-	char name[4];		// Name without trailing NUL byte
-	uint16_t offset;	// Offset from the beginning of partition in LE
-	uint8_t reserved[2];	// Unused
-} __attribute__((packed));
-
 struct region_device;
 
 void mvpd_pnor_main(void);

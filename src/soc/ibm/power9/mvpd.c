@@ -61,47 +61,50 @@ struct pt_record {
 
 static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 {
-	/* engine=1 port=0 addr=0xa0 */
 	const unsigned int bus = 1;
 	uint16_t addr = 0xa0;
-	uint16_t slave;
+	uint16_t slave = 0;
+	uint16_t actual_offset = 0;
 
 	struct i2c_msg seg[2];
 
-	if (offset > EEPROM_CHIP_SIZE) {
+	/* Two chips at two different addresses. */
+	if (offset >= EEPROM_CHIP_SIZE) {
 		offset -= EEPROM_CHIP_SIZE;
 		addr += 0x02;
 	}
 
 	assert(offset < EEPROM_CHIP_SIZE);
+	actual_offset = offset;
 
+	/* Most-significant bit is port number. */
 	slave = addr >> 1;
 
 	seg[0].flags = 0;
 	seg[0].slave = slave;
-	seg[0].buf   = (uint8_t *)&offset;
-	seg[0].len   = sizeof(offset);
+	seg[0].buf   = (uint8_t *)&actual_offset;
+	seg[0].len   = sizeof(actual_offset);
 	seg[1].flags = I2C_M_RD;
 	seg[1].slave = slave;
 	seg[1].buf   = data;
 	seg[1].len   = len;
 
-	/* Subtract length of the offset */
-	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - 2;
+	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - sizeof(actual_offset);
 }
 
-static int read_eeprom(uint16_t offset, void *data, uint32_t len)
+static int read_eeprom(uint32_t offset, void *data, uint32_t len)
 {
-	int ret_value1;
-	int ret_value2;
-	uint16_t len1;
-	uint16_t len2;
+	int ret_value1 = 0;
+	int ret_value2 = 0;
+	uint16_t len1 = 0;
+	uint16_t len2 = 0;
 
-	if (offset / EEPROM_CHIP_SIZE == (offset + len) / EEPROM_CHIP_SIZE)
+	assert(len != 0);
+	if (offset / EEPROM_CHIP_SIZE == (offset + len - 1) / EEPROM_CHIP_SIZE)
 		return read_eeprom_chip(offset, data, len);
 
 	len1 = EEPROM_CHIP_SIZE - offset;
-	len2 = (offset + len) % EEPROM_CHIP_SIZE;
+	len2 = len - len1;
 
 	ret_value1 = read_eeprom_chip(offset, data, len1);
 	if (ret_value1 < 0)

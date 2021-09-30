@@ -37,7 +37,8 @@ struct pt_record {
 } __attribute__((packed));
 
 /*
- * From talos.xml:
+ * Configuration of EEPROM with VPD data in talos.xml:
+ *
  * <attribute>
  *  <id>EEPROM_VPD_PRIMARY_INFO</id>
  *  <default>
@@ -59,6 +60,8 @@ struct pt_record {
  * </attribute>
  */
 
+/* Reads from a single EEPROM chip, which is deduced from offset. Returns number
+ * of bytes read. */
 static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 {
 	const unsigned int bus = 1;
@@ -68,7 +71,7 @@ static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 
 	struct i2c_msg seg[2];
 
-	/* Two chips at two different addresses. */
+	/* Two chips at two different addresses */
 	if (offset >= EEPROM_CHIP_SIZE) {
 		offset -= EEPROM_CHIP_SIZE;
 		addr += 0x02;
@@ -77,7 +80,7 @@ static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 	assert(offset < EEPROM_CHIP_SIZE);
 	actual_offset = offset;
 
-	/* Most-significant bit is port number. */
+	/* Most-significant bit is port number */
 	slave = addr >> 1;
 
 	seg[0].flags = 0;
@@ -92,6 +95,8 @@ static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 	return i2c_transfer(bus, seg, ARRAY_SIZE(seg)) - sizeof(actual_offset);
 }
 
+/* Reads from EEPROM handling accesses across chip boundaries (64 KiB).  Returns
+ * number of bytes read. */
 static int read_eeprom(uint32_t offset, void *data, uint32_t len)
 {
 	int ret_value1 = 0;
@@ -117,9 +122,11 @@ static int read_eeprom(uint32_t offset, void *data, uint32_t len)
 	return ret_value1 + ret_value2;
 }
 
-static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
-			    const char *record_name, const char *kwd_name,
-			    uint8_t *buf, size_t *size)
+/* Finds and extracts i-th keyword (`index` specifies which one) from a record
+ * in EEPROM that starts at specified offset */
+static bool eeprom_extract_kwd(uint64_t offset, uint8_t index,
+			       const char *record_name, const char *kwd_name,
+			       uint8_t *buf, size_t *size)
 {
 	uint16_t record_size = 0;
 	uint8_t name[VPD_RECORD_NAME_LEN];
@@ -144,8 +151,6 @@ static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
 	if (memcmp(name, record_name, VPD_RECORD_NAME_LEN))
 		die("Expected to be working with %s record, got %.4s!\n",
 		    record_name, name);
-
-	printk(BIOS_EMERG, "kwd (%s) index = %d\n", kwd_name, index);
 
 	offset += VPD_RECORD_NAME_LEN;
 
@@ -177,8 +182,6 @@ static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
 		}
 
 		if (!memcmp(name_buf, kwd_name, VPD_KWD_NAME_LEN) && index-- == 0) {
-			printk(BIOS_EMERG, "kwd (%s) offset = %lld\n", kwd_name, offset);
-
 			if (*size < kwd_size)
 				die("Keyword buffer is too small: %llu instead of %llu\n",
 				    (unsigned long long)*size, (unsigned long long)kwd_size);
@@ -196,7 +199,8 @@ static bool eeprom_find_kwd(uint64_t offset, uint8_t index,
 	return false;
 }
 
-/* Builds MVPD partition for a single processor (64 KiB per chip) */
+/* Builds MVPD partition for a single processor (64 KiB per chip) or returns an
+ * already built one */
 static const uint8_t *mvpd_get(void)
 {
 	enum { SECTION_SIZE = 64 * KiB };
@@ -219,16 +223,14 @@ static const uint8_t *mvpd_get(void)
 
 	uint8_t i = 0;
 
-	/* Skip the ECC data + large resource ID in the VHDR */
+	/* Skip the ECC data + "large resource" byte (0x84) in the VHDR */
 	uint64_t offset = 12;
 
-	/* Alread constructed partition */
+	/* Partition is already constructed (filled one can't be empty) */
 	if (mvpd_buf[0] != '\0')
 		return mvpd_buf;
 
-	memset(mvpd_buf, 0xff, sizeof(mvpd_buf)); 
-
-	if (!eeprom_find_kwd(offset, 0, "VHDR", "PT", pt_buf, &pt_size))
+	if (!eeprom_extract_kwd(offset, 0, "VHDR", "PT", pt_buf, &pt_size))
 		die("Failed to find PT keyword of VHDR record in EEPROM.\n");
 
 	if (memcmp(pt_record->record_name, "VTOC", VPD_RECORD_NAME_LEN))
@@ -247,7 +249,7 @@ static const uint8_t *mvpd_get(void)
 		uint8_t entry_count;
 
 		pt_size = sizeof(pt_buf);
-		if (!eeprom_find_kwd(offset, i, "VTOC", "PT", pt_buf, &pt_size)) {
+		if (!eeprom_extract_kwd(offset, i, "VTOC", "PT", pt_buf, &pt_size)) {
 			if (i == 0)
 				die("Failed to find any PT keyword of VTOC record in EEPROM\n");
 			break;
@@ -270,8 +272,6 @@ static const uint8_t *mvpd_get(void)
 			if (k == ARRAY_SIZE(mvpd_records))
 				continue;
 
-			printk(BIOS_EMERG, "%.4s %d @ %d\n", record_name, record_size, mvpd_offset);
-
 			if (mvpd_offset + record_size > SECTION_SIZE)
 				die("MVPD section doesn't have space for %.4s record of size %d\n",
 				    record_name, record_size);
@@ -288,22 +288,6 @@ static const uint8_t *mvpd_get(void)
 
 			++toc;
 			mvpd_offset += record_size;
-		}
-	}
-
-	mvpd_device_init(); 
-	const struct region_device *mvpd_device = mvpd_device_ro(); 
-
-	static uint8_t tmp[1024]; 
-	for (int j = 0; j < 64; ++j) {
-		if (rdev_readat(mvpd_device, tmp, j*1024, 1024) != 1024)
-			die("Failed to read PNOR MVPD TOC!\n");
-		if (memcmp(tmp, &mvpd_buf[j*1024], 1024)) {
-			printk(BIOS_EMERG, "should be:\n");
-			/* hexdump(tmp, 1024); */
-			printk(BIOS_EMERG, "is:\n");
-			/* hexdump(&mvpd_buf[j*1024], 1024); */
-			die("j = %d, MVPD isn't identical!\n", j);
 		}
 	}
 
@@ -478,9 +462,8 @@ bool mvpd_extract_ring(const char *record_name, const char *kwd_name,
 		    record_name);
 
 	ring = find_ring(chiplet_id, even_odd, ring_id, rings, rings_size);
-	if (ring == NULL) {
+	if (ring == NULL)
 		return false;
-	}
 
 	ring_size = be32toh(ring->size);
 	if (buf_size >= ring_size)

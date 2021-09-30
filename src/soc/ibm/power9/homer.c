@@ -1693,6 +1693,7 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 	pgpe_hdr->magic               = 0x504750455f312e30;	// PGPE_1.0
 }
 
+
 /*
  * This logic is for SMF disabled only!
  */

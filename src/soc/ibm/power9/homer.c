@@ -37,9 +37,6 @@
 
 #define QUAD_BIT_POS     24
 
-#define PPC_PLACE(val, pos, len) \
-	PPC_SHIFT((val) & ((1 << ((len) + 1)) - 1), ((pos) + ((len) - 1)))
-
 /* Subsections of STOP image that contain SCOM entries */
 enum scom_section {
 	STOP_SECTION_CORE_SCOM,
@@ -1442,13 +1439,13 @@ static void populate_epsilon_l2_scom_reg(struct homer_st *homer)
 	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L2_EPS_DIVIDER + 1;
 	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L2_EPS_DIVIDER + 1;
 
-	uint64_t eps_r = PPC_PLACE(eps_r_t0, 0, 12)
-		       | PPC_PLACE(eps_r_t1, 12, 12)
-		       | PPC_PLACE(eps_r_t2, 24, 12);
+	uint64_t eps_r = PPC_SHIFT(eps_r_t0, 11)
+		       | PPC_SHIFT(eps_r_t1, 23)
+		       | PPC_SHIFT(eps_r_t2, 35);
 
-	uint64_t eps_w = PPC_PLACE(eps_w_t0, 0, 12)
-		       | PPC_PLACE(eps_w_t1, 12, 12)
-		       | PPC_PLACE(L2_EPS_DIVIDER, 24, 4);
+	uint64_t eps_w = PPC_SHIFT(eps_w_t0, 11)
+		       | PPC_SHIFT(eps_w_t1, 23)
+		       | PPC_SHIFT(L2_EPS_DIVIDER, 27);
 
 	uint8_t quad = 0;
 
@@ -1488,13 +1485,13 @@ static void populate_epsilon_l3_scom_reg(struct homer_st *homer)
 	uint32_t eps_w_t0 = pb_cfg->eps_w[0] / 8 / L3_EPS_DIVIDER + 1;
 	uint32_t eps_w_t1 = pb_cfg->eps_w[1] / 8 / L3_EPS_DIVIDER + 1;
 
-	uint64_t eps_r = PPC_PLACE(eps_r_t0, 0, 12)
-		       | PPC_PLACE(eps_r_t1, 12, 12)
-		       | PPC_PLACE(eps_r_t2, 24, 12);
+	uint64_t eps_r = PPC_SHIFT(eps_r_t0, 11)
+		       | PPC_SHIFT(eps_r_t1, 23)
+		       | PPC_SHIFT(eps_r_t2, 35);
 
-	uint64_t eps_w = PPC_PLACE(eps_w_t0, 0, 12)
-		       | PPC_PLACE(eps_w_t1, 12, 12)
-		       | PPC_PLACE(L2_EPS_DIVIDER, 30, 4);
+	uint64_t eps_w = PPC_SHIFT(eps_w_t0, 11)
+		       | PPC_SHIFT(eps_w_t1, 23)
+		       | PPC_SHIFT(L2_EPS_DIVIDER, 33);
 
 	uint8_t quad = 0;
 
@@ -1531,7 +1528,7 @@ static void populate_l3_refresh_scom_reg(struct homer_st *homer, uint8_t dd)
 
 	/* ATTR_CHIP_EC_FEATURE_HW408892 === (DD <= 0x20) */
 	if (powerbus_cfg()->fabric_freq >= 2000 && dd > 0x20)
-		refresh_val |= PPC_PLACE(0x2, 8, 4);
+		refresh_val |= PPC_SHIFT(0x2, 11);
 
 	for (quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
 		/* Create restore entry for L3 Refresh Timer Divider register */
@@ -1552,10 +1549,10 @@ static void populate_ncu_rng_bar_scom_reg(struct homer_st *homer)
 
 	uint8_t ex = 0;
 
-	uint64_t regNcuRngBarData = PPC_PLACE(0x0, 8, 5)   // system ID
-				  | PPC_PLACE(0x3, 13, 2)  // msel
-				  | PPC_PLACE(0x0, 15, 4)  // group ID
-				  | PPC_PLACE(0x0, 19, 3); // chip ID
+	uint64_t regNcuRngBarData = PPC_SHIFT(0x0, 12)  // system ID
+				  | PPC_SHIFT(0x3, 14)  // msel
+				  | PPC_SHIFT(0x0, 18)  // group ID
+				  | PPC_SHIFT(0x0, 21); // chip ID
 
 	regNcuRngBarData += NX_RANGE_BAR_ADDR_OFFSET;
 

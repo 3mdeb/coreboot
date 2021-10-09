@@ -4,13 +4,17 @@
 
 #include <commonlib/bsd/helpers.h>
 #include <console/console.h>
+#include <cpu/power/scom.h>
 #include <stdint.h>
 #include <string.h>
+#include <timer.h>
 
 #define MAX_PEC_PER_PROC 3
 #define MAX_PHB_PER_PROC 6
 
 #define MAX_LANE_GROUPS_PER_PEC 4
+
+#define NUM_PCIE_LANES 16
 
 /* Enum indicating lane width (units = "number of lanes") */
 enum lane_width {
@@ -44,6 +48,13 @@ enum phb_active_mask {
 	PHB3_MASK   = 0x10, // PHB3 enabled
 	PHB4_MASK   = 0x08, // PHB4 enabled
 	PHB5_MASK   = 0x04, // PHB5 enabled
+};
+
+/* Bit position of the PHB with the largest number a given PEC can use */
+enum pec_phb_shift {
+	PEC0_PHB_SHIFT = 7, // PHB0 only
+	PEC1_PHB_SHIFT = 5, // PHB1 - PHB2
+	PEC2_PHB_SHIFT = 2, // PHB3 - PHB5
 };
 
 /*
@@ -176,6 +187,44 @@ static uint16_t lane_masks[MAX_PEC_PER_PROC][MAX_LANE_GROUPS_PER_PEC] = {
 	{ LANE_MASK_X8_GRP0, 0x0, LANE_MASK_X4_GRP0, LANE_MASK_X4_GRP1 },
 };
 
+static const uint64_t RX_VGA_CTRL3_REGISTER[NUM_PCIE_LANES] = {
+	0x8000008D0D010C3F,
+	0x800000CD0D010C3F,
+	0x8000018D0D010C3F,
+	0x800001CD0D010C3F,
+	0x8000028D0D010C3F,
+	0x800002CD0D010C3F,
+	0x8000038D0D010C3F,
+	0x800003CD0D010C3F,
+	0x8000088D0D010C3F,
+	0x800008CD0D010C3F,
+	0x8000098D0D010C3F,
+	0x800009CD0D010C3F,
+	0x80000A8D0D010C3F,
+	0x80000ACD0D010C3F,
+	0x80000B8D0D010C3F,
+	0x80000BCD0D010C3F,
+};
+
+static const uint64_t RX_LOFF_CNTL_REGISTER[NUM_PCIE_LANES] = {
+	0x800000A60D010C3F,
+	0x800000E60D010C3F,
+	0x800001A60D010C3F,
+	0x800001E60D010C3F,
+	0x800002A60D010C3F,
+	0x800002E60D010C3F,
+	0x800003A60D010C3F,
+	0x800003E60D010C3F,
+	0x800008A60D010C3F,
+	0x800008E60D010C3F,
+	0x800009A60D010C3F,
+	0x800009E60D010C3F,
+	0x80000AA60D010C3F,
+	0x80000AE60D010C3F,
+	0x80000BA60D010C3F,
+	0x80000BE60D010C3F,
+};
+
 static enum lane_width lane_mask_to_width(uint16_t mask)
 {
 	enum lane_width width = LANE_WIDTH_NC;
@@ -192,13 +241,91 @@ static enum lane_width lane_mask_to_width(uint16_t mask)
 	return width;
 }
 
+static uint64_t pec_val(int pec_id, uint8_t in,
+			uint32_t pec0_s, uint32_t pec0_c,
+			uint32_t pec1_s, uint32_t pec1_c,
+			uint32_t pec2_s, uint32_t pec2_c)
+{
+	uint64_t out = 0;
+
+	switch (pec_id) {
+		case 0:
+			out = PPC_SHIFT(in & ((1 << pec0_c) - 1), pec0_s);
+			break;
+		case 1:
+			out = PPC_SHIFT(in & ((1 << pec1_c) - 1), pec1_s);
+			break;
+		case 2:
+			out = PPC_SHIFT(in & ((1 << pec2_c) - 1), pec2_s);
+			break;
+		default:
+			die("Unknown PEC ID: %d\n", pec_id);
+	}
+
+	return out;
+}
+
 void pci_init(void)
 {
+	enum {
+		NUM_PCS_CONFIG = 4,
+
+		PEC_CPLT_CONF1_OR = 0x0D000019,
+		PEC_CPLT_CTRL0_OR = 0x0D000010,
+		PEC_CPLT_CONF1_CLEAR = 0x0D000029,
+
+		PEC_PCS_RX_CONFIG_MODE_REG = 0x800004800D010C3F,
+		PEC_PCS_RX_CDR_GAIN_REG = 0x800004B30D010C3F,
+		PEC_PCS_RX_SIGDET_CONTROL_REG = 0x800004A70D010C3F,
+
+		PCI_IOP_FIR_ACTION0_REG = 0x0000000000000000ULL,
+		PCI_IOP_FIR_ACTION1_REG = 0xE000000000000000ULL,
+		PCI_IOP_FIR_MASK_REG    = 0x1FFFFFFFF8000000ULL,
+
+		PEC_FIR_ACTION0_REG = 0x0D010C06,
+		PEC_FIR_ACTION1_REG = 0x0D010C07,
+		PEC_FIR_MASK_REG = 0x0D010C03,
+
+		PEC0_IOP_CONFIG_START_BIT = 13,
+		PEC1_IOP_CONFIG_START_BIT = 14,
+		PEC2_IOP_CONFIG_START_BIT = 10,
+		PEC0_IOP_BIT_COUNT = 1,
+		PEC1_IOP_BIT_COUNT = 2,
+		PEC2_IOP_BIT_COUNT = 3,
+		PEC0_IOP_SWAP_START_BIT = 12,
+		PEC1_IOP_SWAP_START_BIT = 12,
+		PEC2_IOP_SWAP_START_BIT = 7,
+		PEC0_IOP_IOVALID_ENABLE_START_BIT = 4,
+		PEC1_IOP_IOVALID_ENABLE_START_BIT = 4,
+		PEC2_IOP_IOVALID_ENABLE_START_BIT = 4,
+		PEC_IOP_IOVALID_ENABLE_STACK0_BIT = 4,
+		PEC_IOP_IOVALID_ENABLE_STACK1_BIT = 5,
+		PEC_IOP_IOVALID_ENABLE_STACK2_BIT = 6,
+		PEC_IOP_REFCLOCK_ENABLE_START_BIT = 32,
+		PEC_IOP_PMA_RESET_START_BIT = 29,
+		PEC_IOP_PIPE_RESET_START_BIT = 28,
+
+		PEC_PCS_PCLCK_CNTL_PLLA_REG = 0x8000050F0D010C3F,
+		PEC_PCS_PCLCK_CNTL_PLLB_REG = 0x8000054F0D010C3F,
+		PEC_PCS_TX_DCLCK_ROTATOR_REG = 0x800004450D010C3F,
+		PEC_PCS_TX_PCIE_REC_DETECT_CNTL1_REG = 0x8000046C0D010C3F,
+		PEC_PCS_TX_PCIE_REC_DETECT_CNTL2_REG = 0x8000046D0D010C3F,
+		PEC_PCS_TX_POWER_SEQ_ENABLE_REG = 0x800004700D010C3F,
+
+		PEC_SCOM0X0B_EDMOD = 52,
+
+		PEC_PCS_RX_VGA_CONTROL1_REG = 0x8000048B0D010C3F,
+		PEC_PCS_RX_VGA_CONTROL2_REG = 0x8000048C0D010C3F,
+		PEC_PCS_SYS_CONTROL_REG = 0x80000C000D010C3F,
+	};
+
 	uint8_t pec;
 
 	uint8_t phb_active_mask = 0;
 
-	const struct lane_config_row *pec_cfgs[3] = { NULL };
+	const struct lane_config_row *pec_cfgs[MAX_PEC_PER_PROC] = { NULL };
+
+	uint8_t iovalid_enable[MAX_PEC_PER_PROC] = { 0 };
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		uint8_t i;
@@ -232,12 +359,237 @@ void pci_init(void)
 
 		pec_cfgs[pec] = &pec_lane_cfgs[pec][i];
 
-		// PEC[ATTR_PROC_PCIE_IOP_CONFIG] := pec_lane_cfgs[pec][i].lane_config 
+		// PEC[ATTR_PROC_PCIE_IOP_CONFIG] := pec_cfgs[pec]->lane_config 
 		// PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1 
-		// PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_lane_cfgs[pec][i].phb_to_pcie_mac 
+		// PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac 
 	}
 
-	// foreach PEC[ATTR_PROC_PCIE_IOVALID_ENABLE] := mask of functional PHBs 
+	/* Mask of functional PHBs for each PEC, ATTR_PROC_PCIE_IOVALID_ENABLE in Hostboot */
+	iovalid_enable[0] = pec_cfgs[0]->phb_active >> PEC0_PHB_SHIFT;
+	iovalid_enable[1] = pec_cfgs[1]->phb_active >> PEC1_PHB_SHIFT;
+	iovalid_enable[2] = pec_cfgs[2]->phb_active >> PEC2_PHB_SHIFT;
 
 	// ATTR_PROC_PCIE_PHB_ACTIVE := phb_active_mask 
+
+	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
+		long time;
+		uint8_t i;
+		uint64_t val;
+		uint8_t proc_pcie_iop_swap;
+
+		chiplet_id_t chiplet = PCI0_CHIPLET_ID + pec;
+
+		/* Phase1 init step 1 (get VPD, no operation here) */
+
+		/* Phase1 init step 2a */
+		val = pec_val(pec, pec_cfgs[pec]->lane_config,
+			      PEC0_IOP_CONFIG_START_BIT, PEC0_IOP_BIT_COUNT * 2,
+			      PEC1_IOP_CONFIG_START_BIT, PEC1_IOP_BIT_COUNT * 2,
+			      PEC2_IOP_CONFIG_START_BIT, PEC2_IOP_BIT_COUNT * 2);
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR, val);
+
+		/* Phase1 init step 2b */
+
+		/* ATTR_PROC_PCIE_IOP_SWAP, from talos.xml */
+		proc_pcie_iop_swap = 0;
+
+		val = pec_val(pec, proc_pcie_iop_swap,
+			      PEC0_IOP_SWAP_START_BIT, PEC0_IOP_BIT_COUNT,
+			      PEC1_IOP_SWAP_START_BIT, PEC1_IOP_BIT_COUNT,
+			      PEC2_IOP_SWAP_START_BIT, PEC2_IOP_BIT_COUNT);
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR, val);
+
+		/* Phase1 init step 3a */
+
+		val = pec_val(pec, iovalid_enable[pec],
+			      PEC0_IOP_IOVALID_ENABLE_START_BIT, PEC0_IOP_BIT_COUNT,
+			      PEC1_IOP_IOVALID_ENABLE_START_BIT, PEC1_IOP_BIT_COUNT,
+			      PEC2_IOP_IOVALID_ENABLE_START_BIT, PEC2_IOP_BIT_COUNT);
+
+		/* Set IOVALID for base PHB if PHB2, or PHB4, or PHB5 are set (SW417485) */
+		if ((val & PPC_BIT(PEC_IOP_IOVALID_ENABLE_STACK1_BIT)) ||
+		    (val & PPC_BIT(PEC_IOP_IOVALID_ENABLE_STACK2_BIT))) {
+			val |= PPC_BIT(PEC_IOP_IOVALID_ENABLE_STACK0_BIT);
+			val |= PPC_BIT(PEC_IOP_IOVALID_ENABLE_STACK1_BIT);
+		}
+
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR, val);
+
+		/* Phase1 init step 3b (enable clock) */
+		/* XXX: assume all PECs are enabled (due to hard-coded lanes),
+		 *      ATTR_PROC_PCIE_REFCLOCK_ENABLE */
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CTRL0_OR,
+				       PPC_BIT(PEC_IOP_REFCLOCK_ENABLE_START_BIT));
+
+		/* Phase1 init step 4 (PMA reset) */
+
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
+				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
+		(void)wait_us(1, false); /* at least 400ns */
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR,
+				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
+		(void)wait_us(1, false); /* at least 400ns */
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
+				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
+
+		/*
+		 * Poll for PRTREADY status on PLLA and PLLB:
+		 * PEC_IOP_PLLA_VCO_COURSE_CAL_REGISTER1 = 0x800005010D010C3F
+		 * PEC_IOP_PLLB_VCO_COURSE_CAL_REGISTER1 = 0x800005410D010C3F
+		 * PEC_IOP_HSS_PORT_READY_START_BIT = 58
+		 */
+		time = wait_us(40,
+				(read_scom_for_chiplet(chiplet, 0x800005010D010C3F) & PPC_BIT(58)) ||
+				(read_scom_for_chiplet(chiplet, 0x800005410D010C3F) & PPC_BIT(58)));
+		if (!time)
+			die("IOP HSS Port Ready status is not set!");
+
+		/* Phase1 init step 5 (Set IOP FIR action0) */
+		write_scom_for_chiplet(chiplet, PEC_FIR_ACTION0_REG, PCI_IOP_FIR_ACTION0_REG);
+
+		/* Phase1 init step 6 (Set IOP FIR action1) */
+		write_scom_for_chiplet(chiplet, PEC_FIR_ACTION1_REG, PCI_IOP_FIR_ACTION1_REG);
+
+		/* Phase1 init step 7 (Set IOP FIR mask) */
+		write_scom_for_chiplet(chiplet, PEC_FIR_MASK_REG, PCI_IOP_FIR_MASK_REG);
+
+		/* Phase1 init step 8-11 (Config 0 - 3) */
+
+		/* ATTR_PROC_PCIE_PCS_RX_CDR_GAIN, from talos.xml */
+		uint8_t pcs_cdr_gain[] = { 0x56, 0x47, 0x47, 0x47 };
+		/* ATTR_PROC_PCIE_PCS_RX_INIT_GAIN, all zeroes by default */
+		uint8_t pcs_init_gain = 0;
+		/* ATTR_PROC_PCIE_PCS_RX_PK_INIT, all zeroes by default */
+		uint8_t pcs_pk_init = 0;
+		/* ATTR_PROC_PCIE_PCS_RX_SIGDET_LVL, defaults and talos.xml */
+		uint8_t pcs_sigdet_lvl = 0x0B;
+
+		uint32_t pcs_config_mode[NUM_PCS_CONFIG] = { 0xA006, 0xA805, 0xB071, 0xB870 };
+
+		for (i = 0; i < NUM_PCS_CONFIG; ++i) {
+			uint8_t lane;
+
+			/* RX Config Mode */
+			write_scom_for_chiplet(chiplet, PEC_PCS_RX_CONFIG_MODE_REG,
+					       PPC_SHIFT(pcs_config_mode[i], 48));
+
+			/* RX CDR GAIN */
+			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_CDR_GAIN_REG,
+						~PPC_BITMASK(56, 63),
+						PPC_SHIFT(pcs_cdr_gain[i], 56));
+
+			for (lane = 0; lane < NUM_PCIE_LANES; ++lane) {
+				/* RX INITGAIN */
+				scom_and_or_for_chiplet(chiplet, RX_VGA_CTRL3_REGISTER[lane],
+							~PPC_BITMASK(48, 52),
+							PPC_SHIFT(pcs_init_gain, 48));
+
+				/* RX PKINIT */
+				scom_and_or_for_chiplet(chiplet, RX_LOFF_CNTL_REGISTER[lane],
+							~PPC_BITMASK(58, 63),
+							PPC_SHIFT(pcs_pk_init, 58));
+			}
+
+			/* RX SIGDET LVL */
+			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_SIGDET_CONTROL_REG,
+						~PPC_BITMASK(59, 63),
+						PPC_SHIFT(pcs_sigdet_lvl, 59));
+		}
+
+		/*
+		 * Phase1 init step 12 (RX Rot Cntl CDR Lookahead Disabled,SSC Disabled)
+                 *
+		 * Skipping update of PEC_PCS_RX_ROT_CNTL_REG, because all these attributes are zero
+		 * for Nimbus and there is nothing to update:
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_LOOKAHEAD
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_SSC
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_EXTEL
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_RST_FW
+		 */
+
+		/* Phase1 init step 13 (RX Config Mode Enable External Config Control) */
+		write_scom_for_chiplet(chiplet, PEC_PCS_RX_CONFIG_MODE_REG, PPC_SHIFT(0x8600, 48));
+
+		/* Phase1 init step 14 (PCLCK Control Register - PLLA) */
+		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLA = 0xF8 */
+		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLA_REG,
+					~PPC_BITMASK(56, 63),
+					PPC_SHIFT(0xf8, 56));
+
+		/* Phase1 init step 15 (PCLCK Control Register - PLLB) */
+		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLB = 0xF8 */
+		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLB_REG,
+					~PPC_BITMASK(56, 63),
+					PPC_SHIFT(0xf8, 56));
+
+		/* Phase1 init step 16 (TX DCLCK Rotator Override) */
+		/* ATTR_PROC_PCIE_PCS_TX_DCLCK_ROT = 0x0022 */
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_DCLCK_ROTATOR_REG,
+				       PPC_SHIFT(0x0022, 48));
+
+		/* Phase1 init step 17 (TX PCIe Receiver Detect Control Register 1) */
+		/* ATTR_PROC_PCIE_PCS_TX_PCIE_RECV_DETECT_CNTL_REG1 = 0xAA7A */
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL1_REG,
+				       PPC_SHIFT(0xaa7a, 48));
+
+		/* Phase1 init step 18 (TX PCIe Receiver Detect Control Register 2) */
+		/* ATTR_PROC_PCIE_PCS_TX_PCIE_RECV_DETECT_CNTL_REG2 = 0x2000 */
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL2_REG,
+				       PPC_SHIFT(0x2000, 48));
+
+		/* Phase1 init step 19 (TX Power Sequence Enable) */
+		/* ATTR_PROC_PCIE_PCS_TX_POWER_SEQ_ENABLE = 0xFF */
+		scom_and_or_for_chiplet(chiplet, PEC_PCS_TX_POWER_SEQ_ENABLE_REG,
+					~PPC_BITMASK(56, 62),
+					PPC_SHIFT(0xff, 56));
+
+		/* Phase1 init step 20 (RX VGA Control Register 1) */
+
+		/* ATTR_PROC_PCIE_PCS_RX_VGA_CNTL_REG1 = 0 */
+		val = PPC_SHIFT(0, 48);
+
+		/* Becase ATTR_CHIP_EC_FEATURE_HW414759 = 1 */
+		val |= PPC_BIT(PEC_SCOM0X0B_EDMOD);
+		val |= PPC_BIT(PEC_SCOM0X0B_EDMOD + 1);
+
+		write_scom_for_chiplet(chiplet, PEC_PCS_RX_VGA_CONTROL1_REG, val);
+
+		/* Phase1 init step 21 (RX VGA Control Register 2) */
+		/* ATTR_PROC_PCIE_PCS_RX_VGA_CNTL_REG2 = 0 */
+		write_scom_for_chiplet(chiplet, PEC_PCS_RX_VGA_CONTROL2_REG,
+				       PPC_SHIFT(0, 48));
+
+		/* Phase1 init step 22 (RX DFE Func Control Register 1) */
+		/* ATTR_PROC_PCIE_PCS_RX_DFE_FDDC = 0, so not updating PEC_IOP_RX_DFE_FUNC_REGISTER1 */
+
+		/* Phase1 init step 23 (PCS System Control) */
+		/* ATTR_PROC_PCIE_PCS_SYSTEM_CNTL computed above */
+		scom_and_or_for_chiplet(chiplet, PEC_PCS_SYS_CONTROL_REG,
+					~PPC_BITMASK(55, 63),
+					PPC_SHIFT(pec_cfgs[pec]->phb_to_pcie_mac, 55));
+
+		/*
+		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL seem to be 0, which
+		 * makes the next four steps no-op.  Hostboot has bugs here in
+		 * that it updates PEC_PCS_M1_CONTROL_REG 4 times instead of
+		 * updating 4 different registers (M1-M4), but no-op conceals this.
+		 */
+
+		/* Phase1 init step 24 (PCS M1 Control) */
+		/* Phase1 init step 25 (PCS M2 Control) */
+		/* Phase1 init step 26 (PCS M3 Control) */
+		/* Phase1 init step 27 (PCS M4 Control) */
+
+		/* Delay a minimum of 200ns to allow prior SCOM programming to take effect */
+		(void)wait_us(1, false);
+
+		// Phase1 init step 28
+		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
+				       PPC_BIT(PEC_IOP_PIPE_RESET_START_BIT));
+
+		/*
+		 * Delay a minimum of 300ns for reset to complete.
+		 * Inherent delay before deasserting PCS PIPE Reset is enough here.
+		 */
+	}
 }

@@ -594,10 +594,35 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 	}
 }
 
+static void enable_ridi(void)
+{
+	enum {
+		PERV_NET_CTRL0 = 0x000F0040,
+		PERV_NET_CTRL0_WOR = 0x000F0042,
+	};
+
+	uint8_t pec = 0;
+
+	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
+		chiplet_id_t chiplet = PCI0_CHIPLET_ID + pec;
+
+		/* Getting NET_CTRL0 register value and checking its CHIPLET_ENABLE bit */
+		if (read_scom_for_chiplet(chiplet, PERV_NET_CTRL0) & PPC_BIT(0)) {
+			/* Enable Recievers, Drivers DI1 & DI2 */
+			uint64_t val = 0;
+			val |= PPC_BIT(19); // NET_CTRL0.RI_N = 1
+			val |= PPC_BIT(20); // NET_CTRL0.DI1_N = 1
+			val |= PPC_BIT(21); // NET_CTRL0.DI2_N = 1
+			write_scom_for_chiplet(chiplet, PERV_NET_CTRL0_WOR, val);
+		}
+	}
+}
+
 void pci_init(void)
 {
 	const struct lane_config_row *pec_cfgs[MAX_PEC_PER_PROC] = { NULL };
 
 	determine_lane_configs(pec_cfgs);
 	phase1(pec_cfgs);
+	enable_ridi();
 }

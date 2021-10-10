@@ -15,6 +15,7 @@
 #define MAX_LANE_GROUPS_PER_PEC 4
 
 #define NUM_PCIE_LANES 16
+#define NUM_PCS_CONFIG 4
 
 /* Enum indicating lane width (units = "number of lanes") */
 enum lane_width {
@@ -241,6 +242,51 @@ static enum lane_width lane_mask_to_width(uint16_t mask)
 	return width;
 }
 
+static void determine_lane_configs(const struct lane_config_row **pec_cfgs)
+{
+	uint8_t pec = 0;
+	uint8_t phb_active_mask = 0;
+
+	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
+		uint8_t i;
+		uint8_t lane_group;
+
+		// enum lane_width  
+		uint16_t lane_mask[MAX_LANE_GROUPS_PER_PEC];
+		memcpy(&lane_mask, &lane_masks[pec], sizeof(lane_mask));
+
+		struct lane_config_row config = {
+			{ LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC },
+			0x00,
+			PHB_MASK_NA,
+			PHB_X16_MAC_MAP,
+		};
+
+		/* Transform effective config to match lane config table format */
+		for (lane_group = 0; lane_group < MAX_LANE_GROUPS_PER_PEC; ++lane_group)
+			config.lane_set[lane_group] = lane_mask_to_width(lane_mask[lane_group]);
+
+		for (i = 0; i < pec_lane_cfg_sizes[pec]; ++i) {
+			if (memcmp(pec_lane_cfgs[pec][i].lane_set, &config.lane_set,
+				   sizeof(config.lane_set)) == 0)
+				break;
+		}
+
+		if (i == pec_lane_cfg_sizes[pec])
+			die("Failed to find PCIE IOP configuration for PEC%d\n", pec);
+
+		phb_active_mask |= pec_lane_cfgs[pec][i].phb_active;
+
+		pec_cfgs[pec] = &pec_lane_cfgs[pec][i];
+
+		// PEC[ATTR_PROC_PCIE_IOP_CONFIG] := pec_cfgs[pec]->lane_config 
+		// PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1 
+		// PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac 
+	}
+
+	// ATTR_PROC_PCIE_PHB_ACTIVE := phb_active_mask 
+}
+
 static uint64_t pec_val(int pec_id, uint8_t in,
 			uint32_t pec0_s, uint32_t pec0_c,
 			uint32_t pec1_s, uint32_t pec1_c,
@@ -265,11 +311,9 @@ static uint64_t pec_val(int pec_id, uint8_t in,
 	return out;
 }
 
-void pci_init(void)
+static void phase1(const struct lane_config_row **pec_cfgs)
 {
 	enum {
-		NUM_PCS_CONFIG = 4,
-
 		PEC_CPLT_CONF1_OR = 0x0D000019,
 		PEC_CPLT_CTRL0_OR = 0x0D000010,
 		PEC_CPLT_CONF1_CLEAR = 0x0D000029,
@@ -319,57 +363,13 @@ void pci_init(void)
 		PEC_PCS_SYS_CONTROL_REG = 0x80000C000D010C3F,
 	};
 
-	uint8_t pec;
-
-	uint8_t phb_active_mask = 0;
-
-	const struct lane_config_row *pec_cfgs[MAX_PEC_PER_PROC] = { NULL };
-
+	uint8_t pec = 0;
 	uint8_t iovalid_enable[MAX_PEC_PER_PROC] = { 0 };
-
-	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
-		uint8_t i;
-		uint8_t lane_group;
-
-		// enum lane_width  
-		uint16_t lane_mask[MAX_LANE_GROUPS_PER_PEC];
-		memcpy(&lane_mask, &lane_masks[pec], sizeof(lane_mask));
-
-		struct lane_config_row config = {
-			{ LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC },
-			0x00,
-			PHB_MASK_NA,
-			PHB_X16_MAC_MAP,
-		};
-
-		/* Transform effective config to match lane config table format */
-		for (lane_group = 0; lane_group < MAX_LANE_GROUPS_PER_PEC; ++lane_group)
-			config.lane_set[lane_group] = lane_mask_to_width(lane_mask[lane_group]);
-
-		for (i = 0; i < pec_lane_cfg_sizes[pec]; ++i) {
-			if (memcmp(pec_lane_cfgs[pec][i].lane_set, &config.lane_set,
-				   sizeof(config.lane_set)) == 0)
-				break;
-		}
-
-		if (i == pec_lane_cfg_sizes[pec])
-			die("Failed to find PCIE IOP configuration for PEC%d\n", pec);
-
-		phb_active_mask |= pec_lane_cfgs[pec][i].phb_active;
-
-		pec_cfgs[pec] = &pec_lane_cfgs[pec][i];
-
-		// PEC[ATTR_PROC_PCIE_IOP_CONFIG] := pec_cfgs[pec]->lane_config 
-		// PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1 
-		// PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac 
-	}
 
 	/* Mask of functional PHBs for each PEC, ATTR_PROC_PCIE_IOVALID_ENABLE in Hostboot */
 	iovalid_enable[0] = pec_cfgs[0]->phb_active >> PEC0_PHB_SHIFT;
 	iovalid_enable[1] = pec_cfgs[1]->phb_active >> PEC1_PHB_SHIFT;
 	iovalid_enable[2] = pec_cfgs[2]->phb_active >> PEC2_PHB_SHIFT;
-
-	// ATTR_PROC_PCIE_PHB_ACTIVE := phb_active_mask 
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		long time;
@@ -592,4 +592,12 @@ void pci_init(void)
 		 * Inherent delay before deasserting PCS PIPE Reset is enough here.
 		 */
 	}
+}
+
+void pci_init(void)
+{
+	const struct lane_config_row *pec_cfgs[MAX_PEC_PER_PROC] = { NULL };
+
+	determine_lane_configs(pec_cfgs);
+	phase1(pec_cfgs);
 }

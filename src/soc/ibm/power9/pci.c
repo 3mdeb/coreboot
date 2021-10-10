@@ -311,7 +311,8 @@ static uint64_t pec_val(int pec_id, uint8_t in,
 	return out;
 }
 
-static void phase1(const struct lane_config_row **pec_cfgs)
+static void phase1(const struct lane_config_row **pec_cfgs,
+		   const uint8_t *iovalid_enable)
 {
 	enum {
 		PEC_CPLT_CONF1_OR = 0x0D000019,
@@ -364,12 +365,6 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 	};
 
 	uint8_t pec = 0;
-	uint8_t iovalid_enable[MAX_PEC_PER_PROC] = { 0 };
-
-	/* Mask of functional PHBs for each PEC, ATTR_PROC_PCIE_IOVALID_ENABLE in Hostboot */
-	iovalid_enable[0] = pec_cfgs[0]->phb_active >> PEC0_PHB_SHIFT;
-	iovalid_enable[1] = pec_cfgs[1]->phb_active >> PEC1_PHB_SHIFT;
-	iovalid_enable[2] = pec_cfgs[2]->phb_active >> PEC2_PHB_SHIFT;
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		long time;
@@ -476,7 +471,7 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 			/* RX CDR GAIN */
 			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_CDR_GAIN_REG,
 						~PPC_BITMASK(56, 63),
-						PPC_SHIFT(pcs_cdr_gain[i], 56));
+						PPC_SHIFT(pcs_cdr_gain[i], 63));
 
 			for (lane = 0; lane < NUM_PCIE_LANES; ++lane) {
 				/* RX INITGAIN */
@@ -487,13 +482,13 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 				/* RX PKINIT */
 				scom_and_or_for_chiplet(chiplet, RX_LOFF_CNTL_REGISTER[lane],
 							~PPC_BITMASK(58, 63),
-							PPC_SHIFT(pcs_pk_init, 58));
+							PPC_SHIFT(pcs_pk_init, 63));
 			}
 
 			/* RX SIGDET LVL */
 			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_SIGDET_CONTROL_REG,
 						~PPC_BITMASK(59, 63),
-						PPC_SHIFT(pcs_sigdet_lvl, 59));
+						PPC_SHIFT(pcs_sigdet_lvl, 63));
 		}
 
 		/*
@@ -514,13 +509,13 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLA = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLA_REG,
 					~PPC_BITMASK(56, 63),
-					PPC_SHIFT(0xf8, 56));
+					PPC_SHIFT(0xf8, 63));
 
 		/* Phase1 init step 15 (PCLCK Control Register - PLLB) */
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLB = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLB_REG,
 					~PPC_BITMASK(56, 63),
-					PPC_SHIFT(0xf8, 56));
+					PPC_SHIFT(0xf8, 63));
 
 		/* Phase1 init step 16 (TX DCLCK Rotator Override) */
 		/* ATTR_PROC_PCIE_PCS_TX_DCLCK_ROT = 0x0022 */
@@ -566,7 +561,7 @@ static void phase1(const struct lane_config_row **pec_cfgs)
 		/* ATTR_PROC_PCIE_PCS_SYSTEM_CNTL computed above */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_SYS_CONTROL_REG,
 					~PPC_BITMASK(55, 63),
-					PPC_SHIFT(pec_cfgs[pec]->phb_to_pcie_mac, 55));
+					PPC_SHIFT(pec_cfgs[pec]->phb_to_pcie_mac, 63));
 
 		/*
 		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL seem to be 0, which
@@ -618,11 +613,187 @@ static void enable_ridi(void)
 	}
 }
 
+static void init_pecs(const uint8_t *iovalid_enable)
+{
+	enum {
+		P9N2_PEC_ADDREXTMASK_REG = 0x4010C05,
+		PEC_PBCQHWCFG_REG = 0x4010C00,
+		PEC_NESTTRC_REG = 0x4010C03,
+		PEC_PBAIBHWCFG_REG = 0xD010800,
+
+		/* powerbus.c has these too */
+		MBOX_SCRATCH_REG1 = 0x00050038,
+		MBOX_SCRATCH_REG6_GROUP_PUMP_MODE = (1 << 23),
+	};
+
+	uint8_t dd = get_dd();
+
+	uint8_t pec = 0;
+
+	uint64_t scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
+
+	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
+	bool node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
+
+	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
+		uint64_t val = 0;
+		chiplet_id_t chiplet = PCI0_CHIPLET_ID + pec;
+
+		/*
+		 * ATTR_FABRIC_ADDR_EXTENSION_GROUP_ID = 0
+		 * ATTR_FABRIC_ADDR_EXTENSION_CHIP_ID = 0
+		 */
+		scom_and_or_for_chiplet(chiplet, P9N2_PEC_ADDREXTMASK_REG,
+					~PPC_BITMASK(0, 6),
+					PPC_SHIFT(0, 6));
+
+		/*
+		 * Phase2 init step 1
+		 * NestBase+0x00
+		 * Set bits 00:03 = 0b0001 Set hang poll scale
+		 * Set bits 04:07 = 0b0001 Set data scale
+		 * Set bits 08:11 = 0b0001 Set hang pe scale
+		 * Set bit 22 = 0b1 Disable out­of­order store behavior
+		 * Set bit 33 = 0b1 Enable Channel Tag streaming behavior
+		 * Set bits 34:35 = 0b11 Set P9 Style cache-inject behavior
+		 * Set bits 46:48 = 0b011 Set P9 Style cache-inject rate, 1/16 cycles
+		 * Set bit 60 = 0b1 only if PEC is bifurcated or trifurcated.
+		 * if HW423589_option1, set Disable Group Scope (r/w) and Use Vg(sys) at Vg scope
+		 */
+
+		val = read_scom_for_chiplet(chiplet, PEC_PBCQHWCFG_REG);
+		/* Set hang poll scale */
+		val &= ~PPC_BITMASK(0, 3);
+		val |= PPC_SHIFT(1, 3);
+		/* Set data scale */
+		val &= ~PPC_BITMASK(4, 7);
+		val |= PPC_SHIFT(1, 7);
+		/* Set hang pe scale */
+		val &= ~PPC_BITMASK(8, 11);
+		val |= PPC_SHIFT(1, 11);
+		/* Disable out­of­order store behavior */
+		val |= PPC_BIT(22);
+		/* Enable Channel Tag streaming behavior */
+		val |= PPC_BIT(33);
+
+		/* Set Disable Group Scope (r/w) and Use Vg(sys) at Vg scope */
+		val |= PPC_BIT(41); // PEC_PBCQHWCFG_REG_PE_DISABLE_WR_VG
+		val |= PPC_BIT(42); // PEC_PBCQHWCFG_REG_PE_DISABLE_WR_SCOPE_GROUP
+		val |= PPC_BIT(43); // PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_VG
+		val |= PPC_BIT(44); // PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_SCOPE_GROUP
+		val |= PPC_BIT(54); // PEC_PBCQHWCFG_REG_PE_DISABLE_RD_VG
+		val |= PPC_BIT(51); // PEC_PBCQHWCFG_REG_PE_DISABLE_RD_SCOPE_GROUP
+		val |= PPC_BIT(56); // PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP
+		val |= PPC_BIT(59); // PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG
+
+		/* Disable P9 Style cache injects if chip is node */
+		if (!node_pump_mode) {
+			/*
+			 * ATTR_PROC_PCIE_CACHE_INJ_MODE
+			 * Attribute to control the cache inject mode.
+			 *
+			 * DISABLE_CI      = 0x0 - Disable cache inject completely. (Reset value default)
+			 * P7_STYLE_CI     = 0x1 - Use cache inject design from Power7.
+			 * PCITLP_STYLE_CI = 0x2 - Use PCI TLP Hint bits in packet to perform the cache inject.
+			 * P9_STYLE_CI     = 0x3 - Initial attempt as cache inject. Power9 style. (Attribute default)
+			 *
+			 * Different cache inject modes will affect DMA write performance. The attribute default was
+			 * selected based on various workloads and was to be the most optimal settings for Power9.
+			 * fapi2::ATTR_PROC_PCIE_CACHE_INJ_MODE = 3 by default
+			 */
+			val &= ~PPC_BITMASK(34, 36);
+			val |= PPC_SHIFT(0x3, 36);
+
+			if (dd == 0x21 || dd == 0x22 || dd == 0x23) {
+				/*
+				 * ATTR_PROC_PCIE_CACHE_INJ_THROTTLE
+				 * Attribute to control the cache inject throttling when cache inject is enable.
+				 *
+				 * DISABLE   = 0x0 - Disable cache inject throttling. (Reset value default)
+				 * 16_CYCLES = 0x1 - Perform 1 cache inject every 16 clock cycles.
+				 * 32_CYCLES = 0x3 - Perform 1 cache inject every 32 clock cycles. (Attribute default)
+				 * 64_CYCLES = 0x7 - Perform 1 cache inject every 32 clock cycles.
+				 *
+				 * Different throttle rates will affect DMA write performance. The attribute default
+				 * settings were optimal settings found across various workloads.
+				 */
+				val &= ~PPC_BITMASK(46, 48);
+				val |= PPC_SHIFT(0x3, 48);
+			}
+		}
+
+		if (pec == 1 || (pec == 2 && iovalid_enable[pec] != 0x4))
+			val |= PPC_BIT(60); // PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_ARBITRATION
+
+		write_scom_for_chiplet(chiplet, PEC_PBCQHWCFG_REG, val);
+
+		/*
+		 * Phase2 init step 2
+		 * NestBase + 0x01
+		 * N/A Modify Drop Priority Control Register (DrPriCtl)
+		 */
+
+		/*
+		 * Phase2 init step 3
+		 * NestBase + 0x03
+		 * Set bits 00:03 = 0b1001 Enable trace, and select
+		 *                         inbound operations with addr information
+		 */
+		scom_and_or_for_chiplet(chiplet, PEC_NESTTRC_REG,
+					~PPC_BITMASK(0, 3),
+					PPC_SHIFT(9, 3));
+
+		/*
+		 * Phase2 init step 4
+		 * NestBase+0x05
+		 * N/A For use of atomics/asb_notify
+		 */
+
+		/*
+		 * Phase2 init step 5
+		 * NestBase+0x06
+		 * N/A To override scope prediction
+		 */
+
+		/*
+		 * Phase2 init step 6
+		 * PCIBase +0x00
+		 * Set bits 30 = 0b1 Enable Trace
+		 */
+		val = 0;
+		val |= PPC_BIT(0x1E); // PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN
+		val |= PPC_SHIFT(7, 0x2A); // PEC_AIB_HWCFG_OSBM_HOL_BLK_CNT
+		write_scom_for_chiplet(chiplet, PEC_PBAIBHWCFG_REG, val);
+	}
+}
+
+static void init_phbs(const uint8_t *iovalid_enable)
+{
+	// TODO: write code 
+}
+
+static void phase2(const uint8_t *iovalid_enable)
+{
+	init_pecs(iovalid_enable);
+	init_phbs(iovalid_enable);
+}
+
 void pci_init(void)
 {
 	const struct lane_config_row *pec_cfgs[MAX_PEC_PER_PROC] = { NULL };
+	uint8_t iovalid_enable[MAX_PEC_PER_PROC] = { 0 };
 
 	determine_lane_configs(pec_cfgs);
-	phase1(pec_cfgs);
+
+	/*
+	 * Mask of functional PHBs for each PEC, ATTR_PROC_PCIE_IOVALID_ENABLE in Hostboot.
+	 * LSB is the PHB with the highest number for the given PEC.
+	 */
+	iovalid_enable[0] = pec_cfgs[0]->phb_active >> PEC0_PHB_SHIFT;
+	iovalid_enable[1] = pec_cfgs[1]->phb_active >> PEC1_PHB_SHIFT;
+	iovalid_enable[2] = pec_cfgs[2]->phb_active >> PEC2_PHB_SHIFT;
+
+	phase1(pec_cfgs, iovalid_enable);
 	enable_ridi();
+	phase2(iovalid_enable);
 }

@@ -5,6 +5,7 @@
 #include <cpu/power/occ.h>
 #include <timer.h>
 
+#include "homer.h"
 #include "ops.h"
 
 #define OCB_PIB_OCBCSR0_OCB_STREAM_MODE (4)
@@ -27,16 +28,6 @@
 
 #define PU_OCB_PIB_OCBCSR0_OR (0x0006D013)
 #define PU_OCB_PIB_OCBCSR0_CLEAR (0x0006D012)
-
-#define NUMBER_OF_EX_CHIPLETS (6)
-static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] = {
-	EP00_CHIPLET_ID,
-	EP01_CHIPLET_ID,
-	EP02_CHIPLET_ID,
-	EP03_CHIPLET_ID,
-	EP04_CHIPLET_ID,
-	EP05_CHIPLET_ID
-};
 
 static void pm_ocb_setup(uint32_t ocb_bar)
 {
@@ -118,11 +109,29 @@ void write_occ_command(uint64_t write_data)
 	write_scom(PU_OCB_PIB_OCBDR1, write_data);
 }
 
-void clear_occ_special_wakeups(void)
+void clear_occ_special_wakeups(uint64_t cores)
 {
-	for (size_t chiplet_index = 0; chiplet_index < NUMBER_OF_EX_CHIPLETS; ++chiplet_index)
-		scom_and_for_chiplet(EX_CHIPLETS[chiplet_index], EX_PPM_SPWKUP_OCC,
-				     ~PPC_BIT(0));
+	for (size_t i = 0; i < MAX_CORES_PER_CHIP; i += 2) {
+		if (!IS_EX_FUNCTIONAL(i, cores))
+			continue;
+		scom_and_for_chiplet(EC00_CHIPLET_ID + i, EX_PPM_SPWKUP_OCC, ~PPC_BIT(0));
+	}
+}
+
+void special_occ_wakeup_disable(uint64_t cores)
+{
+	enum { PPM_SPWKUP_FSP = 0x200F010B };
+
+	for (int i = 0; i < MAX_CORES_PER_CHIP; ++i) {
+		uint32_t spwkup_addr = PPM_SPWKUP_FSP + 0x01000000 * i;
+
+		if (!IS_EC_FUNCTIONAL(i, cores))
+			continue;
+
+		write_scom_for_chiplet(EC00_CHIPLET_ID + i, spwkup_addr, 0);
+		/* This puts an inherent delay in the propagation of the reset transition */
+		(void)read_scom_for_chiplet(EC00_CHIPLET_ID + i, spwkup_addr);
+	}
 }
 
 static uint32_t ppc_lis(uint16_t rt, uint16_t data)

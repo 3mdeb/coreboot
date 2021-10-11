@@ -1531,21 +1531,6 @@ static void check_proc_config(struct homer_st *homer)
 	*conf_vector = htobe64(vector_value);
 }
 
-static void special_wakeup_disable(uint64_t cores)
-{
-	enum { PPM_SPWKUP_FSP = 0x200F010B };
-
-	for (int i = 0; i < MAX_CORES_PER_CHIP; ++i) {
-		uint32_t spwkup_addr = PPM_SPWKUP_FSP + 0x01000000 * i;
-
-		if (!IS_EC_FUNCTIONAL(i, cores))
-			continue;
-
-		write_scom(spwkup_addr, 0);
-		(void)read_scom(spwkup_addr);
-	}
-}
-
 static void pm_pss_init(void)
 {
 	enum {
@@ -1585,8 +1570,8 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 	pm_pstate_gpe_init(homer, cores);
 
 	check_proc_config(homer);
-	clear_occ_special_wakeups();
-	special_wakeup_disable(cores);
+	clear_occ_special_wakeups(cores);
+	special_occ_wakeup_disable(cores);
 	occ_start_from_mem();
 
 	write_scom(PU_OCB_OCI_OCCFLG2_CLEAR, PPC_BIT(STOP_RECOVERY_TRIGGER_ENABLE));

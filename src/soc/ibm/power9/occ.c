@@ -3,7 +3,6 @@
 #include <console/console.h>
 #include <cpu/power/scom.h>
 #include <cpu/power/occ.h>
-#include <timer.h>
 
 #include "homer.h"
 #include "ops.h"
@@ -59,9 +58,6 @@ static void check_ocb_mode(uint64_t OCBCSR_address, uint64_t OCBSHCS_address)
 				/* Proceed if the OCB_OCI_OCBSHCS0_PUSH_FULL is clear */
 				if (!(stream_push_control & PPC_BIT(OCB_OCI_OCBSHCS0_PUSH_FULL)))
 					break;
-
-				/* Hostboot has delay of 0 here */
-				wait_us(1, false);
 
 				stream_push_control = read_scom(OCBSHCS_address);
 			}

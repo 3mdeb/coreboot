@@ -3,71 +3,10 @@
 #ifndef CPU_PPC64_OCC_H
 #define CPU_PPC64_OCC_H
 
-#include <cpu/power/scom.h>
-
-#define OCB_PIB_OCBCSR0_OCB_STREAM_MODE (4)
-#define OCB_PIB_OCBCSR0_OCB_STREAM_TYPE (5)
-
-#define OCB_OCI_OCBSHCS0_PUSH_ENABLE (31)
-#define OCB_OCI_OCBSHCS0_PUSH_FULL   (0)
-
-#define PU_OCB_PIB_OCBCSR0_RO (0x0006D011)
-#define PU_OCB_PIB_OCBCSR1_RO (0x0006D031)
-#define PU_OCB_OCI_OCBSHCS0_SCOM (0x0006C204)
-#define PU_OCB_OCI_OCBSHCS1_SCOM (0x0006C214)
-#define PU_OCB_PIB_OCBDR0 (0x0006D015)
-#define PU_OCB_PIB_OCBDR1 (0x0006D035)
-
-#define PU_OCB_PIB_OCBCSR0_OR (0x0006D013)
-#define PU_OCB_PIB_OCBCSR1_OR (0x0006D033)
-#define PU_OCB_PIB_OCBCSR2_OR (0x0006D053)
-#define PU_OCB_PIB_OCBCSR3_OR (0x0006D073)
-
-#define PU_OCB_PIB_OCBCSR0_CLEAR (0x0006D012)
-#define PU_OCB_PIB_OCBCSR1_CLEAR (0x0006D032)
-#define PU_OCB_PIB_OCBCSR2_CLEAR (0x0006D052)
-#define PU_OCB_PIB_OCBCSR3_CLEAR (0x0006D072)
-
-#define PU_OCB_PIB_OCBAR0 (0x0006D010)
-#define PU_OCB_PIB_OCBAR1 (0x0006D030)
-#define PU_OCB_PIB_OCBAR2 (0x0006D050)
-#define PU_OCB_PIB_OCBAR3 (0x0006D070)
-
-#define EX_PPM_SPWKUP_OCC (0x200F010C)
-
-#define NUMBER_OF_EX_CHIPLETS (6)
-static const chiplet_id_t EX_CHIPLETS[NUMBER_OF_EX_CHIPLETS] = {
-	EP00_CHIPLET_ID,
-	EP01_CHIPLET_ID,
-	EP02_CHIPLET_ID,
-	EP03_CHIPLET_ID,
-	EP04_CHIPLET_ID,
-	EP05_CHIPLET_ID
-};
-
-static const uint64_t OCBARn[4] = {
-	PU_OCB_PIB_OCBAR0,
-	PU_OCB_PIB_OCBAR1,
-	PU_OCB_PIB_OCBAR2,
-	PU_OCB_PIB_OCBAR3
-};
-
-static const uint64_t OCBCSRn_CLEAR[4] = {
-	PU_OCB_PIB_OCBCSR0_CLEAR,
-	PU_OCB_PIB_OCBCSR1_CLEAR,
-	PU_OCB_PIB_OCBCSR2_CLEAR,
-	PU_OCB_PIB_OCBCSR3_CLEAR
-};
-
-static const uint64_t OCBCSRn_OR[4] = {
-	PU_OCB_PIB_OCBCSR0_OR,
-	PU_OCB_PIB_OCBCSR1_OR,
-	PU_OCB_PIB_OCBCSR2_OR,
-	PU_OCB_PIB_OCBCSR3_OR
-};
-
 void writeOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
 void readOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
+void write_occ_command(uint64_t write_data);
 void clear_occ_special_wakeups(void);
+void occ_start_from_mem(void);
 
 #endif /* CPU_PPC64_OCC_H */

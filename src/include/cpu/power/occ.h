@@ -5,11 +5,6 @@
 
 #include <cpu/power/scom.h>
 
-#define OCC_405_SRAM_ADDRESS (0xFFF40000)
-#define OCC_OFFSET_MAIN_EP (0x6C)
-#define OCC_BRANCH_INSTR (0x4B00000200000000)
-#define BRANCH_ADDR_MASK (0x00FFFFFC)
-
 #define OCB_PIB_OCBCSR0_OCB_STREAM_MODE (4)
 #define OCB_PIB_OCBCSR0_OCB_STREAM_TYPE (5)
 
@@ -73,7 +68,6 @@ static const uint64_t OCBCSRn_OR[4] = {
 
 void writeOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
 void readOCCSRAM(uint32_t address, uint64_t *buffer, size_t data_length);
-uint64_t makeStart405Instruction(void);
 void clear_occ_special_wakeups(void);
 
 #endif /* CPU_PPC64_OCC_H */

@@ -53,20 +53,6 @@ void readOCCSRAM(uint32_t address, uint64_t * buffer, size_t data_length)
 	get_ocb_indirect(data_length / 8, address, buffer);
 }
 
-uint64_t makeStart405Instruction(void)
-{
-	uint64_t epAddr;
-	readOCCSRAM(OCC_405_SRAM_ADDRESS + OCC_OFFSET_MAIN_EP, &epAddr, 8);
-
-	// The branch instruction is of the form 0x4BXXXXX200000000, where X
-	// is the address of the 405 main's entry point (alligned as shown).
-	// Example: If 405 main's EP is FFF5B570, then the branch instruction
-	// will be 0x4bf5b57200000000. The last two bits of the first byte of
-	// the branch instruction must be '2' according to the OCC instruction
-	// set manual.
-	return OCC_BRANCH_INSTR | (((uint64_t)(BRANCH_ADDR_MASK & epAddr)) << 32);
-}
-
 void clear_occ_special_wakeups(void)
 {
 	for (size_t chiplet_index = 0; chiplet_index < NUMBER_OF_EX_CHIPLETS; ++chiplet_index)

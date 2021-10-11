@@ -146,8 +146,6 @@ static uint32_t ppc_ori(uint16_t rs, uint16_t ra, uint16_t data)
 
 static uint32_t ppc_mtspr(uint16_t rs, uint16_t spr)
 {
-	enum { MTSPR_CONST1 = 467 };
-
 	uint32_t temp = ((spr & 0x03FF) << (31 - 20));
 
 	uint32_t inst;
@@ -155,19 +153,14 @@ static uint32_t ppc_mtspr(uint16_t rs, uint16_t spr)
 	inst |= rs << (31 - 10);
 	inst |= (temp & 0x0000F800) << 5;  // Perform swizzle
 	inst |= (temp & 0x001F0000) >> 5;  // Perform swizzle
-	inst |= MTSPR_CONST1 << 1;
 	return inst;
 }
 
 static uint32_t ppc_bctr(void)
 {
-	enum { BCCTR_CONST1 = 528 };
-
 	uint32_t inst;
 	inst = BCCTR_OP;
 	inst |= 20 << (31 - 10); // BO
-	/* BI = 0 is taken care of by inst = 0 */
-	inst |= BCCTR_CONST1 << 1;
 	return inst;
 }
 

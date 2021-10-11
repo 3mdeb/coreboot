@@ -1088,26 +1088,6 @@ static void istep_16_1(int this_core)
 	//     p9_stop_save_scom() and others
 }
 
-static void pm_pba_bar_config(uint32_t index, uint64_t bar_addr)
-{
-	enum {
-		PU_PBABAR0    = 0x05012B00,
-		PU_PBABARMSK0 = 0x05012B04,
-	};
-
-	write_scom_direct(PU_PBABAR0 + index, bar_addr & 0x1FFFFFFFFFFFFFFFull);
-	write_scom_direct(PU_PBABARMSK0 + index, 0x300000);
-}
-
-static void load_occ_setup(struct homer_st *homer, uint8_t *common_area)
-{
-	uint64_t occ_addr = (uint64_t)&homer->occ_host_area;
-	uint64_t common_addr = (uint64_t)common_area;
-
-	pm_pba_bar_config(0, occ_addr & PHYSICAL_ADDR_MASK);
-	pm_pba_bar_config(2, common_addr & PHYSICAL_ADDR_MASK);
-}
-
 /* Loads OCC Image from PNOR into HOMER */
 static void load_occ_image_to_homer(struct homer_st *homer)
 {
@@ -1146,15 +1126,11 @@ static void load_host_data_to_homer(struct homer_st *homer)
 
 static void load_pm_complex(struct homer_st *homer)
 {
-	/* Common OCC area is located right after HOMER image */
-	uint8_t *common_area = (uint8_t *)homer + sizeof(*homer);
-
 	/*
 	 * Hostboot resets OCC here, but we haven't started it yet, so reset
 	 * shouldn't be necessary.
 	 */
 
-	load_occ_setup(homer, common_area);
 	load_occ_image_to_homer(homer);
 	load_host_data_to_homer(homer);
 }

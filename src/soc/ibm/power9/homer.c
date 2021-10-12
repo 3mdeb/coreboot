@@ -680,6 +680,118 @@ static void build_pgpe(struct homer_st *homer, struct xip_pgpe_header *pgpe,
 	hdr->aux_controls = 1 << 24;
 }
 
+static void pba_slave_setup_runtime_phase(void)
+{
+	enum {
+		OCI_MASTER_ID_GPE2     = 0x2,
+		OCI_MASTER_ID_GPE3     = 0x3,
+		OCI_MASTER_ID_ICU      = 0x5,
+		OCI_MASTER_ID_PGPE     = OCI_MASTER_ID_GPE2,
+		OCI_MASTER_ID_SGPE     = OCI_MASTER_ID_GPE3,
+		OCI_MASTER_ID_MASK_ALL = 0x7,
+
+		PBA_READ_TTYPE_CL_RD_NC            = 0x0, /// Cache line read
+		PBA_WRITE_GATHER_TIMEOUT_2_PULSES  = 0x4,
+		PBA_READ_PREFETCH_NONE             = 0x1, /// No prefetch
+		PBA_WRITE_TTYPE_DMA_PR_WR          = 0x0, /// DMA Partial Write
+
+		/* Values for PBA Mode register fields */
+		PBA_OCI_REGION                   = 0x2,
+		PBA_BCE_OCI_TRANSACTION_64_BYTES = 0x1,
+
+		PU_PBAMODE_SCOM    = 0x00068000,
+		PU_PBASLVCTL0_SCOM = 0x00068004,
+		PU_PBASLVCTL1_SCOM = 0x00068005,
+		PU_PBASLVCTL2_SCOM = 0x00068006,
+	};
+
+	uint64_t data;
+
+	/*
+	 * Set the PBA_MODECTL register. It's not yet clear how PBA BCE
+	 * transaction size will affect performance - for now we go with the
+	 * largest size.  The HTM marker space is enabled and configured. Slave
+	 * fairness is enabled. The setting 'dis_slvmatch_order' ensures that PBA
+	 * will correctly flush write data before allowing a read of the same
+	 * address from a different master on a different slave.  The second write
+	 * buffer is enabled.
+	 */
+
+	data = 0;
+	data |= PPC_PLACE(PBA_OCI_REGION, 16, 2);                   // pba_region
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2); // bcde_ocitrans
+	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2); // bcue_ocitrans
+	data |= PPC_BIT(8);                                         // en_marker_ack
+	data |= PPC_PLACE(0x7, 18, 3);                              // oci_marker_space
+	data |= PPC_BIT(27);                                        // en_slv_fairness
+	data |= PPC_BIT(10);                                        // en_second_wrbuf
+
+	write_scom(PU_PBAMODE_SCOM, data);
+
+	/*
+	 * Slave 0 (SGPE STOP).  This is a read/write slave in the event that
+	 * the STOP functions needs to write to memory.
+	 */
+
+	data = 0;
+	data |= PPC_BIT(0);                                          // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_SGPE, 1, 3);                 // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL0_SCOM, data);
+
+	/*
+	 * Slave 1 (GPE 1, PPC405 booting).  This is a read/write slave.  Write gathering is
+	 * allowed, but with the shortest possible timeout.
+	 */
+
+	data = 0;
+	data |= PPC_BIT(0);                                          // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 1, 3);                  // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 5, 3);                  // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL1_SCOM, data);
+
+	/*
+	 * Slave 2 (PGPE Boot, Pstates/WOF).  This is a read/write slave.  Write gethering is
+	 * allowed, but with the shortest possible timeout. This slave is
+	 * effectively disabled soon after IPL.
+	 */
+
+	data = 0;
+	data |= PPC_BIT(0);                                          // enable
+	data |= PPC_PLACE(OCI_MASTER_ID_PGPE, 1, 3);                 // mid_match_value
+	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
+	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
+	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
+	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
+	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
+	data |= PPC_BIT(20);                                         // buf_alloc_a
+	data |= PPC_BIT(21);                                         // buf_alloc_b
+	data |= PPC_BIT(22);                                         // buf_alloc_c
+	data |= PPC_BIT(19);                                         // buf_alloc_w
+
+	write_scom(PU_PBASLVCTL2_SCOM, data);
+
+	/* Slave 3 is not modified by this function, because it is owned by SBE */
+}
+
 static void pba_reset(void)
 {
 	long time;
@@ -784,6 +896,8 @@ static void pba_reset(void)
 	  [3]   1   // PBAXCFG_RCV_RESET?
 	*/
 	write_scom(PU_PBAXCFG_SCOM, PPC_BIT(2) | PPC_BIT(3));
+
+	pba_slave_setup_runtime_phase();
 }
 
 static void stop_gpe_init(struct homer_st *homer)
@@ -1323,118 +1437,6 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	}
 }
 
-static void pba_slave_setup_runtime_phase(void)
-{
-	enum {
-		OCI_MASTER_ID_GPE2     = 0x2,
-		OCI_MASTER_ID_GPE3     = 0x3,
-		OCI_MASTER_ID_ICU      = 0x5,
-		OCI_MASTER_ID_PGPE     = OCI_MASTER_ID_GPE2,
-		OCI_MASTER_ID_SGPE     = OCI_MASTER_ID_GPE3,
-		OCI_MASTER_ID_MASK_ALL = 0x7,
-
-		PBA_READ_TTYPE_CL_RD_NC            = 0x0, /// Cache line read
-		PBA_WRITE_GATHER_TIMEOUT_2_PULSES  = 0x4,
-		PBA_READ_PREFETCH_NONE             = 0x1, /// No prefetch
-		PBA_WRITE_TTYPE_DMA_PR_WR          = 0x0, /// DMA Partial Write
-
-		/* Values for PBA Mode register fields */
-		PBA_OCI_REGION                   = 0x2,
-		PBA_BCE_OCI_TRANSACTION_64_BYTES = 0x1,
-
-		PU_PBAMODE_SCOM    = 0x00068000,
-		PU_PBASLVCTL0_SCOM = 0x00068004,
-		PU_PBASLVCTL1_SCOM = 0x00068005,
-		PU_PBASLVCTL2_SCOM = 0x00068006,
-	};
-
-	uint64_t data;
-
-	/*
-	 * Set the PBA_MODECTL register. It's not yet clear how PBA BCE
-	 * transaction size will affect performance - for now we go with the
-	 * largest size.  The HTM marker space is enabled and configured. Slave
-	 * fairness is enabled. The setting 'dis_slvmatch_order' ensures that PBA
-	 * will correctly flush write data before allowing a read of the same
-	 * address from a different master on a different slave.  The second write
-	 * buffer is enabled.
-	 */
-
-	data = 0;
-	data |= PPC_PLACE(PBA_OCI_REGION, 16, 2);                   // pba_region
-	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2); // bcde_ocitrans
-	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2); // bcue_ocitrans
-	data |= PPC_BIT(8);                                         // en_marker_ack
-	data |= PPC_PLACE(0x7, 18, 3);                              // oci_marker_space
-	data |= PPC_BIT(27);                                        // en_slv_fairness
-	data |= PPC_BIT(10);                                        // en_second_wrbuf
-
-	write_scom(PU_PBAMODE_SCOM, data);
-
-	/*
-	 * Slave 0 (SGPE STOP).  This is a read/write slave in the event that
-	 * the STOP functions needs to write to memory.
-	 */
-
-	data = 0;
-	data |= PPC_BIT(0);                                          // enable
-	data |= PPC_PLACE(OCI_MASTER_ID_SGPE, 1, 3);                 // mid_match_value
-	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
-	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
-	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
-	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
-	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
-	data |= PPC_BIT(20);                                         // buf_alloc_a
-	data |= PPC_BIT(21);                                         // buf_alloc_b
-	data |= PPC_BIT(22);                                         // buf_alloc_c
-	data |= PPC_BIT(19);                                         // buf_alloc_w
-
-	write_scom(PU_PBASLVCTL0_SCOM, data);
-
-	/*
-	 * Slave 1 (GPE 1, PPC405 booting).  This is a read/write slave.  Write gathering is
-	 * allowed, but with the shortest possible timeout.
-	 */
-
-	data = 0;
-	data |= PPC_BIT(0);                                          // enable
-	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 1, 3);                  // mid_match_value
-	data |= PPC_PLACE(OCI_MASTER_ID_ICU, 5, 3);                  // mid_care_mask
-	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
-	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
-	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
-	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
-	data |= PPC_BIT(20);                                         // buf_alloc_a
-	data |= PPC_BIT(21);                                         // buf_alloc_b
-	data |= PPC_BIT(22);                                         // buf_alloc_c
-	data |= PPC_BIT(19);                                         // buf_alloc_w
-
-	write_scom(PU_PBASLVCTL1_SCOM, data);
-
-	/*
-	 * Slave 2 (PGPE Boot, Pstates/WOF).  This is a read/write slave.  Write gethering is
-	 * allowed, but with the shortest possible timeout. This slave is
-	 * effectively disabled soon after IPL.
-	 */
-
-	data = 0;
-	data |= PPC_BIT(0);                                          // enable
-	data |= PPC_PLACE(OCI_MASTER_ID_PGPE, 1, 3);                 // mid_match_value
-	data |= PPC_PLACE(OCI_MASTER_ID_MASK_ALL, 5, 3);             // mid_care_mask
-	data |= PPC_PLACE(PBA_READ_TTYPE_CL_RD_NC, 15, 1);           // read_ttype
-	data |= PPC_PLACE(PBA_READ_PREFETCH_NONE, 16, 2);            // read_prefetch_ctl
-	data |= PPC_PLACE(PBA_WRITE_TTYPE_DMA_PR_WR, 8, 3);          // write_ttype
-	data |= PPC_PLACE(PBA_WRITE_GATHER_TIMEOUT_2_PULSES, 25, 3); // wr_gather_timeout
-	data |= PPC_BIT(20);                                         // buf_alloc_a
-	data |= PPC_BIT(21);                                         // buf_alloc_b
-	data |= PPC_BIT(22);                                         // buf_alloc_c
-	data |= PPC_BIT(19);                                         // buf_alloc_w
-
-	write_scom(PU_PBASLVCTL2_SCOM, data);
-
-	/* Slave 3 is not modified by this function, because it is owned by SBE */
-}
-
 static void pm_pba_init(void)
 {
 	enum {
@@ -1469,8 +1471,6 @@ static void pm_pba_init(void)
 	data |= PPC_PLACE(PBAX_SND_RETRY_THRESHOLD, 28, 8);
 	data |= PPC_PLACE(PBAX_SND_TIMEOUT, 36, 5);
 	write_scom(PU_PBAXCFG_SCOM, data);
-
-	pba_slave_setup_runtime_phase();
 }
 
 static void pm_pstate_gpe_init(struct homer_st *homer, uint64_t cores)

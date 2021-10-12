@@ -1158,7 +1158,7 @@ static void pm_corequad_init(uint64_t cores)
 		 * 18 - 19    : PCB interrupt
 		 * 20,22,24,26: InterPPM Ivrm/Aclk/Vdata/Dpll enable
 		 */
-		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR_CLEAR, 0xfffe3aa000000000ull);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR_CLEAR, 0xFFFE3AA000000000ull);
 
 		/* Clear QUAD PPM ERROR Register */
 		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERR, 0);
@@ -1210,7 +1210,7 @@ static void pm_corequad_init(uint64_t cores)
 			write_scom_for_chiplet(core_chiplet, C_CPPM_CSAR_CLEAR, 0x1b00000000);
 
 			/* Restore CORE PPM Error Mask */
-			err_mask = 0xfff00000; // from Hostboot's log
+			err_mask = 0xFFF00000; // from Hostboot's log
 			write_scom_for_chiplet(core_chiplet, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
 		}
 	}
@@ -1276,8 +1276,7 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(TOGGLE_XSR_TRH, 1, 3));
 	write_scom(PU_GPE2_PPE_XIXCR, PPC_PLACE(RESUME, 1, 3));
 
-	/* Does this need to be such a long time? */
-	wait_ms(20*TIMEOUT_COUNT,
+	wait_ms(PGPE_POLLTIME_MS * TIMEOUT_COUNT,
 		(read_scom(PU_OCB_OCI_OCCS2_SCOM) & PPC_BIT(PGPE_ACTIVE)) ||
 		(read_scom(PU_GPE2_PPE_XIDBGPRO) & PPC_BIT(HALTED_STATE)));
 
@@ -1323,7 +1322,6 @@ static void pba_slave_setup_runtime_phase(void)
 		/* Values for PBA Mode register fields */
 		PBA_OCI_REGION                   = 0x2,
 		PBA_BCE_OCI_TRANSACTION_64_BYTES = 0x1,
-		PBA_OCI_MARKER_BASE              = 0x40070000,
 
 		PU_PBAMODE_SCOM    = 0x00068000,
 		PU_PBASLVCTL0_SCOM = 0x00068004,
@@ -1348,7 +1346,7 @@ static void pba_slave_setup_runtime_phase(void)
 	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 21, 2); // bcde_ocitrans
 	data |= PPC_PLACE(PBA_BCE_OCI_TRANSACTION_64_BYTES, 23, 2); // bcue_ocitrans
 	data |= PPC_BIT(8);                                         // en_marker_ack
-	data |= PPC_PLACE(PBA_OCI_MARKER_BASE >> 16, 18, 3);        // oci_marker_space
+	data |= PPC_PLACE(0x7, 18, 3);                              // oci_marker_space
 	data |= PPC_BIT(27);                                        // en_slv_fairness
 	data |= PPC_BIT(10);                                        // en_second_wrbuf
 
@@ -1477,11 +1475,11 @@ static void check_proc_config(struct homer_st *homer)
 		if ((read_scom_for_chiplet(nest, 0x0501080A) & PPC_BIT(0)) ||
 		    (read_scom_for_chiplet(nest, 0x0501080C) & PPC_BIT(0))) {
 			uint8_t pos = MCS_POS + mcs_i;
-			*conf_vector |= (0x8000000000000000ull >> pos);
+			*conf_vector |= PPC_BIT(pos);
 
 			/* MCS and MBA/MCA seem to have equivalent values */
 			pos = MBA_POS + mcs_i;
-			*conf_vector |= (0x8000000000000000ull >> pos);
+			*conf_vector |= PPC_BIT(pos);
 		}
 	}
 

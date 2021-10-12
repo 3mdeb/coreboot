@@ -130,53 +130,6 @@ void special_occ_wakeup_disable(uint64_t cores)
 	}
 }
 
-static uint32_t ppc_lis(uint16_t rt, uint16_t data)
-{
-	uint32_t inst;
-	inst = LIS_OP;
-	inst |= rt << (31 - 10);
-	inst |= data;
-	return inst;
-}
-
-static uint32_t ppc_ori(uint16_t rs, uint16_t ra, uint16_t data)
-{
-	uint32_t inst;
-	inst = ORI_OP;
-	inst |= rs << (31 - 10);
-	inst |= ra << (31 - 15);
-	inst |= data;
-	return inst;
-}
-
-static uint32_t ppc_mtspr(uint16_t rs, uint16_t spr)
-{
-	uint32_t temp = ((spr & 0x03FF) << (31 - 20));
-
-	uint32_t inst;
-	inst = MTSPR_OP;
-	inst |= rs << (31 - 10);
-	inst |= (temp & 0x0000F800) << 5;  // Perform swizzle
-	inst |= (temp & 0x001F0000) >> 5;  // Perform swizzle
-	return inst;
-}
-
-static uint32_t ppc_bctr(void)
-{
-	uint32_t inst;
-	inst = BCCTR_OP;
-	inst |= 20 << (31 - 10); // BO
-	return inst;
-}
-
-static uint32_t ppc_b(uint32_t target_addr)
-{
-	uint32_t inst;
-	inst = BR_OP;
-	inst |= (target_addr & 0x03FFFFFF);
-	return inst;
-}
-
 /* Sets up boot loader in SRAM and returns 32-bit jump instruction to it */
 static uint64_t setup_memory_boot(void)
 {

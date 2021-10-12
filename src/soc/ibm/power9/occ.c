@@ -119,14 +119,12 @@ void special_occ_wakeup_disable(uint64_t cores)
 	enum { PPM_SPWKUP_FSP = 0x200F010B };
 
 	for (int i = 0; i < MAX_CORES_PER_CHIP; ++i) {
-		uint32_t spwkup_addr = PPM_SPWKUP_FSP + 0x01000000 * i;
-
 		if (!IS_EC_FUNCTIONAL(i, cores))
 			continue;
 
-		write_scom_for_chiplet(EC00_CHIPLET_ID + i, spwkup_addr, 0);
+		write_scom_for_chiplet(EC00_CHIPLET_ID + i, PPM_SPWKUP_FSP, 0);
 		/* This puts an inherent delay in the propagation of the reset transition */
-		(void)read_scom_for_chiplet(EC00_CHIPLET_ID + i, spwkup_addr);
+		(void)read_scom_for_chiplet(EC00_CHIPLET_ID + i, PPM_SPWKUP_FSP);
 	}
 }
 

@@ -784,22 +784,6 @@ static void pba_reset(void)
 	  [3]   1   // PBAXCFG_RCV_RESET?
 	*/
 	write_scom(PU_PBAXCFG_SCOM, PPC_BIT(2) | PPC_BIT(3));
-
-	/*
-	 * The following registers are undocumented. Their fields can be decoded
-	 * from hostboot, but the values are always the same, so why bother...
-	 */
-	/* Set the PBA_MODECTL register */
-	write_scom(0x00068000, 0x00A0BA9000000000);
-
-	/* Slave 0 (SGPE and OCC boot) */
-	write_scom(0x00068004, 0xB7005E0000000000);
-
-	/* Slave 1 (405 ICU/DCU) */
-	write_scom(0x00068005, 0xD5005E4000000000);
-
-	/* Slave 2 (PGPE Boot) */
-	write_scom(0x00068006, 0xA7005E4000000000);
 }
 
 static void stop_gpe_init(struct homer_st *homer)

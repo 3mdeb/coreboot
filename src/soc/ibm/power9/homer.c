@@ -1517,22 +1517,65 @@ static void pm_pss_init(void)
 		PU_SPIPSS_100NS_REG     = 0x00070028,
 	};
 
-	scom_and_or(PU_SPIPSS_ADC_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
+	/*
+	 *  0-5   frame size
+	 * 12-17  in delay
+	 */
+	scom_and_or(PU_SPIPSS_ADC_CTRL_REG0,
+		    ~PPC_BITMASK(0, 5) & ~PPC_BITMASK(12, 17),
+		    PPC_SHIFT(8, 5));
+
+	/*
+	 *  0     adc_fsm_enable    = 1
+	 *  1     adc_device        = 0
+	 *  2     adc_cpol          = 0
+	 *  3     adc_cpha          = 0
+	 *  4-13  adc_clock_divider = set to 10Mhz
+	 * 14-17  adc_nr_of_frames  = 0x16 (for auto 2 mode)
+	 */
 	scom_and_or(PU_SPIPSS_ADC_CTRL_REG0 + 1, ~PPC_BITMASK(0, 17),
-		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12));
+		    PPC_BIT(0) | PPC_SHIFT(10, 13) | PPC_SHIFT(0x16, 17));
+
+	/*
+	 * 0-16  inter frame delay
+	 */
 	scom_and(PU_SPIPSS_ADC_CTRL_REG0 + 2, ~PPC_BITMASK(0, 16));
 
 	write_scom(PU_SPIPSS_ADC_WDATA_REG, 0);
 
-	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0, ~PPC_BITMASK(0, 11), PPC_BIT(2));
-	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0 + 1, ~PPC_BITMASK(1, 3),
-		    PPC_BIT(0) | PPC_BIT(10) | PPC_BIT(12) | PPC_BIT(17));
+	/*
+	 *  0-5   frame size
+	 * 12-17  in delay
+	 */
+	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0,
+		    ~PPC_BITMASK(0, 5) & ~PPC_BITMASK(12, 17),
+		    PPC_SHIFT(8, 5));
+
+	/*
+	 *  0     p2s_fsm_enable    = 1
+	 *  1     p2s_device        = 0
+	 *  2     p2s_cpol          = 0
+	 *  3     p2s_cpha          = 0
+	 *  4-13  p2s_clock_divider = set to 10Mhz
+	 * 17     p2s_nr_of_frames  = 1 (for auto 2 mode)
+	 */
+	scom_and_or(PU_SPIPSS_P2S_CTRL_REG0 + 1,
+		    ~(PPC_BITMASK(0, 13) | PPC_BIT(17)),
+		    PPC_BIT(0) | PPC_SHIFT(10, 13) | PPC_BIT(17));
+
+	/*
+	 * 0-16  inter frame delay
+	 */
 	scom_and(PU_SPIPSS_P2S_CTRL_REG0 + 2, ~PPC_BITMASK(0, 16));
 
 	write_scom(PU_SPIPSS_P2S_WDATA_REG, 0);
 
-	scom_and_or(PU_SPIPSS_100NS_REG, 0xFFFFFFFF,
-		    (uint64_t)(powerbus_cfg()->fabric_freq / 40) << 32);
+	/*
+	 * 0-31  100ns value
+	 */
+	scom_and_or(PU_SPIPSS_100NS_REG,
+		    PPC_BITMASK(0, 31),
+		    PPC_SHIFT(powerbus_cfg()->fabric_freq / 40, 31));
 }
 
 /* Initializes power-management and starts OCC */

@@ -1158,21 +1158,33 @@ static void pm_corequad_init(uint64_t cores)
 		 * 18 - 19    : PCB interrupt
 		 * 20,22,24,26: InterPPM Ivrm/Aclk/Vdata/Dpll enable
 		 */
-		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR_CLEAR, 0xFFFE3AA000000000ull);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR_CLEAR,
+				       PPC_BIT(0) |
+				       PPC_BITMASK(1, 11) |
+				       PPC_BIT(12) |
+				       PPC_BIT(13) |
+				       PPC_BIT(14) |
+				       PPC_BITMASK(18, 19) |
+				       PPC_BIT(20) |
+				       PPC_BIT(22) |
+				       PPC_BIT(24) |
+				       PPC_BIT(26));
 
 		/* Clear QUAD PPM ERROR Register */
 		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERR, 0);
 
 		/* Restore Quad PPM Error Mask */
 		err_mask = 0xFFFFFF00; // from Hostboot's log
-		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERRMSK, (uint64_t)err_mask << 32);
+		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_ERRMSK,
+				       PPC_SHIFT(err_mask, 31));
 
 		for (int core = quad * 4; core < (quad + 1) * 4; ++core) {
 			chiplet_id_t core_chiplet = EC00_CHIPLET_ID + core;
 
 			/* Clear the Core PPM CME DoorBells */
 			for (int i = 0; i < DOORBELLS_COUNT; ++i)
-				write_scom_for_chiplet(core_chiplet, CME_DOORBELL_CLEAR[i], ~(uint64_t)0);
+				write_scom_for_chiplet(core_chiplet, CME_DOORBELL_CLEAR[i],
+						       PPC_BITMASK(0, 63));
 
 			/*
 			 * Setup Core PPM Mode register
@@ -1191,27 +1203,37 @@ static void pm_corequad_init(uint64_t cores)
 			 * 10     : STOP_EXIT_TYPE_SEL
 			 * 13     : WKUP_NOTIFY_SELECT
 			 */
-
-			/* Clear Core PPM Mode register */
-			write_scom_for_chiplet(core_chiplet, C_CPPM_CPMMR_CLEAR, 0x401b000000000000);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_CPMMR_CLEAR,
+					       PPC_BIT(1) |
+					       PPC_BIT(11) |
+					       PPC_BIT(12) |
+					       PPC_BIT(14) |
+					       PPC_BIT(15));
 
 			/* Clear Core PPM Errors */
 			write_scom_for_chiplet(core_chiplet, C_CPPM_ERR, 0);
 
 			/*
 			 * Clear Hcode Error Injection and other CSAR settings:
-			 *  - CPPM_CSAR_FIT_HCODE_ERROR_INJECT
-			 *  - CPPM_CSAR_ENABLE_PSTATE_REGISTRATION_INTERLOCK
-			 *  - CPPM_CSAR_PSTATE_HCODE_ERROR_INJECT
-			 *  - CPPM_CSAR_STOP_HCODE_ERROR_INJECT
-			 * CPPM_CSAR_DISABLE_CME_NACK_ON_PROLONGED_DROOP is NOT cleared
+			 * 27     : FIT_HCODE_ERROR_INJECT
+			 * 28     : ENABLE_PSTATE_REGISTRATION_INTERLOCK
+			 * 29     : DISABLE_CME_NACK_ON_PROLONGED_DROOP
+			 * 30     : PSTATE_HCODE_ERROR_INJECT
+			 * 31     : STOP_HCODE_ERROR_INJECT
+			 *
+			 * DISABLE_CME_NACK_ON_PROLONGED_DROOP is NOT cleared
 			 * as this is a persistent, characterization setting.
 			 */
-			write_scom_for_chiplet(core_chiplet, C_CPPM_CSAR_CLEAR, 0x1b00000000);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_CSAR_CLEAR,
+					       PPC_BIT(27) |
+					       PPC_BIT(28) |
+					       PPC_BIT(30) |
+					       PPC_BIT(31));
 
 			/* Restore CORE PPM Error Mask */
 			err_mask = 0xFFF00000; // from Hostboot's log
-			write_scom_for_chiplet(core_chiplet, C_CPPM_ERRMSK, (uint64_t)err_mask << 32);
+			write_scom_for_chiplet(core_chiplet, C_CPPM_ERRMSK,
+					       PPC_SHIFT(err_mask, 31));
 		}
 	}
 }
@@ -1292,15 +1314,12 @@ static void pstate_gpe_init(struct homer_st *homer, uint64_t cores)
 	uint32_t safe_mode_freq = oppb->frequency_min_khz / gppb->frequency_step_khz;
 
 	for (int quad = 0; quad < MAX_QUADS_PER_CHIP; ++quad) {
-		uint64_t data;
-		chiplet_id_t quad_chiplet = EP00_CHIPLET_ID + quad;
-
 		if (!IS_EQ_FUNCTIONAL(quad, cores))
 			continue;
 
-		data = read_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR);
-		data = (data & ~PPC_BITMASK(1, 12)) | PPC_PLACE(safe_mode_freq, 1, 11);
-		write_scom_for_chiplet(quad_chiplet, EQ_QPPM_QPMMR, data);
+		scom_and_or_for_chiplet(EP00_CHIPLET_ID + quad, EQ_QPPM_QPMMR,
+					~PPC_BITMASK(1, 11),
+					PPC_SHIFT(safe_mode_freq, 11));
 	}
 }
 

@@ -3143,8 +3143,7 @@ static void update_headers(struct homer_st *homer, uint64_t cores)
 	cme_hdr->scom_len = 512;
 
 	/* Timebase frequency */
-	/* FIXME: get PB frequency properly */
-	cme_hdr->timebase_hz = 1866 * MHz / 64;
+	cme_hdr->timebase_hz = powerbus_cfg()->fabric_freq * MHz / 64;
 
 	/*
 	 * Update QPMR Header area in HOMER

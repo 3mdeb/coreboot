@@ -65,7 +65,7 @@ struct pt_record {
 static int read_eeprom_chip(uint32_t offset, void *data, uint16_t len)
 {
 	const unsigned int bus = 1;
-	uint16_t addr = 0xa0;
+	uint16_t addr = 0xA0;
 	uint16_t slave = 0;
 	uint16_t actual_offset = 0;
 
@@ -177,7 +177,7 @@ static bool eeprom_extract_kwd(uint64_t offset, uint8_t index,
 			uint8_t small_size;
 			if (read_eeprom(offset, &small_size, sizeof(small_size)) != sizeof(small_size))
 				die("Failed to read small keyword size from EEPROM\n");
-			kwd_size = small_size;;
+			kwd_size = small_size;
 			offset += 1;
 		}
 

@@ -1781,24 +1781,26 @@ static bool write_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,
 
 	if (!parse_occ_response(homer, occ_cmd, &status, &rsp_seq_num, response,
 				response_len)) {
+		/* Statuses of 0xE0-EF are reserved for OCC exceptions */
+		if ((status & 0xF0) == 0xE0)
+			printk(BIOS_WARNING,
+			       "OCC exception occurred while running 0x%02x command\n",
+			       occ_cmd);
+
 		printk(BIOS_WARNING, "Received OCC response:\n");
 		hexdump(response, *response_len);
 		printk(BIOS_WARNING, "Failed to parse OCC response\n");
 		return false;
 	}
 
-	/* Statuses of 0xE0-EF are reserved for OCC exceptions */
-	if ((status & 0xF0) == 0xE0)
-		printk(BIOS_WARNING, "OCC exception occurred while running 0x%02x command\n",
-		       occ_cmd);
-	else if (rsp_seq_num != cmd_seq_num)
+	if (rsp_seq_num != cmd_seq_num) {
 		printk(BIOS_WARNING,
 		       "Received OCC response for a wrong command while running 0x%02x\n",
 		       occ_cmd);
-	else
-		return true;
+		return false;
+	}
 
-	return false;
+	return true;
 }
 
 static void send_occ_cmd(struct homer_st *homer, uint8_t occ_cmd,

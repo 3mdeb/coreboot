@@ -14,7 +14,6 @@
 #include "istep_13_scom.h"
 #include "chip.h"
 #include "homer.h"
-#include "pci.h"
 
 /*
  * These are various definitions of the page sizes and segment sizes supported
@@ -521,8 +520,6 @@ static void enable_soc_dev(struct device *dev)
 	rng_init();
 	istep_18_11();
 	istep_18_12();
-
-	pci_init();
 }
 
 /*

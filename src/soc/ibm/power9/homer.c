@@ -1579,6 +1579,139 @@ static void pm_pss_init(void)
 		    PPC_SHIFT(powerbus_cfg()->fabric_freq / 40, 31));
 }
 
+static void pm_occ_fir_init(void)
+{
+	enum {
+		PERV_TP_OCC_SCOM_OCCLFIR = 0x01010800,
+
+		/* Bits of OCC LFIR */
+		OCC_FW0                    = 0,
+		OCC_FW1                    = 1,
+		CME_ERR_NOTIFY             = 2,
+		STOP_RCV_NOTIFY_PRD        = 3,
+		OCC_HB_NOTIFY              = 4,
+		GPE0_WD_TIMEOUT            = 5,
+		GPE1_WD_TIMEOUT            = 6,
+		GPE2_WD_TIMEOUT            = 7,
+		GPE3_WD_TIMEOUT            = 8,
+		GPE0_ERR                   = 9,
+		GPE1_ERR                   = 10,
+		GPE2_ERR                   = 11,
+		GPE3_ERR                   = 12,
+		OCB_ERR                    = 13,
+		SRAM_UE                    = 14,
+		SRAM_CE                    = 15,
+		SRAM_READ_ERR              = 16,
+		SRAM_WRITE_ERR             = 17,
+		SRAM_DATAOUT_PERR          = 18,
+		SRAM_OCI_WDATA_PARITY      = 19,
+		SRAM_OCI_BE_PARITY_ERR     = 20,
+		SRAM_OCI_ADDR_PARITY_ERR   = 21,
+		GPE0_HALTED                = 22,
+		GPE1_HALTED                = 23,
+		GPE2_HALTED                = 24,
+		GPE3_HALTED                = 25,
+		EXT_TRAP                   = 26,
+		PPC405_CORE_RESET          = 27,
+		PPC405_CHIP_RESET          = 28,
+		PPC405_SYS_RESET           = 29,
+		PPC405_WAIT_STATE          = 30,
+		PPC405_DBGSTOPACK          = 31,
+		OCB_DB_OCI_TIMEOUT         = 32,
+		OCB_DB_OCI_RDATA_PARITY    = 33,
+		OCB_DB_OCI_SLVERR          = 34,
+		OCB_PIB_ADDR_PARITY_ERR    = 35,
+		OCB_DB_PIB_DATA_PARITY_ERR = 36,
+		OCB_IDC0_ERR               = 37,
+		OCB_IDC1_ERR               = 38,
+		OCB_IDC2_ERR               = 39,
+		OCB_IDC3_ERR               = 40,
+		SRT_FSM_ERR                = 41,
+		JTAGACC_ERR                = 42,
+		SPARE_ERR_38               = 43,
+		C405_ECC_UE                = 44,
+		C405_ECC_CE                = 45,
+		C405_OCI_MC_CHK            = 46,
+		SRAM_SPARE_DIRERR0         = 47,
+		SRAM_SPARE_DIRERR1         = 48,
+		SRAM_SPARE_DIRERR2         = 49,
+		SRAM_SPARE_DIRERR3         = 50,
+		GPE0_OCISLV_ERR            = 51,
+		GPE1_OCISLV_ERR            = 52,
+		GPE2_OCISLV_ERR            = 53,
+		GPE3_OCISLV_ERR            = 54,
+		C405ICU_M_TIMEOUT          = 55,
+		C405DCU_M_TIMEOUT          = 56,
+		OCC_CMPLX_FAULT            = 57,
+		OCC_CMPLX_NOTIFY           = 58,
+		SPARE_59                   = 59,
+		SPARE_60                   = 60,
+		SPARE_61                   = 61,
+		FIR_PARITY_ERR_DUP         = 62,
+		FIR_PARITY_ERR             = 63,
+
+		/* FIR types */
+		FIRTYPE_OCC_LFIR = 0x00000001, // OCC LFIR
+		FIRTYPE_PBA_LFIR = 0x00000002, // PBA LFIR
+		FIRTYPE_CME_LFIR = 0x00000003, // CME LFIR
+		FIRTYPE_PPM_LFIR = 0x00000004, // PPM LFIR
+
+		/* FIR register offset from base */
+		BASE_WAND_INCR = 1,
+		BASE_WOR_INCR  = 2,
+		MASK_INCR      = 3,
+		MASK_WAND_INCR = 4,
+		MASK_WOR_INCR  = 5,
+		ACTION0_INCR   = 6,
+		ACTION1_INCR   = 7
+	};
+
+	const uint64_t wor_bits =
+		  PPC_BIT(C405ICU_M_TIMEOUT) | PPC_BIT(CME_ERR_NOTIFY)
+		| PPC_BIT(EXT_TRAP)          | PPC_BIT(FIR_PARITY_ERR_DUP)
+		| PPC_BIT(FIR_PARITY_ERR)    | PPC_BIT(GPE0_HALTED)
+		| PPC_BIT(GPE0_WD_TIMEOUT)   | PPC_BIT(GPE1_HALTED)
+		| PPC_BIT(GPE1_WD_TIMEOUT)   | PPC_BIT(GPE2_ERR)
+		| PPC_BIT(GPE2_HALTED)       | PPC_BIT(GPE2_WD_TIMEOUT)
+		| PPC_BIT(GPE3_ERR)          | PPC_BIT(GPE3_HALTED)
+		| PPC_BIT(GPE3_WD_TIMEOUT)   | PPC_BIT(OCB_ERR)
+		| PPC_BIT(OCC_FW0)           | PPC_BIT(OCC_FW1)
+		| PPC_BIT(OCC_HB_NOTIFY)     | PPC_BIT(PPC405_CHIP_RESET)
+		| PPC_BIT(PPC405_CORE_RESET) | PPC_BIT(PPC405_DBGSTOPACK)
+		| PPC_BIT(PPC405_SYS_RESET)  | PPC_BIT(PPC405_WAIT_STATE)
+		| PPC_BIT(SPARE_59)          | PPC_BIT(SPARE_60)
+		| PPC_BIT(SPARE_61)          | PPC_BIT(SPARE_ERR_38);
+	const uint64_t action0_bits = C405_ECC_UE;
+	const uint64_t action1_bits =
+		  PPC_BIT(C405_ECC_CE)             | PPC_BIT(C405_OCI_MC_CHK)
+		| PPC_BIT(C405DCU_M_TIMEOUT)       | PPC_BIT(GPE0_ERR)
+		| PPC_BIT(GPE0_OCISLV_ERR)         | PPC_BIT(GPE1_ERR)
+		| PPC_BIT(GPE1_OCISLV_ERR)         | PPC_BIT(GPE2_OCISLV_ERR)
+		| PPC_BIT(GPE3_OCISLV_ERR)         | PPC_BIT(JTAGACC_ERR)
+		| PPC_BIT(OCB_DB_OCI_RDATA_PARITY) | PPC_BIT(OCB_DB_OCI_SLVERR)
+		| PPC_BIT(OCB_DB_OCI_TIMEOUT)      | PPC_BIT(OCB_DB_PIB_DATA_PARITY_ERR)
+		| PPC_BIT(OCB_IDC0_ERR)            | PPC_BIT(OCB_IDC1_ERR)
+		| PPC_BIT(OCB_IDC2_ERR)            | PPC_BIT(OCB_IDC3_ERR)
+		| PPC_BIT(OCB_PIB_ADDR_PARITY_ERR) | PPC_BIT(OCC_CMPLX_FAULT)
+		| PPC_BIT(OCC_CMPLX_NOTIFY)        | PPC_BIT(SRAM_CE)
+		| PPC_BIT(SRAM_DATAOUT_PERR)       | PPC_BIT(SRAM_OCI_ADDR_PARITY_ERR)
+		| PPC_BIT(SRAM_OCI_BE_PARITY_ERR)  | PPC_BIT(SRAM_OCI_WDATA_PARITY)
+		| PPC_BIT(SRAM_READ_ERR)           | PPC_BIT(SRAM_SPARE_DIRERR0)
+		| PPC_BIT(SRAM_SPARE_DIRERR1)      | PPC_BIT(SRAM_SPARE_DIRERR2)
+		| PPC_BIT(SRAM_SPARE_DIRERR3)      | PPC_BIT(SRAM_UE)
+		| PPC_BIT(SRAM_WRITE_ERR)          | PPC_BIT(SRT_FSM_ERR)
+		| PPC_BIT(STOP_RCV_NOTIFY_PRD);
+
+	const uint64_t mask = read_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_INCR);
+
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR, 0);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + ACTION0_INCR, action0_bits);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + ACTION1_INCR, action1_bits);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WOR_INCR, mask | wor_bits);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WAND_INCR,
+		   mask & ~action0_bits & ~action1_bits);
+}
+
 /* Initializes power-management and starts OCC */
 static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 {
@@ -1586,6 +1719,7 @@ static void start_pm_complex(struct homer_st *homer, uint64_t cores)
 
 	pm_corequad_init(cores);
 	pm_pss_init();
+	pm_occ_fir_init();
 	stop_gpe_init(homer);
 	pm_pstate_gpe_init(homer, cores);
 

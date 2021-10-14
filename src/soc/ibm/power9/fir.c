@@ -87,21 +87,6 @@ void pm_occ_fir_init(void)
 		FIR_PARITY_ERR             = 63,
 	};
 
-	const uint64_t wor_bits =
-		  PPC_BIT(C405ICU_M_TIMEOUT) | PPC_BIT(CME_ERR_NOTIFY)
-		| PPC_BIT(EXT_TRAP)          | PPC_BIT(FIR_PARITY_ERR_DUP)
-		| PPC_BIT(FIR_PARITY_ERR)    | PPC_BIT(GPE0_HALTED)
-		| PPC_BIT(GPE0_WD_TIMEOUT)   | PPC_BIT(GPE1_HALTED)
-		| PPC_BIT(GPE1_WD_TIMEOUT)   | PPC_BIT(GPE2_ERR)
-		| PPC_BIT(GPE2_HALTED)       | PPC_BIT(GPE2_WD_TIMEOUT)
-		| PPC_BIT(GPE3_ERR)          | PPC_BIT(GPE3_HALTED)
-		| PPC_BIT(GPE3_WD_TIMEOUT)   | PPC_BIT(OCB_ERR)
-		| PPC_BIT(OCC_FW0)           | PPC_BIT(OCC_FW1)
-		| PPC_BIT(OCC_HB_NOTIFY)     | PPC_BIT(PPC405_CHIP_RESET)
-		| PPC_BIT(PPC405_CORE_RESET) | PPC_BIT(PPC405_DBGSTOPACK)
-		| PPC_BIT(PPC405_SYS_RESET)  | PPC_BIT(PPC405_WAIT_STATE)
-		| PPC_BIT(SPARE_59)          | PPC_BIT(SPARE_60)
-		| PPC_BIT(SPARE_61)          | PPC_BIT(SPARE_ERR_38);
 	const uint64_t action0_bits = 0;
 	const uint64_t action1_bits =
 		  PPC_BIT(C405_ECC_CE)             | PPC_BIT(C405_OCI_MC_CHK)
@@ -123,14 +108,15 @@ void pm_occ_fir_init(void)
 		| PPC_BIT(SRAM_WRITE_ERR)          | PPC_BIT(SRT_FSM_ERR)
 		| PPC_BIT(STOP_RCV_NOTIFY_PRD)     | PPC_BIT(C405_ECC_UE);
 
-	const uint64_t mask = read_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_INCR);
+	uint64_t mask = read_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_INCR);
+	mask &= ~action0_bits;
+	mask &= ~action1_bits;
 
 	write_scom(PERV_TP_OCC_SCOM_OCCLFIR, 0);
 	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + ACTION0_INCR, action0_bits);
 	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + ACTION1_INCR, action1_bits);
-	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WOR_INCR, mask | wor_bits);
-	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WAND_INCR,
-		   mask & ~action0_bits & ~action1_bits);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WOR_INCR, mask);
+	write_scom(PERV_TP_OCC_SCOM_OCCLFIR + MASK_WAND_INCR, mask);
 }
 
 void pm_pba_fir_init(void)
@@ -187,23 +173,6 @@ void pm_pba_fir_init(void)
 		PBAFIR_FIR_PARITY_ERR    = 45,
 	};
 
-	const uint64_t wor_bits =
-		  PPC_BIT(PBAFIR_PB_RDADRERR_FW)    | PPC_BIT(PBAFIR_PB_RDDATATO_FW)
-		| PPC_BIT(PBAFIR_PB_SUE_FW)         | PPC_BIT(PBAFIR_SPARE)
-		| PPC_BIT(PBAFIR_PB_ACKDEAD_FW_RD)  | PPC_BIT(PBAFIR_BCUE_SETUP_ERR)
-		| PPC_BIT(PBAFIR_BCUE_PB_ACK_DEAD)  | PPC_BIT(PBAFIR_BCUE_PB_ADRERR)
-		| PPC_BIT(PBAFIR_BCUE_OCI_DATERR)   | PPC_BIT(PBAFIR_BCDE_SETUP_ERR)
-		| PPC_BIT(PBAFIR_BCDE_PB_ACK_DEAD)  | PPC_BIT(PBAFIR_BCDE_PB_ADRERR)
-		| PPC_BIT(PBAFIR_BCDE_RDDATATO_ERR) | PPC_BIT(PBAFIR_BCDE_SUE_ERR)
-		| PPC_BIT(PBAFIR_BCDE_UE_ERR)       | PPC_BIT(PBAFIR_BCDE_CE)
-		| PPC_BIT(PBAFIR_BCDE_OCI_DATERR)   | PPC_BIT(PBAFIR_AXPUSH_WRERR)
-		| PPC_BIT(PBAFIR_AXRCV_DLO_ERR)     | PPC_BIT(PBAFIR_AXRCV_DLO_TO)
-		| PPC_BIT(PBAFIR_AXRCV_RSVDATA_TO)  | PPC_BIT(PBAFIR_AXFLOW_ERR)
-		| PPC_BIT(PBAFIR_AXSND_DHI_RTYTO)   | PPC_BIT(PBAFIR_AXSND_DLO_RTYTO)
-		| PPC_BIT(PBAFIR_AXSND_RSVTO)       | PPC_BIT(PBAFIR_AXSND_RSVERR)
-		| PPC_BIT(PBAFIR_PB_ACKDEAD_FW_WR)  | PPC_BIT(PBAFIR_RESERVED_41)
-		| PPC_BIT(PBAFIR_RESERVED_42)       | PPC_BIT(PBAFIR_RESERVED_43)
-		| PPC_BIT(PBAFIR_FIR_PARITY_ERR2)   | PPC_BIT(PBAFIR_FIR_PARITY_ERR);
 	const uint64_t action0_bits = 0;
 	const uint64_t action1_bits =
 		  PPC_BIT(PBAFIR_OCI_APAR_ERR)     | PPC_BIT(PBAFIR_PB_UE_FW)
@@ -213,12 +182,14 @@ void pm_pba_fir_init(void)
 		| PPC_BIT(PBAFIR_PB_WRADRERR_FW)   | PPC_BIT(PBAFIR_PB_BADCRESP)
 		| PPC_BIT(PBAFIR_PB_CRESPTO)       | PPC_BIT(PBAFIR_INTERNAL_ERR)
 		| PPC_BIT(PBAFIR_ILLEGAL_CACHE_OP) | PPC_BIT(PBAFIR_OCI_BAD_REG_ADDR);
-	/* Setting bits with such initial value is pointless, but that's how Hostboot does it */
-	const uint64_t mask = PPC_BITMASK(0, 63);
+
+	uint64_t mask = PPC_BITMASK(0, 63);
+	mask &= ~action0_bits;
+	mask &= ~action1_bits;
 
 	write_scom(PU_PBAFIR, 0);
 	write_scom(PU_PBAFIR + ACTION0_INCR, action0_bits);
 	write_scom(PU_PBAFIR + ACTION1_INCR, action1_bits);
-	write_scom(PU_PBAFIR + MASK_WOR_INCR, mask | wor_bits);
-	write_scom(PU_PBAFIR + MASK_WAND_INCR, mask & ~action0_bits & ~action1_bits);
+	write_scom(PU_PBAFIR + MASK_WOR_INCR, mask);
+	write_scom(PU_PBAFIR + MASK_WAND_INCR, mask);
 }

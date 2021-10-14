@@ -223,8 +223,6 @@ static enum lane_width lane_mask_to_width(uint16_t mask)
 		width = LANE_WIDTH_8X;
 	else if (mask == LANE_MASK_X4_GRP0 || mask == LANE_MASK_X4_GRP1)
 		width = LANE_WIDTH_4X;
-	else
-		die("Invalid value for lane mask: 0x%04x\n", mask);
 
 	return width;
 }

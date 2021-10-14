@@ -33,6 +33,7 @@ ramstage-y += timer.c
 ramstage-y += istep_18_11.c
 ramstage-y += istep_18_12.c
 ramstage-y += mvpd.c
+ramstage-y += fir.c
 ramstage-y += vpd.c
 ramstage-y += tor.c
 ramstage-y += rs4.c

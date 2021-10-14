@@ -2,6 +2,7 @@
 
 #include <cpu/power/istep_14.h>
 
+#include <console/console.h>
 #include <cpu/power/scom.h>
 
 #include "pci.h"
@@ -18,24 +19,24 @@ static void init_pecs(const uint8_t *iovalid_enable)
 		MBOX_SCRATCH_REG1 = 0x00050038,
 		MBOX_SCRATCH_REG6_GROUP_PUMP_MODE = (1 << 23),
 
-        PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN = 30,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE = 0x16,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_WR_SCOPE_GROUP = 42,
-        PEC_PBCQHWCFG_REG_PE_CHANNEL_STREAMING_EN = 33,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_WR_VG = 41,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_VG = 43,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_SCOPE_GROUP = 44,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_RD_SCOPE_GROUP = 51,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_RD_VG = 54,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP = 56,
-        PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG = 59,
+		PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN = 30,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_OOO_MODE = 0x16,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_WR_SCOPE_GROUP = 42,
+		PEC_PBCQHWCFG_REG_PE_CHANNEL_STREAMING_EN = 33,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_WR_VG = 41,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_VG = 43,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_INTWR_SCOPE_GROUP = 44,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_RD_SCOPE_GROUP = 51,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_RD_VG = 54,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_SCOPE_GROUP = 56,
+		PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_VG = 59,
 	};
 
+	uint64_t scratch_reg6 = 0;
+	uint8_t pec = 0;
 	uint8_t dd = get_dd();
 
-	uint8_t pec = 0;
-
-	uint64_t scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
+	scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
 
 	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
 	bool node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
@@ -43,6 +44,8 @@ static void init_pecs(const uint8_t *iovalid_enable)
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		uint64_t val = 0;
 		chiplet_id_t chiplet = PCI0_CHIPLET_ID + pec;
+
+		printk(BIOS_EMERG, "Initializing PEC%d...\n", pec);
 
 		/*
 		 * ATTR_FABRIC_ADDR_EXTENSION_GROUP_ID = 0
@@ -272,6 +275,8 @@ static void init_phbs(uint8_t phb_active_mask, const uint8_t *iovalid_enable)
 		if (!(phb_active_mask & (PHB0_MASK >> phb)))
 			continue;
 
+		printk(BIOS_EMERG, "Initializing PHB%d...\n", phb);
+
 		/*
 		 * Phase2 init step 12_a (yes, out of order)
 		 * NestBase + StackBase + 0xA
@@ -455,8 +460,11 @@ static void init_phbs(uint8_t phb_active_mask, const uint8_t *iovalid_enable)
 
 void istep_14_3(uint8_t phb_active_mask, const uint8_t *iovalid_enable)
 {
-	report_istep(14, 3);
+	printk(BIOS_EMERG, "starting istep 14.3\n");
+	report_istep(14,3);
 
 	init_pecs(iovalid_enable);
 	init_phbs(phb_active_mask, iovalid_enable);
+
+	printk(BIOS_EMERG, "ending istep 14.3\n");
 }

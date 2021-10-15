@@ -54,8 +54,7 @@ struct lane_config_row {
 	 * Grouping of lanes under one IOP.
 	 * Value signifies width of each PCIE lane set (0, 4, 8, or 16).
 	 */
-	// enum lane_width  
-	uint8_t lane_set[MAX_LANE_GROUPS_PER_PEC];
+	uint8_t lane_set[MAX_LANE_GROUPS_PER_PEC]; // enum lane_width
 
 	/* IOP config value from PCIE IOP configuration table */
 	uint8_t lane_config;
@@ -69,11 +68,9 @@ struct lane_config_row {
 	 * PHB4 = 0x08
 	 * PHB5 = 0x04
 	 */
-	// enum phb_active_mask 
-	uint8_t phb_active;
+	uint8_t phb_active; // enum phb_active_mask
 
-	// enum phb_to_mac   
-	uint16_t phb_to_pcie_mac;
+	uint16_t phb_to_pcie_mac; // enum phb_to_mac
 };
 
 /*
@@ -167,8 +164,15 @@ static const size_t pec_lane_cfg_sizes[] = {
 	ARRAY_SIZE(pec2_lane_cfg)
 };
 
-// TODO: find (possibly dynamic) source of these values 
-// enum lane_width  
+/*
+ * This probably comes from parsing PEC_PCIE_HX_KEYWORD_DATA in Hostboot, its
+ * description:
+ *   This attribute holds the contents of the HX keyword read by the FSP
+ *   from a PCIe card.
+ * genHwsvMrwXml.pl has some defaults but with a different value for PEC2.
+ * Defaults differ among processors.
+ * enum lane_width
+ */
 static uint16_t lane_masks[MAX_PEC_PER_PROC][MAX_LANE_GROUPS_PER_PEC] = {
 	{ LANE_MASK_X16,     0x0,               0x0,               0x0 },
 	{ LANE_MASK_X8_GRP0, 0x0, LANE_MASK_X8_GRP1,               0x0 },
@@ -236,8 +240,7 @@ static uint8_t determine_lane_configs(const struct lane_config_row **pec_cfgs)
 		uint8_t i;
 		uint8_t lane_group;
 
-		// enum lane_width  
-		uint16_t lane_mask[MAX_LANE_GROUPS_PER_PEC];
+		uint16_t lane_mask[MAX_LANE_GROUPS_PER_PEC]; // enum lane_width
 		memcpy(&lane_mask, &lane_masks[pec], sizeof(lane_mask));
 
 		struct lane_config_row config = {
@@ -264,9 +267,13 @@ static uint8_t determine_lane_configs(const struct lane_config_row **pec_cfgs)
 
 		pec_cfgs[pec] = &pec_lane_cfgs[pec][i];
 
-		// PEC[ATTR_PROC_PCIE_IOP_CONFIG] := pec_cfgs[pec]->lane_config 
-		// PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1 
-		// PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac 
+		/*
+		 * In the rest of PCIe-related code the following PEC attributes have these
+		 * values:
+		 *  - PEC[ATTR_PROC_PCIE_IOP_CONFIG]      := pec_cfgs[pec]->lane_config
+		 *  - PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1
+		 *  - PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac
+		 */
 	}
 
 	return phb_active_mask;
@@ -281,13 +288,13 @@ static uint64_t pec_val(int pec_id, uint8_t in,
 
 	switch (pec_id) {
 		case 0:
-			out = PPC_SHIFT(in & ((1 << pec0_c) - 1), pec0_s);
+			out = PPC_SHIFT(in & ((1 << pec0_c) - 1), pec0_s + pec0_c - 1);
 			break;
 		case 1:
-			out = PPC_SHIFT(in & ((1 << pec1_c) - 1), pec1_s);
+			out = PPC_SHIFT(in & ((1 << pec1_c) - 1), pec1_s + pec1_c - 1);
 			break;
 		case 2:
-			out = PPC_SHIFT(in & ((1 << pec2_c) - 1), pec2_s);
+			out = PPC_SHIFT(in & ((1 << pec2_c) - 1), pec2_s + pec2_c - 1);
 			break;
 		default:
 			die("Unknown PEC ID: %d\n", pec_id);
@@ -304,6 +311,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		PEC_CPLT_CTRL0_OR = 0x0D000010,
 		PEC_CPLT_CONF1_CLEAR = 0x0D000029,
 
+		PEC_PCS_RX_ROT_CNTL_REG = 0x800004820D010C3F,
 		PEC_PCS_RX_CONFIG_MODE_REG = 0x800004800D010C3F,
 		PEC_PCS_RX_CDR_GAIN_REG = 0x800004B30D010C3F,
 		PEC_PCS_RX_SIGDET_CONTROL_REG = 0x800004A70D010C3F,
@@ -346,7 +354,13 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		PEC_PCS_RX_VGA_CONTROL1_REG = 0x8000048B0D010C3F,
 		PEC_PCS_RX_VGA_CONTROL2_REG = 0x8000048C0D010C3F,
+		PEC_IOP_RX_DFE_FUNC_REGISTER1 = 0x8000049F0D010C3F,
 		PEC_PCS_SYS_CONTROL_REG = 0x80000C000D010C3F,
+
+		PEC_PCS_M1_CONTROL_REG =  0x80000C010D010C3F,
+		PEC_PCS_M2_CONTROL_REG =  0x80000C020D010C3F,
+		PEC_PCS_M3_CONTROL_REG =  0x80000C030D010C3F,
+		PEC_PCS_M4_CONTROL_REG =  0x80000C040D010C3F,
 	};
 
 	uint8_t pec = 0;
@@ -370,8 +384,11 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		/* Phase1 init step 2b */
 
-		/* ATTR_PROC_PCIE_IOP_SWAP, from talos.xml */
-		proc_pcie_iop_swap = 0;
+		/*
+		 * FIXME: ATTR_PROC_PCIE_IOP_SWAP, might be computed by processPec() in
+		 * processMrw.pl and stored somewhere, this is based on logs...
+		 */
+		proc_pcie_iop_swap = (pec == 0);
 
 		val = pec_val(pec, proc_pcie_iop_swap,
 			      PEC0_IOP_SWAP_START_BIT, PEC0_IOP_BIT_COUNT,
@@ -450,127 +467,119 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 			uint8_t lane;
 
 			/* RX Config Mode */
-			// 
 			write_scom_for_chiplet(chiplet, PEC_PCS_RX_CONFIG_MODE_REG,
-					       PPC_SHIFT(pcs_config_mode[i], 48));
+					       pcs_config_mode[i]);
 
 			/* RX CDR GAIN */
-			// 
 			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_CDR_GAIN_REG,
 						~PPC_BITMASK(56, 63),
-						PPC_SHIFT(pcs_cdr_gain[i], 63));
+						pcs_cdr_gain[i]);
 
 			for (lane = 0; lane < NUM_PCIE_LANES; ++lane) {
 				/* RX INITGAIN */
-				// 
 				scom_and_or_for_chiplet(chiplet, RX_VGA_CTRL3_REGISTER[lane],
 							~PPC_BITMASK(48, 52),
-							PPC_SHIFT(pcs_init_gain, 48));
+							PPC_SHIFT(pcs_init_gain, 52));
 
 				/* RX PKINIT */
-				// 
 				scom_and_or_for_chiplet(chiplet, RX_LOFF_CNTL_REGISTER[lane],
 							~PPC_BITMASK(58, 63),
-							PPC_SHIFT(pcs_pk_init, 63));
+							pcs_pk_init);
 			}
 
 			/* RX SIGDET LVL */
-			// 
 			scom_and_or_for_chiplet(chiplet, PEC_PCS_RX_SIGDET_CONTROL_REG,
 						~PPC_BITMASK(59, 63),
-						PPC_SHIFT(pcs_sigdet_lvl, 63));
+						pcs_sigdet_lvl);
 		}
 
 		/*
-		 * Phase1 init step 12 (RX Rot Cntl CDR Lookahead Disabled,SSC Disabled)
+		 * Phase1 init step 12 (RX Rot Cntl CDR Lookahead Disabled, SSC Disabled)
                  *
-		 * Skipping update of PEC_PCS_RX_ROT_CNTL_REG, because all these attributes are zero
-		 * for Nimbus and there is nothing to update:
-		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_LOOKAHEAD
-		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_SSC
-		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_EXTEL
-		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_RST_FW
+		 * All these attributes seem to be zero for Nimbus:
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_LOOKAHEAD (55)
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_SSC (63)
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_EXTEL (59)
+		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_RST_FW (62)
 		 */
+		scom_and_for_chiplet(chiplet, PEC_PCS_RX_ROT_CNTL_REG,
+				     ~(PPC_BIT(55) | PPC_BIT(63) | PPC_BIT(59) | PPC_BIT(62)));
 
 		/* Phase1 init step 13 (RX Config Mode Enable External Config Control) */
-		// verify this and other shifts below  
-		write_scom_for_chiplet(chiplet, PEC_PCS_RX_CONFIG_MODE_REG,
-				       PPC_SHIFT(0x8600, 48));
+		write_scom_for_chiplet(chiplet, PEC_PCS_RX_CONFIG_MODE_REG, 0x8600);
 
 		/* Phase1 init step 14 (PCLCK Control Register - PLLA) */
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLA = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLA_REG,
 					~PPC_BITMASK(56, 63),
-					PPC_SHIFT(0xf8, 63));
+					0xf8);
 
 		/* Phase1 init step 15 (PCLCK Control Register - PLLB) */
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLB = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLB_REG,
 					~PPC_BITMASK(56, 63),
-					PPC_SHIFT(0xf8, 63));
+					0xf8);
 
 		/* Phase1 init step 16 (TX DCLCK Rotator Override) */
 		/* ATTR_PROC_PCIE_PCS_TX_DCLCK_ROT = 0x0022 */
-		write_scom_for_chiplet(chiplet, PEC_PCS_TX_DCLCK_ROTATOR_REG,
-				       PPC_SHIFT(0x0022, 48));
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_DCLCK_ROTATOR_REG, 0x0022);
 
 		/* Phase1 init step 17 (TX PCIe Receiver Detect Control Register 1) */
 		/* ATTR_PROC_PCIE_PCS_TX_PCIE_RECV_DETECT_CNTL_REG1 = 0xAA7A */
-		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL1_REG,
-				       PPC_SHIFT(0xaa7a, 48));
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL1_REG, 0xaa7a);
 
 		/* Phase1 init step 18 (TX PCIe Receiver Detect Control Register 2) */
 		/* ATTR_PROC_PCIE_PCS_TX_PCIE_RECV_DETECT_CNTL_REG2 = 0x2000 */
-		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL2_REG,
-				       PPC_SHIFT(0x2000, 48));
+		write_scom_for_chiplet(chiplet, PEC_PCS_TX_PCIE_REC_DETECT_CNTL2_REG, 0x2000);
 
 		/* Phase1 init step 19 (TX Power Sequence Enable) */
-		/* ATTR_PROC_PCIE_PCS_TX_POWER_SEQ_ENABLE = 0xFF */
+		/* ATTR_PROC_PCIE_PCS_TX_POWER_SEQ_ENABLE = 0xFF, but field is 7 bits */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_TX_POWER_SEQ_ENABLE_REG,
 					~PPC_BITMASK(56, 62),
-					PPC_SHIFT(0xff, 56));
+					PPC_SHIFT(0x7f, 62));
 
 		/* Phase1 init step 20 (RX VGA Control Register 1) */
 
 		/* ATTR_PROC_PCIE_PCS_RX_VGA_CNTL_REG1 = 0 */
-		val = PPC_SHIFT(0, 48);
+		val = 0;
 
-		/* Becase ATTR_CHIP_EC_FEATURE_HW414759 = 1 */
-		val |= PPC_BIT(PEC_SCOM0X0B_EDMOD);
-		val |= PPC_BIT(PEC_SCOM0X0B_EDMOD + 1);
+		/* ATTR_CHIP_EC_FEATURE_HW414759 = 0, so not setting PEC_SCOM0X0B_EDMOD */
 
 		write_scom_for_chiplet(chiplet, PEC_PCS_RX_VGA_CONTROL1_REG, val);
 
 		/* Phase1 init step 21 (RX VGA Control Register 2) */
 		/* ATTR_PROC_PCIE_PCS_RX_VGA_CNTL_REG2 = 0 */
-		write_scom_for_chiplet(chiplet, PEC_PCS_RX_VGA_CONTROL2_REG,
-				       PPC_SHIFT(0, 48));
+		write_scom_for_chiplet(chiplet, PEC_PCS_RX_VGA_CONTROL2_REG, 0);
 
 		/* Phase1 init step 22 (RX DFE Func Control Register 1) */
-		/* ATTR_PROC_PCIE_PCS_RX_DFE_FDDC = 0, so not updating PEC_IOP_RX_DFE_FUNC_REGISTER1 */
+		/* ATTR_PROC_PCIE_PCS_RX_DFE_FDDC = 1 */
+		scom_or_for_chiplet(chiplet, PEC_IOP_RX_DFE_FUNC_REGISTER1, PPC_BIT(50));
 
 		/* Phase1 init step 23 (PCS System Control) */
 		/* ATTR_PROC_PCIE_PCS_SYSTEM_CNTL computed above */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_SYS_CONTROL_REG,
 					~PPC_BITMASK(55, 63),
-					PPC_SHIFT(pec_cfgs[pec]->phb_to_pcie_mac, 63));
+					pec_cfgs[pec]->phb_to_pcie_mac);
 
 		/*
-		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL seem to be 0, which
-		 * makes the next four steps no-op.  Hostboot has bugs here in
-		 * that it updates PEC_PCS_M1_CONTROL_REG 4 times instead of
-		 * updating 4 different registers (M1-M4), but no-op conceals this.
+		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL seem to be 0.
+		 * Hostboot has bugs here in that it updates PEC_PCS_M1_CONTROL_REG
+		 * 4 times instead of updating 4 different registers (M1-M4).
 		 */
 
 		/* Phase1 init step 24 (PCS M1 Control) */
+		scom_and_for_chiplet(chiplet, PEC_PCS_M1_CONTROL_REG, ~PPC_BITMASK(55, 63));
 		/* Phase1 init step 25 (PCS M2 Control) */
+		scom_and_for_chiplet(chiplet, PEC_PCS_M2_CONTROL_REG, ~PPC_BITMASK(55, 63));
 		/* Phase1 init step 26 (PCS M3 Control) */
+		scom_and_for_chiplet(chiplet, PEC_PCS_M3_CONTROL_REG, ~PPC_BITMASK(55, 63));
 		/* Phase1 init step 27 (PCS M4 Control) */
+		scom_and_for_chiplet(chiplet, PEC_PCS_M4_CONTROL_REG, ~PPC_BITMASK(55, 63));
 
 		/* Delay a minimum of 200ns to allow prior SCOM programming to take effect */
 		(void)wait_us(1, false);
 
-		// Phase1 init step 28
+		/* Phase1 init step 28 */
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
 				       PPC_BIT(PEC_IOP_PIPE_RESET_START_BIT));
 

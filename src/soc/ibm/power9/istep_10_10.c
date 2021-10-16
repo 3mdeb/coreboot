@@ -4,6 +4,7 @@
 
 #include <console/console.h>
 #include <cpu/power/scom.h>
+#include <delay.h>
 #include <stdint.h>
 #include <string.h>
 #include <timer.h>
@@ -416,10 +417,10 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
 				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
-		(void)wait_us(1, false); /* at least 400ns */
+		udelay(1); /* at least 400ns */
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR,
 				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
-		(void)wait_us(1, false); /* at least 400ns */
+		udelay(1); /* at least 400ns */
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,
 				       PPC_BIT(PEC_IOP_PMA_RESET_START_BIT));
 
@@ -560,7 +561,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		scom_and_for_chiplet(chiplet, PEC_PCS_M4_CONTROL_REG, ~PPC_BITMASK(55, 63));
 
 		/* Delay a minimum of 200ns to allow prior SCOM programming to take effect */
-		(void)wait_us(1, false);
+		udelay(1);
 
 		/* Phase1 init step 28 */
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_CLEAR,

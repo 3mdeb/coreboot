@@ -34,12 +34,13 @@ static void init_pecs(const uint8_t *iovalid_enable)
 
 	uint64_t scratch_reg6 = 0;
 	uint8_t pec = 0;
+	bool node_pump_mode = false;
 	uint8_t dd = get_dd();
 
 	scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
 
 	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
-	bool node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
+	node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		uint64_t val = 0;
@@ -57,7 +58,7 @@ static void init_pecs(const uint8_t *iovalid_enable)
 
 		/*
 		 * Phase2 init step 1
-		 * NestBase+0x00
+		 * NestBase + 0x00
 		 * Set bits 00:03 = 0b0001 Set hang poll scale
 		 * Set bits 04:07 = 0b0001 Set data scale
 		 * Set bits 08:11 = 0b0001 Set hang pe scale
@@ -153,13 +154,13 @@ static void init_pecs(const uint8_t *iovalid_enable)
 
 		/*
 		 * Phase2 init step 4
-		 * NestBase+0x05
+		 * NestBase + 0x05
 		 * N/A For use of atomics/asb_notify
 		 */
 
 		/*
 		 * Phase2 init step 5
-		 * NestBase+0x06
+		 * NestBase + 0x06
 		 * N/A To override scope prediction
 		 */
 
@@ -265,7 +266,7 @@ static void init_phbs(uint8_t phb_active_mask, const uint8_t *iovalid_enable)
 	uint8_t phb = 0;
 	for (phb = 0; phb < MAX_PHB_PER_PROC; ++phb) {
 		/* BAR enable attribute (ATTR_PROC_PCIE_BAR_ENABLE) */
-		uint8_t l_bar_enables[3] = { 0 };
+		uint8_t bar_enables[3] = { 0 };
 
 		uint64_t val = 0;
 		uint64_t mmio0_bar = base_addr_mmio;
@@ -435,12 +436,12 @@ static void init_phbs(uint8_t phb_active_mask, const uint8_t *iovalid_enable)
 
 		val = 0;
 
-		if (l_bar_enables[0])
+		if (bar_enables[0])
 			val |= PPC_BIT(0); // PHB_BARE_REG_PE_MMIO_BAR0_EN, bit 0 for BAR0
-		if (l_bar_enables[1])
+		if (bar_enables[1])
 			val |= PPC_BIT(1); // PHB_BARE_REG_PE_MMIO_BAR1_EN, bit 1 for BAR1
-		if (l_bar_enables[2])
-			val |= PPC_BIT(1); // PHB_BARE_REG_PE_PHB_BAR_EN, bit 2 for PHB
+		if (bar_enables[2])
+			val |= PPC_BIT(2); // PHB_BARE_REG_PE_PHB_BAR_EN, bit 2 for PHB
 
 		write_scom(phb_addr(phb, PHB_BARE_REG), val);
 

@@ -38,7 +38,10 @@ enum phb_to_mac {
 	PHB_X8_X4_X4_MAC_MAP = 0x0090,
 };
 
-/* Bit position of the PHB with the largest number a given PEC can use */
+/*
+ * Bit position of the PHB with the largest number a given PEC can use
+ * (see enum phb_active_mask for bit values).
+ */
 enum pec_phb_shift {
 	PEC0_PHB_SHIFT = 7, // PHB0 only
 	PEC1_PHB_SHIFT = 5, // PHB1 - PHB2
@@ -59,16 +62,8 @@ struct lane_config_row {
 	/* IOP config value from PCIE IOP configuration table */
 	uint8_t lane_config;
 
-	/*
-	 * PHB active mask (see phb_active_mask enum)
-	 * PHB0 = 0x80
-	 * PHB1 = 0x40
-	 * PHB2 = 0x20
-	 * PHB3 = 0x10
-	 * PHB4 = 0x08
-	 * PHB5 = 0x04
-	 */
-	uint8_t phb_active; // enum phb_active_mask
+	/* PHB active mask (see phb_active_mask enum) */
+	uint8_t phb_active;
 
 	uint16_t phb_to_pcie_mac; // enum phb_to_mac
 };
@@ -76,10 +71,10 @@ struct lane_config_row {
 /*
  * Currently there are three PEC config tables for procs with 48 usable PCIE
  * lanes. In general, the code accumulates the current configuration of
- * the PECs from the MRW and other dynamic information(such as bifurcation)
- * then matches that config to one of the rows in the table.  Once a match
- * is discovered, the PEC config value is  pulled from the matching row and
- * set in the attributes.
+ * the PECs from the MRW and other dynamic information (such as bifurcation)
+ * then matches that config to one of the rows in the table. Once a match
+ * is discovered, the PEC config value is pulled from the matching row for
+ * future use.
  *
  * Each PEC can control up to 16 lanes:
  * - PEC0 can give 16 lanes to PHB0
@@ -165,13 +160,8 @@ static const size_t pec_lane_cfg_sizes[] = {
 };
 
 /*
- * This probably comes from parsing PEC_PCIE_HX_KEYWORD_DATA in Hostboot, its
- * description:
- *   This attribute holds the contents of the HX keyword read by the FSP
- *   from a PCIe card.
- * genHwsvMrwXml.pl has some defaults but with a different value for PEC2.
- * Defaults differ among processors.
- * enum lane_width
+ * PEC_PCIE_LANE_MASK_NON_BIFURCATED in processed talos.xml for the first
+ * processor chip.  Values correspond to lane_width enumeration.
  */
 static uint16_t lane_masks[MAX_PEC_PER_PROC][MAX_LANE_GROUPS_PER_PEC] = {
 	{ LANE_MASK_X16,     0x0,               0x0,               0x0 },
@@ -231,17 +221,16 @@ static enum lane_width lane_mask_to_width(uint16_t mask)
 	return width;
 }
 
-static uint8_t determine_lane_configs(const struct lane_config_row **pec_cfgs)
+static void determine_lane_configs(uint8_t *phb_active_mask,
+				   const struct lane_config_row **pec_cfgs)
 {
 	uint8_t pec = 0;
-	uint8_t phb_active_mask = 0;
+
+	*phb_active_mask = 0;
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		uint8_t i;
 		uint8_t lane_group;
-
-		uint16_t lane_mask[MAX_LANE_GROUPS_PER_PEC]; // enum lane_width
-		memcpy(&lane_mask, &lane_masks[pec], sizeof(lane_mask));
 
 		struct lane_config_row config = {
 			{ LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC, LANE_WIDTH_NC },
@@ -252,7 +241,7 @@ static uint8_t determine_lane_configs(const struct lane_config_row **pec_cfgs)
 
 		/* Transform effective config to match lane config table format */
 		for (lane_group = 0; lane_group < MAX_LANE_GROUPS_PER_PEC; ++lane_group)
-			config.lane_set[lane_group] = lane_mask_to_width(lane_mask[lane_group]);
+			config.lane_set[lane_group] = lane_mask_to_width(lane_masks[pec][lane_group]);
 
 		for (i = 0; i < pec_lane_cfg_sizes[pec]; ++i) {
 			if (memcmp(pec_lane_cfgs[pec][i].lane_set, &config.lane_set,
@@ -263,20 +252,18 @@ static uint8_t determine_lane_configs(const struct lane_config_row **pec_cfgs)
 		if (i == pec_lane_cfg_sizes[pec])
 			die("Failed to find PCIE IOP configuration for PEC%d\n", pec);
 
-		phb_active_mask |= pec_lane_cfgs[pec][i].phb_active;
+		*phb_active_mask |= pec_lane_cfgs[pec][i].phb_active;
 
 		pec_cfgs[pec] = &pec_lane_cfgs[pec][i];
 
 		/*
-		 * In the rest of PCIe-related code the following PEC attributes have these
+		 * In the rest of the PCIe-related code the following PEC attributes have these
 		 * values:
 		 *  - PEC[ATTR_PROC_PCIE_IOP_CONFIG]      := pec_cfgs[pec]->lane_config
 		 *  - PEC[ATTR_PROC_PCIE_REFCLOCK_ENABLE] := 1
 		 *  - PEC[ATTR_PROC_PCIE_PCS_SYSTEM_CNTL] := pec_cfgs[pec]->phb_to_pcie_mac
 		 */
 	}
-
-	return phb_active_mask;
 }
 
 static uint64_t pec_val(int pec_id, uint8_t in,
@@ -373,6 +360,17 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		chiplet_id_t chiplet = PCI0_CHIPLET_ID + pec;
 
+		/* ATTR_PROC_PCIE_PCS_RX_CDR_GAIN, from talos.xml */
+		uint8_t pcs_cdr_gain[] = { 0x56, 0x47, 0x47, 0x47 };
+		/* ATTR_PROC_PCIE_PCS_RX_INIT_GAIN, all zeroes by default */
+		uint8_t pcs_init_gain = 0;
+		/* ATTR_PROC_PCIE_PCS_RX_PK_INIT, all zeroes by default */
+		uint8_t pcs_pk_init = 0;
+		/* ATTR_PROC_PCIE_PCS_RX_SIGDET_LVL, defaults and talos.xml */
+		uint8_t pcs_sigdet_lvl = 0x0B;
+
+		uint32_t pcs_config_mode[NUM_PCS_CONFIG] = { 0xA006, 0xA805, 0xB071, 0xB870 };
+
 		/* Phase1 init step 1 (get VPD, no operation here) */
 
 		/* Phase1 init step 2a */
@@ -384,10 +382,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		/* Phase1 init step 2b */
 
-		/*
-		 * FIXME: ATTR_PROC_PCIE_IOP_SWAP, might be computed by processPec() in
-		 * processMrw.pl and stored somewhere, this is based on logs...
-		 */
+		/* ATTR_PROC_PCIE_IOP_SWAP from processed talos.xml for first proc */
 		proc_pcie_iop_swap = (pec == 0);
 
 		val = pec_val(pec, proc_pcie_iop_swap,
@@ -413,8 +408,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CONF1_OR, val);
 
 		/* Phase1 init step 3b (enable clock) */
-		/* XXX: assume all PECs are enabled (due to hard-coded lanes),
-		 *      ATTR_PROC_PCIE_REFCLOCK_ENABLE */
+		/* ATTR_PROC_PCIE_REFCLOCK_ENABLE, all PECs are enabled. */
 		write_scom_for_chiplet(chiplet, PEC_CPLT_CTRL0_OR,
 				       PPC_BIT(PEC_IOP_REFCLOCK_ENABLE_START_BIT));
 
@@ -452,17 +446,6 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 
 		/* Phase1 init step 8-11 (Config 0 - 3) */
 
-		/* ATTR_PROC_PCIE_PCS_RX_CDR_GAIN, from talos.xml */
-		uint8_t pcs_cdr_gain[] = { 0x56, 0x47, 0x47, 0x47 };
-		/* ATTR_PROC_PCIE_PCS_RX_INIT_GAIN, all zeroes by default */
-		uint8_t pcs_init_gain = 0;
-		/* ATTR_PROC_PCIE_PCS_RX_PK_INIT, all zeroes by default */
-		uint8_t pcs_pk_init = 0;
-		/* ATTR_PROC_PCIE_PCS_RX_SIGDET_LVL, defaults and talos.xml */
-		uint8_t pcs_sigdet_lvl = 0x0B;
-
-		uint32_t pcs_config_mode[NUM_PCS_CONFIG] = { 0xA006, 0xA805, 0xB071, 0xB870 };
-
 		for (i = 0; i < NUM_PCS_CONFIG; ++i) {
 			uint8_t lane;
 
@@ -496,7 +479,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		/*
 		 * Phase1 init step 12 (RX Rot Cntl CDR Lookahead Disabled, SSC Disabled)
                  *
-		 * All these attributes seem to be zero for Nimbus:
+		 * All these attributes are zero for Nimbus:
 		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_LOOKAHEAD (55)
 		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_CDR_SSC (63)
 		 *  - ATTR_PROC_PCIE_PCS_RX_ROT_EXTEL (59)
@@ -512,13 +495,13 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLA = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLA_REG,
 					~PPC_BITMASK(56, 63),
-					0xf8);
+					0xF8);
 
 		/* Phase1 init step 15 (PCLCK Control Register - PLLB) */
 		/* ATTR_PROC_PCIE_PCS_PCLCK_CNTL_PLLB = 0xF8 */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_PCLCK_CNTL_PLLB_REG,
 					~PPC_BITMASK(56, 63),
-					0xf8);
+					0xF8);
 
 		/* Phase1 init step 16 (TX DCLCK Rotator Override) */
 		/* ATTR_PROC_PCIE_PCS_TX_DCLCK_ROT = 0x0022 */
@@ -536,7 +519,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 		/* ATTR_PROC_PCIE_PCS_TX_POWER_SEQ_ENABLE = 0xFF, but field is 7 bits */
 		scom_and_or_for_chiplet(chiplet, PEC_PCS_TX_POWER_SEQ_ENABLE_REG,
 					~PPC_BITMASK(56, 62),
-					PPC_SHIFT(0x7f, 62));
+					PPC_SHIFT(0x7F, 62));
 
 		/* Phase1 init step 20 (RX VGA Control Register 1) */
 
@@ -562,7 +545,7 @@ static void phase1(const struct lane_config_row **pec_cfgs,
 					pec_cfgs[pec]->phb_to_pcie_mac);
 
 		/*
-		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL seem to be 0.
+		 * All values in ATTR_PROC_PCIE_PCS_M_CNTL are 0.
 		 * Hostboot has bugs here in that it updates PEC_PCS_M1_CONTROL_REG
 		 * 4 times instead of updating 4 different registers (M1-M4).
 		 */
@@ -597,7 +580,7 @@ void istep_10_10(uint8_t *phb_active_mask, uint8_t *iovalid_enable)
 	printk(BIOS_EMERG, "starting istep 10.10\n");
 	report_istep(10,10);
 
-	*phb_active_mask = determine_lane_configs(pec_cfgs);
+	determine_lane_configs(phb_active_mask, pec_cfgs);
 
 	/*
 	 * Mask of functional PHBs for each PEC, ATTR_PROC_PCIE_IOVALID_ENABLE in Hostboot.

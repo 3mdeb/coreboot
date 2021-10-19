@@ -15,7 +15,6 @@
 #include <timer.h>
 
 #include "chip.h"
-#include "fir.h"
 #include "homer.h"
 #include "ops.h"
 #include "tor.h"

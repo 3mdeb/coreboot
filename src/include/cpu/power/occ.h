@@ -12,4 +12,7 @@ void clear_occ_special_wakeups(uint64_t cores);
 void special_occ_wakeup_disable(uint64_t cores);
 void occ_start_from_mem(void);
 
+void pm_occ_fir_init(void);
+void pm_pba_fir_init(void);
+
 #endif /* CPU_PPC64_OCC_H */

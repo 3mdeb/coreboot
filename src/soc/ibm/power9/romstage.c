@@ -372,7 +372,7 @@ void main(void)
 
 	istep_14_1();
 	istep_14_2();
-	istep_14_3(phb_active_mask, iovalid_enable);
+	if (0) istep_14_3(phb_active_mask, iovalid_enable);
 	report_istep(14,4);	// no-op
 	istep_14_5();
 

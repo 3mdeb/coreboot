@@ -346,15 +346,14 @@ void main(void)
 
 	init_timer();
 
+	istep_10_10(&phb_active_mask, iovalid_enable);
+	istep_10_12();
 	istep_10_13();
 
 	timestamp_add_now(TS_BEFORE_INITRAM);
 
 	vpd_pnor_main();
 	prepare_dimm_data();
-
-	istep_10_10(&phb_active_mask, iovalid_enable);
-	istep_10_12();
 
 	report_istep(13,1);	// no-op
 	istep_13_2();

@@ -68,7 +68,7 @@ static void init_pecs(const uint8_t *iovalid_enable)
 		 * Set bits 00:03 = 0b0001 Set hang poll scale
 		 * Set bits 04:07 = 0b0001 Set data scale
 		 * Set bits 08:11 = 0b0001 Set hang pe scale
-		 * Set bit 22 = 0b1 Disable out­of­order store behavior
+		 * Set bit 22 = 0b1 Disable out of order store behavior
 		 * Set bit 33 = 0b1 Enable Channel Tag streaming behavior
 		 * Set bits 34:35 = 0b11 Set P9 Style cache-inject behavior
 		 * Set bits 46:48 = 0b011 Set P9 Style cache-inject rate, 1/16 cycles
@@ -86,7 +86,7 @@ static void init_pecs(const uint8_t *iovalid_enable)
 		/* Set hang pe scale */
 		val &= ~PPC_BITMASK(8, 11);
 		val |= PPC_SHIFT(1, 11);
-		/* Disable out­of­order store behavior */
+		/* Disable out of order store behavior */
 		val |= PPC_BIT(22);
 		/* Enable Channel Tag streaming behavior */
 		val |= PPC_BIT(33);

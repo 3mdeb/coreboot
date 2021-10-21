@@ -22,7 +22,7 @@ static void init_pecs(const uint8_t *iovalid_enable)
 
 		/* powerbus.c has these too */
 		MBOX_SCRATCH_REG1 = 0x00050038,
-		MBOX_SCRATCH_REG6_GROUP_PUMP_MODE = (1 << 23),
+		MBOX_SCRATCH_REG6_GROUP_PUMP_MODE = 23,
 
 		PEC_PBCQHWCFG_REG_PE_DISABLE_TCE_ARBITRATION = 60,
 		PEC_PBAIBHWCFG_REG_PE_PCIE_CLK_TRACE_EN = 30,
@@ -47,7 +47,7 @@ static void init_pecs(const uint8_t *iovalid_enable)
 	scratch_reg6 = read_scom(MBOX_SCRATCH_REG1 + 5);
 
 	/* ATTR_PROC_FABRIC_PUMP_MODE, it's either node or group pump mode */
-	node_pump_mode = !(scratch_reg6 & MBOX_SCRATCH_REG6_GROUP_PUMP_MODE);
+	node_pump_mode = !(scratch_reg6 & PPC_BIT(MBOX_SCRATCH_REG6_GROUP_PUMP_MODE));
 
 	for (pec = 0; pec < MAX_PEC_PER_PROC; ++pec) {
 		uint64_t val = 0;

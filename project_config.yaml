@@ -9,7 +9,7 @@ framework:
 
 documentation:
         name: Dasharo Compatibility
-        url: # https://novacustom.gitlab.io/dasharo-compatibility/
+        url: https://docs.dasharo.com/
         building_url: https://docs.dasharo.com/variants/talos_2/building-manual/
         flashing_url: https://docs.dasharo.com/variants/talos_2/installation-manual/
 
@@ -18,9 +18,8 @@ platform:
         model: Talos II
 
 tests:
-        specification: # https://novacustom.gitlab.io/dasharo-compatibility/dasharo-compatibility/
-        hardware_matrix: # https://novacustom.gitlab.io/dasharo-compatibility/hardware/clevo-nv41/testing_configuration/
-        results: # https://docs.google.com/spreadsheets/d/1LOXY9HCu-fMitkYwX08iLsQdSNenzyU0LnMdVbZB5Do/edit#gid=0
+        hardware_matrix: https://docs.dasharo.com/variants/talos_2/hardware-matrix/
+        results: hardware_matrix: https://docs.dasharo.com/variants/talos_2/test-results/
 
 asciinema:
         signature_verification: https://asciinema.org/a/415457

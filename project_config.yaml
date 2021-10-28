@@ -1,0 +1,26 @@
+# Dasharo project configuration data
+
+client:
+        name: Insurgo
+
+framework:
+        name: coreboot
+        version: v0.4.0
+
+documentation:
+        name: Dasharo Compatibility
+        url: # https://novacustom.gitlab.io/dasharo-compatibility/
+        building_url: https://docs.dasharo.com/variants/talos_2/building-manual/
+        flashing_url: https://docs.dasharo.com/variants/talos_2/installation-manual/
+
+platform:
+        vendor: Raptor Computing Systems
+        model: Talos II
+
+tests:
+        specification: # https://novacustom.gitlab.io/dasharo-compatibility/dasharo-compatibility/
+        hardware_matrix: # https://novacustom.gitlab.io/dasharo-compatibility/hardware/clevo-nv41/testing_configuration/
+        results: # https://docs.google.com/spreadsheets/d/1LOXY9HCu-fMitkYwX08iLsQdSNenzyU0LnMdVbZB5Do/edit#gid=0
+
+asciinema:
+        signature_verification: https://asciinema.org/a/415457

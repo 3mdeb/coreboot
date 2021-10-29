@@ -5,6 +5,7 @@
 #include <timestamp.h>
 #include <string.h>		// memcpy
 #include <cpu/power/spr.h>
+#include <console/console.h>
 
 /* Time base frequency is 512 MHz so 512 ticks per usec */
 #define TB_TICKS_PER_USEC 512
@@ -58,6 +59,11 @@ void init_timer(void)
 {
 	uint64_t tmp;
 
+	for (tmp = 0; tmp < 0x3000; tmp += 128)
+		asm volatile("dcbz 0, %0; icbi 0, %0" :: "r"(tmp) : "memory");
+
+	asm volatile("isync" ::: "memory");
+
 	/*
 	 * Set both decrementers to the highest possible value. POWER9 implements
 	 * 56 bits, they decrement with 512MHz frequency. Decrementer exception
@@ -79,6 +85,8 @@ void init_timer(void)
 
 	write_spr(SPR_DEC, SPR_DEC_LONGEST_TIME);
 	write_spr(SPR_HDEC, SPR_DEC_LONGEST_TIME);
+
+	printk(BIOS_ERR, "HDEC = %#16.16llx..............\n", read_spr(SPR_HDEC));
 
 	/* r13 is reserved for thread ID, we don't have threads so borrow it */
 	asm volatile("mr 13, %0" :: "r"(&hdec_done));
@@ -105,6 +113,8 @@ void init_timer(void)
 
 	tmp = read_msr();
 	write_msr(tmp | 0x8000);	/* EE - External Interrupt Enable */
+
+	printk(BIOS_ERR, "MSR = %#16.16llx..............\n", read_msr());
 }
 
 /* TODO: with HDEC we can get ~2ns resolution, may be useful for RAM init. */

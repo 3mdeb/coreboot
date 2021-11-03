@@ -15,7 +15,7 @@ SECTIONS
 	 * chaotic when nonconsecutive bits are set...
 	 *
 	 * Two and a half possible cases:
-	 * 0. bootlbock started with QEMU in hb-mode
+	 * 0. bootblock started with QEMU in hb-mode
 	 *    - NIA =                          0x10  (bug?)
 	 *    - HRMOR =                  0x08000000  (128M)
 	 *    - no physical memory to enable/train, everything accessible from start
@@ -34,9 +34,12 @@ SECTIONS
 	 * Common subset (assuming 2. initializes as much memory as possible) is
 	 * 0xF8200000-0xF8400000. 2M should be more than enough for pre-RAM code,
 	 * but it isn't enough to load ramstage. We could implement postcar stage,
-	 * but KISS: initialize L3 from 0xF8208000 to 0xF8A00000 (8M - 32K)
-	 * unconditionally and use only this range until RAM is available (unless
-	 * we were started by HBBL, then keep bootblock linked at 0xF8000000).
+	 * but KISS: initialize L3 from _ebootblock to 0xF8980000: up to 9.5M into
+	 * cache, leaving bottom 2M (0xF8000000-0xF8200000) either uninitialized
+	 * (when started from SEEPROM) or just unused for anything but bootblock
+	 * (loaded by HBBL). Last 0.5M of L3 cache is left for interrupt vectors
+	 * normally located at address 0.
+	 *
 	 * Set HRMOR to 0 before jumping to C code in bootblock and forget it even
 	 * exists.
 	 *
@@ -63,6 +66,11 @@ SECTIONS
 
 	ROMSTAGE(            0xF8240000, 256K)
 
+	/*
+	 * bootblock_crt0.S assumes this is the last part of L3, leaving for
+	 * interrupt vectors at least 0.5M because of cache associativity. If
+	 * more CBFS_CACHE is needed, split this into pre-/postram caches.
+	 */
 	CBFS_CACHE(          0xF8280000, 7M)
 
 	RAMSTAGE(            0xF9000000, 2M)

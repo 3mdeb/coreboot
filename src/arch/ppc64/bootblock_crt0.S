@@ -39,7 +39,7 @@
  * chaotic when nonconsecutive bits are set...
  *
  * Two and a half possible cases:
- * 0. bootlbock started with QEMU in hb-mode
+ * 0. bootblock started with QEMU in hb-mode
  *    - NIA =                          0x10  (bug?)
  *    - HRMOR =                  0x08000000  (128M)
  *    - no physical memory to enable/train, everything accessible from start
@@ -49,7 +49,7 @@
  *    - initialized L3 =           0x400000  (4M)
  *    - top address before RAM = 0xF8400000
  * 2. bootblock in SEEPROM, loaded by SBE
- *    - NIA =                             0  ('b 0x3000', place for int. vectors)
+ *    - NIA =                        0x3000  (placeholder for int. vectors)
  *    - HRMOR =                  0xF8200000  (4G - 128 M + 2 M)
  *    - initialized L3 =             0x8000  (bootblock/HBBL size = 32K)
  *    - no way 32K will be enough, must initialize more L3 in bootblock
@@ -58,9 +58,12 @@
  * Common subset (assuming 2. initializes as much memory as possible) is
  * 0xF8200000-0xF8400000. 2M should be more than enough for pre-RAM code,
  * but it isn't enough to load ramstage. We could implement postcar stage,
- * but KISS: initialize L3 from 0xF8208000 to 0xF8A00000 (8M - 32K)
- * unconditionally and use only this range until RAM is available (unless
- * we were started by HBBL, then keep bootblock linked at 0xF8000000).
+ * but KISS: initialize L3 from _ebootblock to 0xF8980000: up to 9.5M into
+ * cache, leaving bottom 2M (0xF8000000-0xF8200000) either uninitialized
+ * (when started from SEEPROM) or just unused for anything but bootblock
+ * (loaded by HBBL). Last 0.5M of L3 cache is left for interrupt vectors
+ * normally located at address 0.
+ *
  * Set HRMOR to 0 before jumping to C code in bootblock and forget it even
  * exists.
  *
@@ -112,16 +115,18 @@ ignoreHRMOR:
 
 stopIgnoringHRMOR:
 	/* Now we are at linked address */
+	slbia 7
+	sync
+	isync
 
 	/*
 	 * When coming from SBE, L3 cache is invalid except for [2M, end of HBBL]
 	 * range. Make the rest of it valid, or embrace the checkstops.
 	 */
 
-	/* Validate and initialize to zeroes [end of HBBL, 10M] range */
+	/* Validate and initialize to zeroes [end of HBBL, 9.5M] range */
 	LOAD_IMM32(%r5, _ebootblock)	/* Assume it is at least 128B aligned */
-	LOAD_IMM32(%r6, _bootblock)	/* Same */
-	addis	%r6, %r6, 0x80		/* Add 8M */
+	LOAD_IMM32(%r6, _epreram_cbfs_cache)	/* Same */
 	addi	%r6, %r6, -1
 1:
 	dcbz	0, %r5
@@ -152,7 +157,7 @@ stopIgnoringHRMOR:
 	mfmsr	%r3
 	ori	%r3, %r3, 0x2000	/* FP = 1 */
 	oris	%r3, %r3, 0x0280	/* VEC = 1, VSX = 1 */
-	mtmsr	%r3
+	mtmsrd	%r3
 
 	/* Load official procedure descriptor address for main() */
 	LOAD_IMM32(%r12, main)

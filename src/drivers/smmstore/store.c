@@ -253,6 +253,13 @@ int smmstore_rawread_region(uint32_t block_id, uint32_t offset, uint32_t bufsize
 	if (validate_block_range(offset, bufsize) < 0)
 		return -1;
 
+#if 0
+	// Simulate persistent read failure:
+	//   Capsule Status: End of Media
+	if (smmstore_use_full_flash && block_id > 2)
+		return -1;
+#endif
+
 	void *ptr = mmap_com_buf(&com_buf, offset, bufsize);
 	if (!ptr)
 		return -1;
@@ -288,6 +295,23 @@ int smmstore_rawwrite_region(uint32_t block_id, uint32_t offset, uint32_t bufsiz
 		return -1;
 	if (validate_block_range(offset, bufsize) < 0)
 		return -1;
+
+#if 0
+	// Simulate persistent write failure:
+	//     Capsule Status: Device Error
+	if (smmstore_use_full_flash && block_id > 2)
+		return -1;
+#endif
+
+#if 0
+	// Simulate one-time write failure:
+	//   Capsule Status: Aborted
+	static bool failed;
+	if (smmstore_use_full_flash && block_id > 2 && !failed) {
+		failed = true;
+		return -1;
+	}
+#endif
 
 	if (rdev_chain(&store, &store, (size_t)block_id * SMM_BLOCK_SIZE + offset,
 			       bufsize)) {

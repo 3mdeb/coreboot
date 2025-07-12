@@ -1,0 +1,61 @@
+#!/bin/bash
+
+set -eu
+
+edk_workspace=payloads/external/edk2/workspace
+edk_basetools=$edk_workspace/Dasharo/BaseTools
+edk_tools=$edk_basetools/BinWrappers/PosixLike
+
+function build() {
+    git submodule update --init 3rdparty/vboot
+
+    rm -rf build
+    cp poc.config .config
+    make olddefconfig
+    make -j$(nproc)
+}
+
+function make_cap() {
+    local capsule=$1
+
+    local build_type
+    if grep -Fq CONFIG_EDK2_RELEASE=y .config; then
+        build_type=RELEASE
+    else
+        build_type=DEBUG
+    fi
+
+    # this still needs to be signed for FmpDxe to be happy
+    cat > sign.json << EOF
+    {
+      "EmbeddedDrivers": [
+        {
+          "Driver": "$edk_workspace/Build/UefiPayloadPkgX64/${build_type}_GCC/X64/FmpDxe.efi"
+        }
+      ],
+      "Payloads": [
+        {
+          "Payload": "build/coreboot.rom",
+          "Guid": "20651b14-8653-4d9b-a75a-67fa76e0ada5",
+          "FwVersion": "0x01020304",
+          "LowestSupportedVersion": "0x00000000",
+
+          "OpenSslSignerPrivateCertFile": "$edk_basetools/Source/Python/Pkcs7Sign/TestCert.pem",
+          "OpenSslOtherPublicCertFile": "$edk_basetools/Source/Python/Pkcs7Sign/TestSub.pub.pem",
+          "OpenSslTrustedPublicCertFile": "$edk_basetools/Source/Python/Pkcs7Sign/TestRoot.pub.pem"
+        }
+      ]
+    }
+EOF
+
+    "$edk_tools/GenerateCapsule" --encode \
+                                 --capflag PersistAcrossReset \
+                                 --json-file sign.json \
+                                 --output "$capsule"
+
+    rm sign.json
+}
+
+build
+
+make_cap qemu-disk/test.cap
